@@ -212,12 +212,33 @@ let drop_branch_form_suffix target line =
    either 0x-prefixed or decimal. This assembler writes decimal everywhere, so
    the rule is asymmetric - it applies to objdump's side alone - and [~side] is
    how that is said out loud rather than hidden in a heuristic. It fires only on
-   a branch or call mnemonic with a single all-hex-digit operand. *)
-let branch_target_is_hex side line =
+   a branch or call mnemonic with a single all-hex-digit operand.
+
+   The mnemonic set is per-dialect and listed rather than pattern-matched,
+   because on A32 the guess "starts with b" also catches [bx lr] and [bic]. Only
+   [b] and [bl] plus a condition suffix take a target; [bx] takes a register,
+   and its operand [lr] is not all hex digits anyway - but relying on that would
+   be relying on a spelling accident. *)
+let arm_conditions =
+  [ "eq"; "ne"; "cs"; "cc"; "mi"; "pl"; "vs"; "vc"; "hi"; "ls"; "ge"; "lt"; "gt"; "le"; "al" ]
+
+let is_branch_mnemonic target m =
+  match target with
+  | "arm" ->
+      let stems = "b" :: "bl" :: List.concat_map (fun c -> [ "b" ^ c; "bl" ^ c ]) arm_conditions in
+      List.mem m stems
+  | "aarch64" ->
+      (* A64 spells the condition after a dot, so there is no [bic]-shaped
+         collision - but [br] and [blr] take registers, so the list is still a
+         list. *)
+      List.mem m ("b" :: "bl" :: List.map (fun c -> "b." ^ c) arm_conditions)
+  | _ -> (String.length m > 0 && m.[0] = 'j') || String.equal m "call"
+
+let branch_target_is_hex target side line =
   if side <> `Objdump then line
   else
     match String.split_on_char ' ' line with
-    | [ m; operand ] when (String.length m > 0 && m.[0] = 'j') || String.equal m "call" ->
+    | [ m; operand ] when is_branch_mnemonic target m ->
         if
           operand <> ""
           && String.for_all (fun c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) operand
@@ -226,9 +247,12 @@ let branch_target_is_hex side line =
     | _ -> line
 
 let normalize ?(side = `Ours) target line =
-  line |> strip_comment target |> drop_symbol_annotation |> collapse_space |> decimalize
+  (* [collapse_space] runs before [drop_symbol_annotation], not after: stripping
+     objdump's trailing [// b.tcont] comment leaves whitespace behind, and the
+     annotation rule anchors on the line ending in [>]. *)
+  line |> strip_comment target |> collapse_space |> drop_symbol_annotation |> decimalize
   |> tighten_commas |> drop_size_suffix target |> drop_branch_form_suffix target
-  |> movz_alias target |> branch_target_is_hex side
+  |> movz_alias target |> branch_target_is_hex target side
 
 (* objdump's body lines look like [   4:\te24dd008 \tsub\tsp, sp, #8]. The
    encoding word is dropped, because the byte comparison already covers it
@@ -399,24 +423,24 @@ let%expect_test "every bound segment matches the controlled reference link" =
     {|
     args_arith   x86_32   .text 130
     args_arith   x86_64   .text 103
-    args_arith   arm      ASSEMBLE arm.operand: cannot parse operand lsl #1
-    args_arith   aarch64  ASSEMBLE aarch64.simplify: unknown instruction madd (+5 more)
+    args_arith   arm      .text 120
+    args_arith   aarch64  .text 104
     cond_select  x86_32   .text 94
     cond_select  x86_64   .text 95
-    cond_select  arm      ASSEMBLE arm.simplify: unknown instruction cmp (+9 more)
-    cond_select  aarch64  ASSEMBLE aarch64.simplify: unknown instruction str (+9 more)
+    cond_select  arm      .text 120
+    cond_select  aarch64  .text 108
     direct_call  x86_32   .text 63
     direct_call  x86_64   .text 64
-    direct_call  arm      ASSEMBLE arm.lower: no add form takes these operands
-    direct_call  aarch64  ASSEMBLE aarch64.lower: no add form takes these operands
+    direct_call  arm      .text 72
+    direct_call  aarch64  .text 56
     global_ldst  x86_32   .text 27, .data 4
     global_ldst  x86_64   .text 34, .data 4
-    global_ldst  arm      ASSEMBLE parse: unexpected token
-    global_ldst  aarch64  ASSEMBLE parse: unexpected token
+    global_ldst  arm      .text 48, .data 4
+    global_ldst  aarch64  .text 40, .data 4
     loop         x86_32   .text 43
     loop         x86_64   .text 49
-    loop         arm      ASSEMBLE arm.simplify: unknown instruction cmp (+2 more)
-    loop         aarch64  ASSEMBLE aarch64.simplify: unknown instruction orr (+4 more)
+    loop         arm      .text 68
+    loop         aarch64  .text 60
     return42     x86_32   .text 19
     return42     x86_64   .text 23
     return42     arm      .text 32
@@ -545,24 +569,24 @@ let%expect_test "diagnostic spelling agrees with objdump after normalization" =
     {|
     args_arith   x86_32   36 lines agree
     args_arith   x86_64   26 lines agree
-    args_arith   arm      (does not assemble)
-    args_arith   aarch64  (does not assemble)
+    args_arith   arm      30 lines agree
+    args_arith   aarch64  26 lines agree
     cond_select  x86_32   29 lines agree
     cond_select  x86_64   27 lines agree
-    cond_select  arm      (does not assemble)
-    cond_select  aarch64  (does not assemble)
+    cond_select  arm      30 lines agree
+    cond_select  aarch64  27 lines agree
     direct_call  x86_32   16 lines agree (1 relocated operand compared as records instead)
     direct_call  x86_64   14 lines agree (1 relocated operand compared as records instead)
-    direct_call  arm      (does not assemble)
-    direct_call  aarch64  (does not assemble)
+    direct_call  arm      18 lines agree (1 relocated operand compared as records instead)
+    direct_call  aarch64  14 lines agree (1 relocated operand compared as records instead)
     global_ldst  x86_32   8 lines agree (2 relocated operands compared as records instead)
     global_ldst  x86_64   8 lines agree (2 relocated operands compared as records instead)
-    global_ldst  arm      (does not assemble)
-    global_ldst  aarch64  (does not assemble)
+    global_ldst  arm      12 lines agree (2 relocated operands compared as records instead)
+    global_ldst  aarch64  10 lines agree (4 relocated operands compared as records instead)
     loop         x86_32   15 lines agree
     loop         x86_64   15 lines agree
-    loop         arm      (does not assemble)
-    loop         aarch64  (does not assemble)
+    loop         arm      17 lines agree
+    loop         aarch64  15 lines agree
     return42     x86_32   6 lines agree
     return42     x86_64   6 lines agree
     return42     arm      8 lines agree
@@ -611,24 +635,24 @@ let%expect_test "canonical disassembly reassembles to the same bytes" =
     {|
     args_arith   x86_32   130 bytes reproduced
     args_arith   x86_64   103 bytes reproduced
-    args_arith   arm      (does not assemble)
-    args_arith   aarch64  (does not assemble)
+    args_arith   arm      120 bytes reproduced
+    args_arith   aarch64  104 bytes reproduced
     cond_select  x86_32   94 bytes reproduced
     cond_select  x86_64   95 bytes reproduced
-    cond_select  arm      (does not assemble)
-    cond_select  aarch64  (does not assemble)
+    cond_select  arm      120 bytes reproduced
+    cond_select  aarch64  108 bytes reproduced
     direct_call  x86_32   63 bytes reproduced
     direct_call  x86_64   64 bytes reproduced
-    direct_call  arm      (does not assemble)
-    direct_call  aarch64  (does not assemble)
+    direct_call  arm      72 bytes reproduced
+    direct_call  aarch64  56 bytes reproduced
     global_ldst  x86_32   27 bytes reproduced
     global_ldst  x86_64   34 bytes reproduced
-    global_ldst  arm      (does not assemble)
-    global_ldst  aarch64  (does not assemble)
+    global_ldst  arm      48 bytes reproduced
+    global_ldst  aarch64  40 bytes reproduced
     loop         x86_32   43 bytes reproduced
     loop         x86_64   49 bytes reproduced
-    loop         arm      (does not assemble)
-    loop         aarch64  (does not assemble)
+    loop         arm      68 bytes reproduced
+    loop         aarch64  60 bytes reproduced
     return42     x86_32   19 bytes reproduced
     return42     x86_64   23 bytes reproduced
     return42     arm      32 bytes reproduced
@@ -680,7 +704,7 @@ let classify ~target ~kind_name ~role ~defined ~same_section =
   | "aarch64", "pcrel-call26" -> (call, Linker_visible "R_AARCH64_CALL26")
   (* A branch to a symbol defined in this section is resolved while assembling
      on every target, and to one outside it is not reachable in M2 at all. *)
-  | _, ("pcrel8-branch" | "pcrel32-branch" | "pcrel-b26") ->
+  | _, ("pcrel8-branch" | "pcrel32-branch" | "pcrel-b26" | "pcrel-b19") ->
       (branch, if defined && same_section then Assembler_resolved else Linker_visible "unsupported")
   (* Data addresses. x86-32 takes the absolute address, x86-64 a RIP-relative
      displacement, and the two fixed-width targets split one reference across
@@ -708,7 +732,7 @@ let elf_addend ~pcrel ~(site : Image.site) ~addend =
 let is_pcrel kind_name =
   match kind_name with
   | "pcrel8-branch" | "pcrel32-branch" | "pcrel32-call" | "pcrel32-data" | "pcrel-b26"
-  | "pcrel-call" | "pcrel-call26" | "adrp-page" ->
+  | "pcrel-b19" | "pcrel-call" | "pcrel-call26" | "adrp-page" ->
       true
   | _ -> false
 
@@ -806,24 +830,24 @@ let%expect_test "fixup observations classify to exactly the measured relocations
     {|
     args_arith   x86_32   0 linker-visible, 0 assembler-resolved
     args_arith   x86_64   0 linker-visible, 0 assembler-resolved
-    args_arith   arm      (does not assemble)
-    args_arith   aarch64  (does not assemble)
+    args_arith   arm      0 linker-visible, 0 assembler-resolved
+    args_arith   aarch64  0 linker-visible, 0 assembler-resolved
     cond_select  x86_32   0 linker-visible, 4 assembler-resolved
     cond_select  x86_64   0 linker-visible, 4 assembler-resolved
-    cond_select  arm      (does not assemble)
-    cond_select  aarch64  (does not assemble)
+    cond_select  arm      0 linker-visible, 4 assembler-resolved
+    cond_select  aarch64  0 linker-visible, 4 assembler-resolved
     direct_call  x86_32   1 linker-visible, 0 assembler-resolved
     direct_call  x86_64   1 linker-visible, 0 assembler-resolved
-    direct_call  arm      (does not assemble)
-    direct_call  aarch64  (does not assemble)
+    direct_call  arm      1 linker-visible, 0 assembler-resolved
+    direct_call  aarch64  1 linker-visible, 0 assembler-resolved
     global_ldst  x86_32   2 linker-visible, 0 assembler-resolved
     global_ldst  x86_64   2 linker-visible, 0 assembler-resolved
-    global_ldst  arm      (does not assemble)
-    global_ldst  aarch64  (does not assemble)
+    global_ldst  arm      2 linker-visible, 0 assembler-resolved
+    global_ldst  aarch64  4 linker-visible, 0 assembler-resolved
     loop         x86_32   0 linker-visible, 2 assembler-resolved
     loop         x86_64   0 linker-visible, 2 assembler-resolved
-    loop         arm      (does not assemble)
-    loop         aarch64  (does not assemble)
+    loop         arm      0 linker-visible, 2 assembler-resolved
+    loop         aarch64  0 linker-visible, 2 assembler-resolved
     return42     x86_32   0 linker-visible, 0 assembler-resolved
     return42     x86_64   0 linker-visible, 0 assembler-resolved
     return42     arm      0 linker-visible, 0 assembler-resolved
