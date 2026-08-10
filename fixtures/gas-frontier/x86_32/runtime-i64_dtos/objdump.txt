@@ -1,0 +1,18 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_dtos>:
+   0:	83 ec 04             	sub    $0x4,%esp
+   3:	d9 3c 24             	fnstcw (%esp)
+   6:	66 8b 04 24          	mov    (%esp),%ax
+   a:	b4 0c                	mov    $0xc,%ah
+   c:	66 89 44 24 02       	mov    %ax,0x2(%esp)
+  11:	d9 6c 24 02          	fldcw  0x2(%esp)
+  15:	dd 44 24 08          	fldl   0x8(%esp)
+  19:	df 7c 24 08          	fistpll 0x8(%esp)
+  1d:	d9 2c 24             	fldcw  (%esp)
+  20:	8b 44 24 08          	mov    0x8(%esp),%eax
+  24:	8b 54 24 0c          	mov    0xc(%esp),%edx
+  28:	83 c4 04             	add    $0x4,%esp
+  2b:	c3                   	ret

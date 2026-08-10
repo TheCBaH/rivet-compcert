@@ -1,0 +1,17 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_shl>:
+   0:	8b 4c 24 0c          	mov    0xc(%esp),%ecx
+   4:	f6 c1 20             	test   $0x20,%cl
+   7:	75 0e                	jne    17 <__compcert_i64_shl+0x17>
+   9:	8b 44 24 04          	mov    0x4(%esp),%eax
+   d:	8b 54 24 08          	mov    0x8(%esp),%edx
+  11:	0f a5 c2             	shld   %cl,%eax,%edx
+  14:	d3 e0                	shl    %cl,%eax
+  16:	c3                   	ret
+  17:	8b 54 24 04          	mov    0x4(%esp),%edx
+  1b:	d3 e2                	shl    %cl,%edx
+  1d:	31 c0                	xor    %eax,%eax
+  1f:	c3                   	ret

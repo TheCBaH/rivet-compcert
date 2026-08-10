@@ -1,0 +1,17 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_sar>:
+   0:	e202203f 	and	r2, r2, #63	@ 0x3f
+   4:	e2723020 	rsbs	r3, r2, #32
+   8:	da000004 	ble	20 <__compcert_i64_sar+0x20>
+   c:	e1a00230 	lsr	r0, r0, r2
+  10:	e1a03311 	lsl	r3, r1, r3
+  14:	e1800003 	orr	r0, r0, r3
+  18:	e1a01251 	asr	r1, r1, r2
+  1c:	e12fff1e 	bx	lr
+  20:	e2422020 	sub	r2, r2, #32
+  24:	e1a00251 	asr	r0, r1, r2
+  28:	e1a01fc1 	asr	r1, r1, #31
+  2c:	e12fff1e 	bx	lr

@@ -1,0 +1,39 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_va_int32>:
+   0:	8b 4c 24 04          	mov    0x4(%esp),%ecx
+   4:	8b 11                	mov    (%ecx),%edx
+   6:	8b 02                	mov    (%edx),%eax
+   8:	83 c2 04             	add    $0x4,%edx
+   b:	89 11                	mov    %edx,(%ecx)
+   d:	c3                   	ret
+   e:	66 90                	xchg   %ax,%ax
+
+00000010 <__compcert_va_int64>:
+  10:	8b 4c 24 04          	mov    0x4(%esp),%ecx
+  14:	8b 11                	mov    (%ecx),%edx
+  16:	8b 02                	mov    (%edx),%eax
+  18:	8b 52 04             	mov    0x4(%edx),%edx
+  1b:	83 01 08             	addl   $0x8,(%ecx)
+  1e:	c3                   	ret
+  1f:	90                   	nop
+
+00000020 <__compcert_va_float64>:
+  20:	8b 4c 24 04          	mov    0x4(%esp),%ecx
+  24:	8b 11                	mov    (%ecx),%edx
+  26:	dd 02                	fldl   (%edx)
+  28:	83 c2 08             	add    $0x8,%edx
+  2b:	89 11                	mov    %edx,(%ecx)
+  2d:	c3                   	ret
+  2e:	66 90                	xchg   %ax,%ax
+
+00000030 <__compcert_va_composite>:
+  30:	8b 4c 24 04          	mov    0x4(%esp),%ecx
+  34:	8b 54 24 08          	mov    0x8(%esp),%edx
+  38:	8b 01                	mov    (%ecx),%eax
+  3a:	8d 54 10 03          	lea    0x3(%eax,%edx,1),%edx
+  3e:	83 e2 fc             	and    $0xfffffffc,%edx
+  41:	89 11                	mov    %edx,(%ecx)
+  43:	c3                   	ret

@@ -1,0 +1,34 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_udivmod>:
+   0:	e1926003 	orrs	r6, r2, r3
+   4:	012fff1e 	bxeq	lr
+   8:	e3a04000 	mov	r4, #0
+   c:	e3a05000 	mov	r5, #0
+  10:	e3a08001 	mov	r8, #1
+  14:	e3530000 	cmp	r3, #0
+  18:	ba000008 	blt	40 <__compcert_i64_udivmod+0x40>
+  1c:	e0922002 	adds	r2, r2, r2
+  20:	e0a33003 	adc	r3, r3, r3
+  24:	e0506002 	subs	r6, r0, r2
+  28:	e0d17003 	sbcs	r7, r1, r3
+  2c:	3a000001 	bcc	38 <__compcert_i64_udivmod+0x38>
+  30:	e2888001 	add	r8, r8, #1
+  34:	eafffff6 	b	14 <__compcert_i64_udivmod+0x14>
+  38:	e1b030a3 	lsrs	r3, r3, #1
+  3c:	e1a02062 	rrx	r2, r2
+  40:	e0944004 	adds	r4, r4, r4
+  44:	e0a55005 	adc	r5, r5, r5
+  48:	e0506002 	subs	r6, r0, r2
+  4c:	e0d17003 	sbcs	r7, r1, r3
+  50:	3a000002 	bcc	60 <__compcert_i64_udivmod+0x60>
+  54:	e1a00006 	mov	r0, r6
+  58:	e1a01007 	mov	r1, r7
+  5c:	e3844001 	orr	r4, r4, #1
+  60:	e1b030a3 	lsrs	r3, r3, #1
+  64:	e1a02062 	rrx	r2, r2
+  68:	e2588001 	subs	r8, r8, #1
+  6c:	1afffff3 	bne	40 <__compcert_i64_udivmod+0x40>
+  70:	e12fff1e 	bx	lr

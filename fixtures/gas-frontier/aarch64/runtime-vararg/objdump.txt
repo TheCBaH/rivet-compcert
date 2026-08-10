@@ -1,0 +1,57 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <__compcert_va_int32>:
+   0:	b9401801 	ldr	w1, [x0, #24]
+   4:	340000e1 	cbz	w1, 20 <__compcert_va_int32+0x20>
+   8:	f9400402 	ldr	x2, [x0, #8]
+   c:	b861c842 	ldr	w2, [x2, w1, sxtw]
+  10:	11002021 	add	w1, w1, #0x8
+  14:	b9001801 	str	w1, [x0, #24]
+  18:	2a0203e0 	mov	w0, w2
+  1c:	d65f03c0 	ret
+  20:	f9400001 	ldr	x1, [x0]
+  24:	b9400022 	ldr	w2, [x1]
+  28:	91002021 	add	x1, x1, #0x8
+  2c:	f9000001 	str	x1, [x0]
+  30:	2a0203e0 	mov	w0, w2
+  34:	d65f03c0 	ret
+  38:	d503201f 	nop
+  3c:	d503201f 	nop
+
+0000000000000040 <__compcert_va_int64>:
+  40:	b9401801 	ldr	w1, [x0, #24]
+  44:	340000e1 	cbz	w1, 60 <__compcert_va_int64+0x20>
+  48:	f9400402 	ldr	x2, [x0, #8]
+  4c:	f861c842 	ldr	x2, [x2, w1, sxtw]
+  50:	11002021 	add	w1, w1, #0x8
+  54:	b9001801 	str	w1, [x0, #24]
+  58:	aa0203e0 	mov	x0, x2
+  5c:	d65f03c0 	ret
+  60:	f9400001 	ldr	x1, [x0]
+  64:	f9400022 	ldr	x2, [x1]
+  68:	91002021 	add	x1, x1, #0x8
+  6c:	f9000001 	str	x1, [x0]
+  70:	aa0203e0 	mov	x0, x2
+  74:	d65f03c0 	ret
+  78:	d503201f 	nop
+  7c:	d503201f 	nop
+
+0000000000000080 <__compcert_va_float64>:
+  80:	b9401c01 	ldr	w1, [x0, #28]
+  84:	340000c1 	cbz	w1, 9c <__compcert_va_float64+0x1c>
+  88:	f9400802 	ldr	x2, [x0, #16]
+  8c:	fc61c840 	ldr	d0, [x2, w1, sxtw]
+  90:	11004021 	add	w1, w1, #0x10
+  94:	b9001c01 	str	w1, [x0, #28]
+  98:	d65f03c0 	ret
+  9c:	f9400001 	ldr	x1, [x0]
+  a0:	fd400020 	ldr	d0, [x1]
+  a4:	91002021 	add	x1, x1, #0x8
+  a8:	f9000001 	str	x1, [x0]
+  ac:	d65f03c0 	ret
+
+00000000000000b0 <__compcert_va_composite>:
+  b0:	14000000 	b	40 <__compcert_va_int64>
+			b0: R_AARCH64_JUMP26	__compcert_va_int64

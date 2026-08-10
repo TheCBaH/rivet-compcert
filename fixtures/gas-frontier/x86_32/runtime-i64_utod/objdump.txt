@@ -1,0 +1,17 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_utod>:
+   0:	df 6c 24 04          	fildll 0x4(%esp)
+   4:	83 7c 24 08 00       	cmpl   $0x0,0x8(%esp)
+   9:	79 06                	jns    11 <__compcert_i64_utod+0x11>
+   b:	d8 05 14 00 00 00    	fadds  0x14
+			d: R_386_32	.text
+  11:	c3                   	ret
+  12:	66 90                	xchg   %ax,%ax
+
+00000014 <LC1>:
+  14:	00 00                	add    %al,(%eax)
+  16:	80                   	.byte 0x80
+  17:	5f                   	pop    %edi

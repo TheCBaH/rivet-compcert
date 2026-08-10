@@ -1,0 +1,7 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_stod>:
+   0:	df 6c 24 04          	fildll 0x4(%esp)
+   4:	c3                   	ret

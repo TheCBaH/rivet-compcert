@@ -1,0 +1,82 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <__compcert_va_int32>:
+   0:	8b 17                	mov    (%rdi),%edx
+   2:	83 fa 30             	cmp    $0x30,%edx
+   5:	73 0d                	jae    14 <__compcert_va_int32+0x14>
+   7:	48 8b 77 10          	mov    0x10(%rdi),%rsi
+   b:	8b 04 16             	mov    (%rsi,%rdx,1),%eax
+   e:	83 c2 08             	add    $0x8,%edx
+  11:	89 17                	mov    %edx,(%rdi)
+  13:	c3                   	ret
+  14:	48 8b 77 08          	mov    0x8(%rdi),%rsi
+  18:	48 8b 06             	mov    (%rsi),%rax
+  1b:	48 83 c6 08          	add    $0x8,%rsi
+  1f:	48 89 77 08          	mov    %rsi,0x8(%rdi)
+  23:	c3                   	ret
+  24:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+  2b:	00 00 00 00 
+  2f:	90                   	nop
+
+0000000000000030 <__compcert_va_int64>:
+  30:	8b 17                	mov    (%rdi),%edx
+  32:	83 fa 30             	cmp    $0x30,%edx
+  35:	73 0e                	jae    45 <__compcert_va_int64+0x15>
+  37:	48 8b 77 10          	mov    0x10(%rdi),%rsi
+  3b:	48 8b 04 16          	mov    (%rsi,%rdx,1),%rax
+  3f:	83 c2 08             	add    $0x8,%edx
+  42:	89 17                	mov    %edx,(%rdi)
+  44:	c3                   	ret
+  45:	48 8b 77 08          	mov    0x8(%rdi),%rsi
+  49:	48 8b 06             	mov    (%rsi),%rax
+  4c:	48 83 c6 08          	add    $0x8,%rsi
+  50:	48 89 77 08          	mov    %rsi,0x8(%rdi)
+  54:	c3                   	ret
+  55:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+  5c:	00 00 00 00 
+
+0000000000000060 <__compcert_va_float64>:
+  60:	8b 57 04             	mov    0x4(%rdi),%edx
+  63:	81 fa b0 00 00 00    	cmp    $0xb0,%edx
+  69:	73 10                	jae    7b <__compcert_va_float64+0x1b>
+  6b:	48 8b 77 10          	mov    0x10(%rdi),%rsi
+  6f:	f2 0f 10 04 16       	movsd  (%rsi,%rdx,1),%xmm0
+  74:	83 c2 10             	add    $0x10,%edx
+  77:	89 57 04             	mov    %edx,0x4(%rdi)
+  7a:	c3                   	ret
+  7b:	48 8b 77 08          	mov    0x8(%rdi),%rsi
+  7f:	f2 0f 10 06          	movsd  (%rsi),%xmm0
+  83:	48 83 c6 08          	add    $0x8,%rsi
+  87:	48 89 77 08          	mov    %rsi,0x8(%rdi)
+  8b:	c3                   	ret
+  8c:	0f 1f 40 00          	nopl   0x0(%rax)
+
+0000000000000090 <__compcert_va_composite>:
+  90:	eb 9e                	jmp    30 <__compcert_va_int64>
+  92:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+  99:	00 00 00 00 
+  9d:	0f 1f 00             	nopl   (%rax)
+
+00000000000000a0 <__compcert_va_saveregs>:
+  a0:	49 89 3a             	mov    %rdi,(%r10)
+  a3:	49 89 72 08          	mov    %rsi,0x8(%r10)
+  a7:	49 89 52 10          	mov    %rdx,0x10(%r10)
+  ab:	49 89 4a 18          	mov    %rcx,0x18(%r10)
+  af:	4d 89 42 20          	mov    %r8,0x20(%r10)
+  b3:	4d 89 4a 28          	mov    %r9,0x28(%r10)
+  b7:	84 c0                	test   %al,%al
+  b9:	74 31                	je     ec <__compcert_va_saveregs+0x4c>
+  bb:	41 0f 29 42 30       	movaps %xmm0,0x30(%r10)
+  c0:	41 0f 29 4a 40       	movaps %xmm1,0x40(%r10)
+  c5:	41 0f 29 52 50       	movaps %xmm2,0x50(%r10)
+  ca:	41 0f 29 5a 60       	movaps %xmm3,0x60(%r10)
+  cf:	41 0f 29 62 70       	movaps %xmm4,0x70(%r10)
+  d4:	41 0f 29 aa 80 00 00 	movaps %xmm5,0x80(%r10)
+  db:	00 
+  dc:	41 0f 29 b2 90 00 00 	movaps %xmm6,0x90(%r10)
+  e3:	00 
+  e4:	41 0f 29 ba a0 00 00 	movaps %xmm7,0xa0(%r10)
+  eb:	00 
+  ec:	c3                   	ret

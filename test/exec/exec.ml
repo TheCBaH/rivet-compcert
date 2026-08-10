@@ -76,14 +76,10 @@ let assemble profile =
 
 (* {1 The induced-failure control}
 
-   The byte pairs are stated in memory order, which is the order everything in
-   this project is stated in. On x86 the immediate follows the opcode directly;
-   on the two fixed-width targets the whole instruction word is given, because a
-   two-byte pattern would be ambiguous across a 32-bit encoding. *)
-let mutation = function
-  | Abi.X86_32 | Abi.X86_64 -> ("\xb8\x2a", "\xb8\x29")
-  | Abi.Arm -> ("\x2a\x00\xa0\xe3", "\x29\x00\xa0\xe3")
-  | Abi.Aarch64 -> ("\x40\x05\x80\x52", "\x20\x05\x80\x52")
+   The byte pair is in {!Snippet_bytes.mutation}, beside the two snippets whose
+   difference it is: [return42] and [return41] differ by exactly this splice,
+   and stating that fact twice is how the two drift. *)
+let mutation = Snippet_bytes.mutation
 
 let occurrences ~needle haystack =
   let n = String.length needle and h = String.length haystack in

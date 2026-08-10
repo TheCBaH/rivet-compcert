@@ -1,0 +1,45 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_smulh>:
+   0:	56                   	push   %esi
+   1:	57                   	push   %edi
+   2:	8b 44 24 0c          	mov    0xc(%esp),%eax
+   6:	f7 64 24 14          	mull   0x14(%esp)
+   a:	89 d1                	mov    %edx,%ecx
+   c:	31 f6                	xor    %esi,%esi
+   e:	31 ff                	xor    %edi,%edi
+  10:	8b 44 24 10          	mov    0x10(%esp),%eax
+  14:	f7 64 24 14          	mull   0x14(%esp)
+  18:	01 c1                	add    %eax,%ecx
+  1a:	11 d6                	adc    %edx,%esi
+  1c:	83 d7 00             	adc    $0x0,%edi
+  1f:	8b 44 24 18          	mov    0x18(%esp),%eax
+  23:	f7 64 24 0c          	mull   0xc(%esp)
+  27:	01 c1                	add    %eax,%ecx
+  29:	11 d6                	adc    %edx,%esi
+  2b:	83 d7 00             	adc    $0x0,%edi
+  2e:	8b 44 24 10          	mov    0x10(%esp),%eax
+  32:	f7 64 24 18          	mull   0x18(%esp)
+  36:	01 c6                	add    %eax,%esi
+  38:	11 d7                	adc    %edx,%edi
+  3a:	31 c0                	xor    %eax,%eax
+  3c:	31 d2                	xor    %edx,%edx
+  3e:	83 7c 24 10 00       	cmpl   $0x0,0x10(%esp)
+  43:	0f 4c 44 24 14       	cmovl  0x14(%esp),%eax
+  48:	0f 4c 54 24 18       	cmovl  0x18(%esp),%edx
+  4d:	29 c6                	sub    %eax,%esi
+  4f:	19 d7                	sbb    %edx,%edi
+  51:	31 c0                	xor    %eax,%eax
+  53:	31 d2                	xor    %edx,%edx
+  55:	83 7c 24 18 00       	cmpl   $0x0,0x18(%esp)
+  5a:	0f 4c 44 24 0c       	cmovl  0xc(%esp),%eax
+  5f:	0f 4c 54 24 10       	cmovl  0x10(%esp),%edx
+  64:	29 c6                	sub    %eax,%esi
+  66:	19 d7                	sbb    %edx,%edi
+  68:	89 f0                	mov    %esi,%eax
+  6a:	89 fa                	mov    %edi,%edx
+  6c:	5f                   	pop    %edi
+  6d:	5e                   	pop    %esi
+  6e:	c3                   	ret

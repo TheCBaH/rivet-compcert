@@ -1,0 +1,36 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_va_int32>:
+   0:	e5901000 	ldr	r1, [r0]
+   4:	e2811004 	add	r1, r1, #4
+   8:	e5801000 	str	r1, [r0]
+   c:	e5110004 	ldr	r0, [r1, #-4]
+  10:	e12fff1e 	bx	lr
+
+00000014 <__compcert_va_int64>:
+  14:	e5901000 	ldr	r1, [r0]
+  18:	e281100f 	add	r1, r1, #15
+  1c:	e3c11007 	bic	r1, r1, #7
+  20:	e5801000 	str	r1, [r0]
+  24:	e5110008 	ldr	r0, [r1, #-8]
+  28:	e5111004 	ldr	r1, [r1, #-4]
+  2c:	e12fff1e 	bx	lr
+
+00000030 <__compcert_va_float64>:
+  30:	e5901000 	ldr	r1, [r0]
+  34:	e281100f 	add	r1, r1, #15
+  38:	e3c11007 	bic	r1, r1, #7
+  3c:	e5801000 	str	r1, [r0]
+  40:	ed110b02 	vldr	d0, [r1, #-8]
+  44:	e12fff1e 	bx	lr
+
+00000048 <__compcert_va_composite>:
+  48:	e5902000 	ldr	r2, [r0]
+  4c:	e0823001 	add	r3, r2, r1
+  50:	e2833003 	add	r3, r3, #3
+  54:	e3c33003 	bic	r3, r3, #3
+  58:	e5803000 	str	r3, [r0]
+  5c:	e1a00002 	mov	r0, r2
+  60:	e12fff1e 	bx	lr

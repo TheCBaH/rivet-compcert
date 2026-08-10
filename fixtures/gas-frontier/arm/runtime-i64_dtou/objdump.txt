@@ -1,0 +1,43 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_dtou>:
+   0:	ec510b10 	vmov	r0, r1, d0
+   4:	e3510000 	cmp	r1, #0
+   8:	ba00001c 	blt	80 <__compcert_i64_dtou+0x80>
+   c:	e1a02081 	lsl	r2, r1, #1
+  10:	e1a02aa2 	lsr	r2, r2, #21
+  14:	e2422033 	sub	r2, r2, #51	@ 0x33
+  18:	e2422b01 	sub	r2, r2, #1024	@ 0x400
+  1c:	e3720034 	cmn	r2, #52	@ 0x34
+  20:	ba000016 	blt	80 <__compcert_i64_dtou+0x80>
+  24:	e352000c 	cmp	r2, #12
+  28:	aa000017 	bge	8c <__compcert_i64_dtou+0x8c>
+  2c:	e3c114ff 	bic	r1, r1, #-16777216	@ 0xff000000
+  30:	e3c1160f 	bic	r1, r1, #15728640	@ 0xf00000
+  34:	e3811601 	orr	r1, r1, #1048576	@ 0x100000
+  38:	e3520000 	cmp	r2, #0
+  3c:	ba000005 	blt	58 <__compcert_i64_dtou+0x58>
+  40:	e2623020 	rsb	r3, r2, #32
+  44:	e1a01211 	lsl	r1, r1, r2
+  48:	e1a03330 	lsr	r3, r0, r3
+  4c:	e1811003 	orr	r1, r1, r3
+  50:	e1a00210 	lsl	r0, r0, r2
+  54:	e12fff1e 	bx	lr
+  58:	e2622000 	rsb	r2, r2, #0
+  5c:	e2623020 	rsb	r3, r2, #32
+  60:	e1a00230 	lsr	r0, r0, r2
+  64:	e1a03311 	lsl	r3, r1, r3
+  68:	e1800003 	orr	r0, r0, r3
+  6c:	e2423020 	sub	r3, r2, #32
+  70:	e1a03331 	lsr	r3, r1, r3
+  74:	e1800003 	orr	r0, r0, r3
+  78:	e1a01231 	lsr	r1, r1, r2
+  7c:	e12fff1e 	bx	lr
+  80:	e3a00000 	mov	r0, #0
+  84:	e3a01000 	mov	r1, #0
+  88:	e12fff1e 	bx	lr
+  8c:	e3e00000 	mvn	r0, #0
+  90:	e1a01000 	mov	r1, r0
+  94:	e12fff1e 	bx	lr

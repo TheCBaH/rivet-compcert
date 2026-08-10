@@ -1,0 +1,25 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_stof>:
+   0:	e1a02ac1 	asr	r2, r1, #21
+   4:	e2922001 	adds	r2, r2, #1
+   8:	e3520002 	cmp	r2, #2
+   c:	3a000005 	bcc	28 <__compcert_i64_stof+0x28>
+  10:	e3a02c07 	mov	r2, #1792	@ 0x700
+  14:	e38220ff 	orr	r2, r2, #255	@ 0xff
+  18:	e0003002 	and	r3, r0, r2
+  1c:	e0833002 	add	r3, r3, r2
+  20:	e1800003 	orr	r0, r0, r3
+  24:	e1c00002 	bic	r0, r0, r2
+  28:	ee000a10 	vmov	s0, r0
+  2c:	eeb80b40 	vcvt.f64.u32	d0, s0
+  30:	ee011a10 	vmov	s2, r1
+  34:	eeb81bc1 	vcvt.f64.s32	d1, s2
+  38:	ed9f2b02 	vldr	d2, [pc, #8]	@ 48 <__compcert_i64_stof+0x48>
+  3c:	ee010b02 	vmla.f64	d0, d1, d2
+  40:	eeb70bc0 	vcvt.f32.f64	s0, d0
+  44:	e12fff1e 	bx	lr
+  48:	00000000 	.word	0x00000000
+  4c:	41f00000 	.word	0x41f00000

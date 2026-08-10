@@ -1,0 +1,18 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <__compcert_i64_dtou>:
+   0:	66 0f 2e 05 00 00 00 	ucomisd 0x0(%rip),%xmm0        # 8 <__compcert_i64_dtou+0x8>
+   7:	00 
+			4: R_X86_64_PC32	.rodata-0x4
+   8:	73 06                	jae    10 <__compcert_i64_dtou+0x10>
+   a:	f2 48 0f 2c c0       	cvttsd2si %xmm0,%rax
+   f:	c3                   	ret
+  10:	f2 0f 5c 05 00 00 00 	subsd  0x0(%rip),%xmm0        # 18 <__compcert_i64_dtou+0x18>
+  17:	00 
+			14: R_X86_64_PC32	.rodata-0x4
+  18:	f2 48 0f 2c c0       	cvttsd2si %xmm0,%rax
+  1d:	48 03 05 00 00 00 00 	add    0x0(%rip),%rax        # 24 <__compcert_i64_dtou+0x24>
+			20: R_X86_64_PC32	.rodata+0x4
+  24:	c3                   	ret

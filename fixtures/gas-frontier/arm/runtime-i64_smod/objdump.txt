@@ -1,0 +1,24 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_smod>:
+   0:	e92d45f0 	push	{r4, r5, r6, r7, r8, sl, lr}
+   4:	e1a0afc1 	asr	sl, r1, #31
+   8:	e1a05fc3 	asr	r5, r3, #31
+   c:	e020000a 	eor	r0, r0, sl
+  10:	e021100a 	eor	r1, r1, sl
+  14:	e050000a 	subs	r0, r0, sl
+  18:	e0c1100a 	sbc	r1, r1, sl
+  1c:	e0222005 	eor	r2, r2, r5
+  20:	e0233005 	eor	r3, r3, r5
+  24:	e0522005 	subs	r2, r2, r5
+  28:	e0c33005 	sbc	r3, r3, r5
+  2c:	ebfffffe 	bl	0 <__compcert_i64_udivmod>
+			2c: R_ARM_CALL	__compcert_i64_udivmod
+  30:	e020000a 	eor	r0, r0, sl
+  34:	e021100a 	eor	r1, r1, sl
+  38:	e050000a 	subs	r0, r0, sl
+  3c:	e0c1100a 	sbc	r1, r1, sl
+  40:	e8bd45f0 	pop	{r4, r5, r6, r7, r8, sl, lr}
+  44:	e12fff1e 	bx	lr

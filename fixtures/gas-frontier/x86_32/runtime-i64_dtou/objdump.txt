@@ -1,0 +1,44 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_dtou>:
+   0:	83 ec 04             	sub    $0x4,%esp
+   3:	dd 44 24 08          	fldl   0x8(%esp)
+   7:	d9 05 6c 00 00 00    	flds   0x6c
+			9: R_386_32	.text
+   d:	dd e9                	fucomp %st(1)
+   f:	df e0                	fnstsw %ax
+  11:	9e                   	sahf
+  12:	76 25                	jbe    39 <__compcert_i64_dtou+0x39>
+  14:	d9 3c 24             	fnstcw (%esp)
+  17:	66 8b 04 24          	mov    (%esp),%ax
+  1b:	b4 0c                	mov    $0xc,%ah
+  1d:	66 89 44 24 02       	mov    %ax,0x2(%esp)
+  22:	d9 6c 24 02          	fldcw  0x2(%esp)
+  26:	df 7c 24 08          	fistpll 0x8(%esp)
+  2a:	8b 44 24 08          	mov    0x8(%esp),%eax
+  2e:	8b 54 24 0c          	mov    0xc(%esp),%edx
+  32:	d9 2c 24             	fldcw  (%esp)
+  35:	83 c4 04             	add    $0x4,%esp
+  38:	c3                   	ret
+  39:	d8 25 6c 00 00 00    	fsubs  0x6c
+			3b: R_386_32	.text
+  3f:	d9 3c 24             	fnstcw (%esp)
+  42:	66 8b 04 24          	mov    (%esp),%ax
+  46:	b4 0c                	mov    $0xc,%ah
+  48:	66 89 44 24 02       	mov    %ax,0x2(%esp)
+  4d:	d9 6c 24 02          	fldcw  0x2(%esp)
+  51:	df 7c 24 08          	fistpll 0x8(%esp)
+  55:	8b 44 24 08          	mov    0x8(%esp),%eax
+  59:	8b 54 24 0c          	mov    0xc(%esp),%edx
+  5d:	81 c2 00 00 00 80    	add    $0x80000000,%edx
+  63:	d9 2c 24             	fldcw  (%esp)
+  66:	83 c4 04             	add    $0x4,%esp
+  69:	c3                   	ret
+  6a:	66 90                	xchg   %ax,%ax
+
+0000006c <LC1>:
+  6c:	00 00                	add    %al,(%eax)
+  6e:	00                   	.byte 0
+  6f:	5f                   	pop    %edi

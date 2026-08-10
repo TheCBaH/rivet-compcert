@@ -1,0 +1,14 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_umod>:
+   0:	55                   	push   %ebp
+   1:	56                   	push   %esi
+   2:	57                   	push   %edi
+   3:	e8 fc ff ff ff       	call   4 <__compcert_i64_umod+0x4>
+			4: R_386_PC32	__compcert_i64_udivmod
+   8:	5f                   	pop    %edi
+   9:	5e                   	pop    %esi
+   a:	5d                   	pop    %ebp
+   b:	c3                   	ret

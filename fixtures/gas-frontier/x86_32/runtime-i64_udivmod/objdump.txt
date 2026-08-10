@@ -1,0 +1,50 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_udivmod>:
+   0:	83 7c 24 20 00       	cmpl   $0x0,0x20(%esp)
+   5:	75 1b                	jne    22 <__compcert_i64_udivmod+0x22>
+   7:	8b 4c 24 1c          	mov    0x1c(%esp),%ecx
+   b:	8b 44 24 18          	mov    0x18(%esp),%eax
+   f:	31 d2                	xor    %edx,%edx
+  11:	f7 f1                	div    %ecx
+  13:	89 c7                	mov    %eax,%edi
+  15:	8b 44 24 14          	mov    0x14(%esp),%eax
+  19:	f7 f1                	div    %ecx
+  1b:	89 c6                	mov    %eax,%esi
+  1d:	89 d0                	mov    %edx,%eax
+  1f:	31 d2                	xor    %edx,%edx
+  21:	c3                   	ret
+  22:	8b 4c 24 1c          	mov    0x1c(%esp),%ecx
+  26:	8b 74 24 20          	mov    0x20(%esp),%esi
+  2a:	8b 44 24 14          	mov    0x14(%esp),%eax
+  2e:	8b 54 24 18          	mov    0x18(%esp),%edx
+  32:	d1 ee                	shr    $1,%esi
+  34:	d1 d9                	rcr    $1,%ecx
+  36:	d1 ea                	shr    $1,%edx
+  38:	d1 d8                	rcr    $1,%eax
+  3a:	85 f6                	test   %esi,%esi
+  3c:	75 f4                	jne    32 <__compcert_i64_udivmod+0x32>
+  3e:	f7 f1                	div    %ecx
+  40:	89 c6                	mov    %eax,%esi
+  42:	8b 4c 24 20          	mov    0x20(%esp),%ecx
+  46:	0f af ce             	imul   %esi,%ecx
+  49:	8b 44 24 1c          	mov    0x1c(%esp),%eax
+  4d:	f7 e6                	mul    %esi
+  4f:	01 ca                	add    %ecx,%edx
+  51:	72 1e                	jb     71 <__compcert_i64_udivmod+0x71>
+  53:	89 c1                	mov    %eax,%ecx
+  55:	8b 44 24 14          	mov    0x14(%esp),%eax
+  59:	29 c8                	sub    %ecx,%eax
+  5b:	89 d1                	mov    %edx,%ecx
+  5d:	8b 54 24 18          	mov    0x18(%esp),%edx
+  61:	19 ca                	sbb    %ecx,%edx
+  63:	73 09                	jae    6e <__compcert_i64_udivmod+0x6e>
+  65:	4e                   	dec    %esi
+  66:	03 44 24 1c          	add    0x1c(%esp),%eax
+  6a:	13 54 24 20          	adc    0x20(%esp),%edx
+  6e:	31 ff                	xor    %edi,%edi
+  70:	c3                   	ret
+  71:	4e                   	dec    %esi
+  72:	eb ce                	jmp    42 <__compcert_i64_udivmod+0x42>

@@ -1,0 +1,15 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_stod>:
+   0:	ee000a10 	vmov	s0, r0
+   4:	eeb80b40 	vcvt.f64.u32	d0, s0
+   8:	ee011a10 	vmov	s2, r1
+   c:	eeb81bc1 	vcvt.f64.s32	d1, s2
+  10:	ed9f2b02 	vldr	d2, [pc, #8]	@ 20 <__compcert_i64_stod+0x20>
+  14:	ee010b02 	vmla.f64	d0, d1, d2
+  18:	e12fff1e 	bx	lr
+  1c:	e320f000 	nop	{0}
+  20:	00000000 	.word	0x00000000
+  24:	41f00000 	.word	0x41f00000

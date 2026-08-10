@@ -1,0 +1,18 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <__compcert_i64_utof>:
+   0:	48 85 ff             	test   %rdi,%rdi
+   3:	78 0a                	js     f <__compcert_i64_utof+0xf>
+   5:	66 0f ef c0          	pxor   %xmm0,%xmm0
+   9:	f3 48 0f 2a c7       	cvtsi2ss %rdi,%xmm0
+   e:	c3                   	ret
+   f:	48 89 f8             	mov    %rdi,%rax
+  12:	48 d1 e8             	shr    $1,%rax
+  15:	48 83 e7 01          	and    $0x1,%rdi
+  19:	48 09 f8             	or     %rdi,%rax
+  1c:	66 0f ef c0          	pxor   %xmm0,%xmm0
+  20:	f3 48 0f 2a c0       	cvtsi2ss %rax,%xmm0
+  25:	f3 0f 58 c0          	addss  %xmm0,%xmm0
+  29:	c3                   	ret
