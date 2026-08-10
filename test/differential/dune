@@ -1,0 +1,16 @@
+; The M1.5 differential gate. Reads the committed fixtures and their GNU oracle
+; artifacts as ordinary files, so this needs no cross toolchain and no emulator
+; and runs in every leg of the portable matrix.
+
+(library
+ (name test_differential)
+ (modules test_differential)
+ (modes byte native)
+ (libraries driver image target_intf foundation fmt)
+ (inline_tests
+  (deps
+   (glob_files_rec %{workspace_root}/fixtures/compcert-3.17/return42/**)))
+ (preprocess
+  (pps ppx_expect))
+ (enabled_if
+  (<> %{env:ASM_MELANGE=false} true)))
