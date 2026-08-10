@@ -9,7 +9,7 @@
  (libraries driver image target_intf foundation test_dump_inputs fmt)
  (inline_tests
   (deps
-   (glob_files_rec %{workspace_root}/fixtures/compcert-3.17/return42/**)))
+   (glob_files_rec %{workspace_root}/fixtures/compcert-3.17/**)))
  (preprocess
   (pps ppx_expect))
  (enabled_if
