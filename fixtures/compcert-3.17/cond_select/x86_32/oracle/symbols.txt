@@ -1,0 +1,2 @@
+.text	local	default	1	defined
+asm_test_entry	global	default	1	defined

@@ -1,0 +1,33 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <asm_test_sum>:
+   0:	910003ef 	mov	x15, sp
+   4:	a9bf7bef 	stp	x15, x30, [sp, #-16]!
+   8:	1b020021 	madd	w1, w1, w2, w0
+   c:	4b030020 	sub	w0, w1, w3
+  10:	f94007fe 	ldr	x30, [sp, #8]
+  14:	910043ff 	add	sp, sp, #0x10
+  18:	d65f03c0 	ret
+
+000000000000001c <asm_test_entry>:
+  1c:	910003ef 	mov	x15, sp
+  20:	a9be7bef 	stp	x15, x30, [sp, #-32]!
+  24:	32000be0 	orr	w0, wzr, #0x7
+  28:	b90017e0 	str	w0, [sp, #20]
+  2c:	528000a0 	mov	w0, #0x5                   	// #5
+  30:	b9001be0 	str	w0, [sp, #24]
+  34:	52800120 	mov	w0, #0x9                   	// #9
+  38:	b90013e0 	str	w0, [sp, #16]
+  3c:	b94017e3 	ldr	w3, [sp, #20]
+  40:	b9401be4 	ldr	w4, [sp, #24]
+  44:	1b047c62 	mul	w2, w3, w4
+  48:	b94013e5 	ldr	w5, [sp, #16]
+  4c:	4b050040 	sub	w0, w2, w5
+  50:	b9401be1 	ldr	w1, [sp, #24]
+  54:	0b010400 	add	w0, w0, w1, lsl #1
+  58:	11001800 	add	w0, w0, #0x6
+  5c:	f94007fe 	ldr	x30, [sp, #8]
+  60:	910083ff 	add	sp, sp, #0x20
+  64:	d65f03c0 	ret

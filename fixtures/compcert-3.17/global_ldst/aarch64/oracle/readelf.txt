@@ -1,0 +1,45 @@
+There are 11 section headers, starting at offset 0x298:
+
+Section Headers:
+  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        0000000000000000 000040 000028 00  AX  0   0  4
+  [ 2] .rela.text        RELA            0000000000000000 0001d0 000060 18   I  8   1  8
+  [ 3] .data             PROGBITS        0000000000000000 000068 000004 00  WA  0   0  4
+  [ 4] .bss              NOBITS          0000000000000000 00006c 000000 00  WA  0   0  1
+  [ 5] .note.GNU-stack   PROGBITS        0000000000000000 00006c 000000 00      0   0  1
+  [ 6] .eh_frame         PROGBITS        0000000000000000 000070 000030 00   A  0   0  8
+  [ 7] .rela.eh_frame    RELA            0000000000000000 000230 000018 18   I  8   6  8
+  [ 8] .symtab           SYMTAB          0000000000000000 0000a0 000108 18      9   9  8
+  [ 9] .strtab           STRTAB          0000000000000000 0001a8 000026 00      0   0  1
+  [10] .shstrtab         STRTAB          0000000000000000 000248 000050 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  D (mbind), p (processor specific)
+
+Relocation section '.rela.text' at offset 0x1d0 contains 4 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000008  0000000900000113 R_AARCH64_ADR_PREL_PG_HI21 0000000000000000 asm_test_global + 0
+000000000000000c  000000090000011d R_AARCH64_LDST32_ABS_LO12_NC 0000000000000000 asm_test_global + 0
+0000000000000014  0000000900000113 R_AARCH64_ADR_PREL_PG_HI21 0000000000000000 asm_test_global + 0
+0000000000000018  000000090000011d R_AARCH64_LDST32_ABS_LO12_NC 0000000000000000 asm_test_global + 0
+
+Relocation section '.rela.eh_frame' at offset 0x230 contains 1 entry:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+000000000000001c  0000000100000105 R_AARCH64_PREL32       0000000000000000 .text + 0
+
+Symbol table '.symtab' contains 11 entries:
+   Num:    Value          Size Type    Bind   Vis      Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1: 0000000000000000     0 SECTION LOCAL  DEFAULT    1 .text
+     2: 0000000000000000     0 SECTION LOCAL  DEFAULT    3 .data
+     3: 0000000000000000     0 SECTION LOCAL  DEFAULT    4 .bss
+     4: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT    3 $d
+     5: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT    1 $x
+     6: 0000000000000000     0 SECTION LOCAL  DEFAULT    5 .note.GNU-stack
+     7: 0000000000000014     0 NOTYPE  LOCAL  DEFAULT    6 $d
+     8: 0000000000000000     0 SECTION LOCAL  DEFAULT    6 .eh_frame
+     9: 0000000000000000     4 OBJECT  GLOBAL DEFAULT    3 asm_test_global
+    10: 0000000000000000    40 FUNC    GLOBAL DEFAULT    1 asm_test_entry

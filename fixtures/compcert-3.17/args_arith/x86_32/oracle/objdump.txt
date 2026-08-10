@@ -1,0 +1,44 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_sum>:
+   0:	83 ec 1c             	sub    $0x1c,%esp
+   3:	8d 44 24 20          	lea    0x20(%esp),%eax
+   7:	89 04 24             	mov    %eax,(%esp)
+   a:	89 5c 24 04          	mov    %ebx,0x4(%esp)
+   e:	89 74 24 08          	mov    %esi,0x8(%esp)
+  12:	89 7c 24 0c          	mov    %edi,0xc(%esp)
+  16:	8b 58 0c             	mov    0xc(%eax),%ebx
+  19:	8b 70 08             	mov    0x8(%eax),%esi
+  1c:	8b 48 04             	mov    0x4(%eax),%ecx
+  1f:	8b 38                	mov    (%eax),%edi
+  21:	0f af ce             	imul   %esi,%ecx
+  24:	8d 04 0f             	lea    (%edi,%ecx,1),%eax
+  27:	29 d8                	sub    %ebx,%eax
+  29:	8b 5c 24 04          	mov    0x4(%esp),%ebx
+  2d:	8b 74 24 08          	mov    0x8(%esp),%esi
+  31:	8b 7c 24 0c          	mov    0xc(%esp),%edi
+  35:	83 c4 1c             	add    $0x1c,%esp
+  38:	c3                   	ret
+  39:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
+
+00000040 <asm_test_entry>:
+  40:	83 ec 1c             	sub    $0x1c,%esp
+  43:	8d 44 24 20          	lea    0x20(%esp),%eax
+  47:	89 04 24             	mov    %eax,(%esp)
+  4a:	b8 07 00 00 00       	mov    $0x7,%eax
+  4f:	89 44 24 0c          	mov    %eax,0xc(%esp)
+  53:	b8 05 00 00 00       	mov    $0x5,%eax
+  58:	89 44 24 10          	mov    %eax,0x10(%esp)
+  5c:	b8 09 00 00 00       	mov    $0x9,%eax
+  61:	89 44 24 08          	mov    %eax,0x8(%esp)
+  65:	8b 44 24 0c          	mov    0xc(%esp),%eax
+  69:	8b 4c 24 10          	mov    0x10(%esp),%ecx
+  6d:	0f af c1             	imul   %ecx,%eax
+  70:	8b 4c 24 08          	mov    0x8(%esp),%ecx
+  74:	29 c8                	sub    %ecx,%eax
+  76:	8b 54 24 10          	mov    0x10(%esp),%edx
+  7a:	8d 44 50 06          	lea    0x6(%eax,%edx,2),%eax
+  7e:	83 c4 1c             	add    $0x1c,%esp
+  81:	c3                   	ret

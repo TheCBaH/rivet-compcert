@@ -1,0 +1,2 @@
+.text	0x0000000f	rela	R_X86_64_PC32	asm_test_global	-0x4
+.text	0x00000019	rela	R_X86_64_PC32	asm_test_global	-0x4

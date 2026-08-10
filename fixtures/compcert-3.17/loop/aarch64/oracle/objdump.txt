@@ -1,0 +1,20 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <asm_test_entry>:
+   0:	910003ef 	mov	x15, sp
+   4:	a9be7bef 	stp	x15, x30, [sp, #-32]!
+   8:	321f07e0 	orr	w0, wzr, #0x6
+   c:	b90013e0 	str	w0, [sp, #16]
+  10:	52800000 	mov	w0, #0x0                   	// #0
+  14:	52800002 	mov	w2, #0x0                   	// #0
+  18:	b94013e1 	ldr	w1, [sp, #16]
+  1c:	6b01005f 	cmp	w2, w1
+  20:	5400008a 	b.ge	30 <asm_test_entry+0x30>  // b.tcont
+  24:	11001c00 	add	w0, w0, #0x7
+  28:	11000442 	add	w2, w2, #0x1
+  2c:	17fffffb 	b	18 <asm_test_entry+0x18>
+  30:	f94007fe 	ldr	x30, [sp, #8]
+  34:	910083ff 	add	sp, sp, #0x20
+  38:	d65f03c0 	ret

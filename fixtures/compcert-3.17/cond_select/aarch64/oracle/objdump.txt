@@ -1,0 +1,32 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <asm_test_entry>:
+   0:	910003ef 	mov	x15, sp
+   4:	a9be7bef 	stp	x15, x30, [sp, #-32]!
+   8:	52800280 	mov	w0, #0x14                  	// #20
+   c:	b90013e0 	str	w0, [sp, #16]
+  10:	528002c0 	mov	w0, #0x16                  	// #22
+  14:	b90017e0 	str	w0, [sp, #20]
+  18:	b94013e4 	ldr	w4, [sp, #16]
+  1c:	b94017e2 	ldr	w2, [sp, #20]
+  20:	6b02009f 	cmp	w4, w2
+  24:	5400006b 	b.lt	30 <asm_test_entry+0x30>  // b.tstop
+  28:	b94013e1 	ldr	w1, [sp, #16]
+  2c:	14000002 	b	34 <asm_test_entry+0x34>
+  30:	b94017e1 	ldr	w1, [sp, #20]
+  34:	b94013e7 	ldr	w7, [sp, #16]
+  38:	b94017e3 	ldr	w3, [sp, #20]
+  3c:	6b0300ff 	cmp	w7, w3
+  40:	5400006c 	b.gt	4c <asm_test_entry+0x4c>
+  44:	b94017e0 	ldr	w0, [sp, #20]
+  48:	14000002 	b	50 <asm_test_entry+0x50>
+  4c:	b94013e0 	ldr	w0, [sp, #16]
+  50:	11005025 	add	w5, w1, #0x14
+  54:	52800006 	mov	w6, #0x0                   	// #0
+  58:	6b00003f 	cmp	w1, w0
+  5c:	9a8600a0 	csel	x0, x5, x6, eq	// eq = none
+  60:	f94007fe 	ldr	x30, [sp, #8]
+  64:	910083ff 	add	sp, sp, #0x20
+  68:	d65f03c0 	ret

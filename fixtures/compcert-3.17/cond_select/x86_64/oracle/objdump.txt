@@ -1,0 +1,32 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <asm_test_entry>:
+   0:	48 83 ec 18          	sub    $0x18,%rsp
+   4:	48 8d 44 24 20       	lea    0x20(%rsp),%rax
+   9:	48 89 04 24          	mov    %rax,(%rsp)
+   d:	b8 14 00 00 00       	mov    $0x14,%eax
+  12:	89 44 24 08          	mov    %eax,0x8(%rsp)
+  16:	b8 16 00 00 00       	mov    $0x16,%eax
+  1b:	89 44 24 0c          	mov    %eax,0xc(%rsp)
+  1f:	8b 7c 24 08          	mov    0x8(%rsp),%edi
+  23:	8b 54 24 0c          	mov    0xc(%rsp),%edx
+  27:	39 d7                	cmp    %edx,%edi
+  29:	7c 06                	jl     31 <asm_test_entry+0x31>
+  2b:	8b 54 24 08          	mov    0x8(%rsp),%edx
+  2f:	eb 04                	jmp    35 <asm_test_entry+0x35>
+  31:	8b 54 24 0c          	mov    0xc(%rsp),%edx
+  35:	44 8b 4c 24 08       	mov    0x8(%rsp),%r9d
+  3a:	8b 74 24 0c          	mov    0xc(%rsp),%esi
+  3e:	41 39 f1             	cmp    %esi,%r9d
+  41:	7f 06                	jg     49 <asm_test_entry+0x49>
+  43:	8b 4c 24 0c          	mov    0xc(%rsp),%ecx
+  47:	eb 04                	jmp    4d <asm_test_entry+0x4d>
+  49:	8b 4c 24 08          	mov    0x8(%rsp),%ecx
+  4d:	67 8d 42 14          	lea    0x14(%edx),%eax
+  51:	45 31 c0             	xor    %r8d,%r8d
+  54:	39 ca                	cmp    %ecx,%edx
+  56:	49 0f 45 c0          	cmovne %r8,%rax
+  5a:	48 83 c4 18          	add    $0x18,%rsp
+  5e:	c3                   	ret

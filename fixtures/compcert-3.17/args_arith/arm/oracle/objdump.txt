@@ -1,0 +1,37 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_sum>:
+   0:	e1a0c00d 	mov	ip, sp
+   4:	e24dd008 	sub	sp, sp, #8
+   8:	e58dc000 	str	ip, [sp]
+   c:	e58de004 	str	lr, [sp, #4]
+  10:	e0210291 	mla	r1, r1, r2, r0
+  14:	e0410003 	sub	r0, r1, r3
+  18:	e59de004 	ldr	lr, [sp, #4]
+  1c:	e28dd008 	add	sp, sp, #8
+  20:	e12fff1e 	bx	lr
+
+00000024 <asm_test_entry>:
+  24:	e1a0c00d 	mov	ip, sp
+  28:	e24dd018 	sub	sp, sp, #24
+  2c:	e58dc000 	str	ip, [sp]
+  30:	e58de004 	str	lr, [sp, #4]
+  34:	e3a00007 	mov	r0, #7
+  38:	e58d000c 	str	r0, [sp, #12]
+  3c:	e3a00005 	mov	r0, #5
+  40:	e58d0010 	str	r0, [sp, #16]
+  44:	e3a00009 	mov	r0, #9
+  48:	e58d0008 	str	r0, [sp, #8]
+  4c:	e59d300c 	ldr	r3, [sp, #12]
+  50:	e59dc010 	ldr	ip, [sp, #16]
+  54:	e0020c93 	mul	r2, r3, ip
+  58:	e59d0008 	ldr	r0, [sp, #8]
+  5c:	e0420000 	sub	r0, r2, r0
+  60:	e59d1010 	ldr	r1, [sp, #16]
+  64:	e0800081 	add	r0, r0, r1, lsl #1
+  68:	e2800006 	add	r0, r0, #6
+  6c:	e59de004 	ldr	lr, [sp, #4]
+  70:	e28dd018 	add	sp, sp, #24
+  74:	e12fff1e 	bx	lr

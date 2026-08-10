@@ -1,0 +1,2 @@
+.text	0x0000000b	rel	R_386_32	asm_test_global	-
+.text	0x00000013	rel	R_386_32	asm_test_global	-
