@@ -731,8 +731,8 @@ let elf_addend ~pcrel ~(site : Image.site) ~addend =
 
 let is_pcrel kind_name =
   match kind_name with
-  | "pcrel8-branch" | "pcrel32-branch" | "pcrel32-call" | "pcrel32-data" | "pcrel-b26"
-  | "pcrel-b19" | "pcrel-call" | "pcrel-call26" | "adrp-page" ->
+  | "pcrel8-branch" | "pcrel32-branch" | "pcrel32-call" | "pcrel32-data" | "pcrel-b26" | "pcrel-b19"
+  | "pcrel-call" | "pcrel-call26" | "adrp-page" ->
       true
   | _ -> false
 
@@ -780,7 +780,27 @@ let check_relocs case target =
   | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
   | Ok b ->
       let problems = ref [] and predicted = ref [] and resolved = ref 0 in
+      let sites = ref [] in
       let note s = problems := s :: !problems in
+      (* Each classified site is *named* in the transcript, not merely counted.
+         An assembler-resolved fixup is absent from reloc.txt by definition, so a
+         count is the only thing the record comparison can say about it; listing
+         the sites is what makes "we resolved this one ourselves" a reviewable
+         claim about a place in the image rather than a number. Every column O1
+         indexes on is on the line, so changing any of them independently changes
+         the transcript. *)
+      let site_line (site : Image.site) (r : Image.symbolic_ref) cls =
+        sites :=
+          Printf.sprintf "  %s+0x%-4x %-16s %-6s %-6s %-9s %s" site.Image.o_section
+            site.Image.o_offset site.Image.o_kind_name
+            (Asm_core.Lowered_ast.fixup_role_name site.Image.o_role)
+            (match r.Image.binding with `Local -> "local" | `Global -> "global")
+            (if not r.Image.defined then "undefined"
+             else if r.Image.same_section then "same-sec"
+             else "other-sec")
+            cls
+          :: !sites
+      in
       List.iter
         (fun o ->
           match o with
@@ -798,8 +818,11 @@ let check_relocs case target =
               in
               Option.iter note complaint;
               match cls with
-              | Assembler_resolved -> incr resolved
+              | Assembler_resolved ->
+                  incr resolved;
+                  site_line site r "assembler-resolved"
               | Linker_visible ty ->
+                  site_line site r ty;
                   let rela = List.exists (fun x -> x.ro_rela) (reloc_records case target) in
                   predicted :=
                     ( site.Image.o_section,
@@ -819,9 +842,10 @@ let check_relocs case target =
           (reloc_records case target)
       in
       List.iter note (compare_records ~predicted:(List.rev !predicted) ~measured);
-      if !problems = [] then
+      if !problems = [] then (
         Printf.printf "%-12s %-8s %d linker-visible, %d assembler-resolved\n" case target
-          (List.length !predicted) !resolved
+          (List.length !predicted) !resolved;
+        List.iter print_endline (List.rev !sites))
       else List.iter (fun p -> Printf.printf "%-12s %-8s %s\n" case target p) (List.rev !problems)
 
 let%expect_test "fixup observations classify to exactly the measured relocations" =
@@ -833,21 +857,59 @@ let%expect_test "fixup observations classify to exactly the measured relocations
     args_arith   arm      0 linker-visible, 0 assembler-resolved
     args_arith   aarch64  0 linker-visible, 0 assembler-resolved
     cond_select  x86_32   0 linker-visible, 4 assembler-resolved
+      .text+0x2b   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x31   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x41   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x47   pcrel8-branch    branch local  same-sec  assembler-resolved
     cond_select  x86_64   0 linker-visible, 4 assembler-resolved
+      .text+0x2a   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x30   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x42   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x48   pcrel8-branch    branch local  same-sec  assembler-resolved
     cond_select  arm      0 linker-visible, 4 assembler-resolved
+      .text+0x2c   pcrel-b26        branch local  same-sec  assembler-resolved
+      .text+0x34   pcrel-b26        branch local  same-sec  assembler-resolved
+      .text+0x48   pcrel-b26        branch local  same-sec  assembler-resolved
+      .text+0x50   pcrel-b26        branch local  same-sec  assembler-resolved
     cond_select  aarch64  0 linker-visible, 4 assembler-resolved
+      .text+0x24   pcrel-b19        branch local  same-sec  assembler-resolved
+      .text+0x2c   pcrel-b26        branch local  same-sec  assembler-resolved
+      .text+0x40   pcrel-b19        branch local  same-sec  assembler-resolved
+      .text+0x48   pcrel-b26        branch local  same-sec  assembler-resolved
     direct_call  x86_32   1 linker-visible, 0 assembler-resolved
+      .text+0x34   pcrel32-call     call   global same-sec  R_386_PC32
     direct_call  x86_64   1 linker-visible, 0 assembler-resolved
+      .text+0x33   pcrel32-call     call   global same-sec  R_X86_64_PLT32
     direct_call  arm      1 linker-visible, 0 assembler-resolved
+      .text+0x34   pcrel-call       call   global same-sec  R_ARM_CALL
     direct_call  aarch64  1 linker-visible, 0 assembler-resolved
+      .text+0x24   pcrel-call26     call   global same-sec  R_AARCH64_CALL26
     global_ldst  x86_32   2 linker-visible, 0 assembler-resolved
+      .text+0xb    abs32            data-address global other-sec R_386_32
+      .text+0x13   abs32            data-address global other-sec R_386_32
     global_ldst  x86_64   2 linker-visible, 0 assembler-resolved
+      .text+0xf    pcrel32-data     data-address global other-sec R_X86_64_PC32
+      .text+0x19   pcrel32-data     data-address global other-sec R_X86_64_PC32
     global_ldst  arm      2 linker-visible, 0 assembler-resolved
+      .text+0x10   movw-abs-nc      data-address global other-sec R_ARM_MOVW_ABS_NC
+      .text+0x14   movt-abs         data-address global other-sec R_ARM_MOVT_ABS
     global_ldst  aarch64  4 linker-visible, 0 assembler-resolved
+      .text+0x8    adrp-page        data-address global other-sec R_AARCH64_ADR_PREL_PG_HI21
+      .text+0xc    ldst32-lo12      data-address global other-sec R_AARCH64_LDST32_ABS_LO12_NC
+      .text+0x14   adrp-page        data-address global other-sec R_AARCH64_ADR_PREL_PG_HI21
+      .text+0x18   ldst32-lo12      data-address global other-sec R_AARCH64_LDST32_ABS_LO12_NC
     loop         x86_32   0 linker-visible, 2 assembler-resolved
+      .text+0x1e   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x26   pcrel8-branch    branch local  same-sec  assembler-resolved
     loop         x86_64   0 linker-visible, 2 assembler-resolved
+      .text+0x21   pcrel8-branch    branch local  same-sec  assembler-resolved
+      .text+0x2b   pcrel8-branch    branch local  same-sec  assembler-resolved
     loop         arm      0 linker-visible, 2 assembler-resolved
+      .text+0x28   pcrel-b26        branch local  same-sec  assembler-resolved
+      .text+0x34   pcrel-b26        branch local  same-sec  assembler-resolved
     loop         aarch64  0 linker-visible, 2 assembler-resolved
+      .text+0x20   pcrel-b19        branch local  same-sec  assembler-resolved
+      .text+0x2c   pcrel-b26        branch local  same-sec  assembler-resolved
     return42     x86_32   0 linker-visible, 0 assembler-resolved
     return42     x86_64   0 linker-visible, 0 assembler-resolved
     return42     arm      0 linker-visible, 0 assembler-resolved
