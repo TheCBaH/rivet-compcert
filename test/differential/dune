@@ -6,7 +6,7 @@
  (name test_differential)
  (modules test_differential)
  (modes byte native)
- (libraries driver image target_intf foundation fmt)
+ (libraries driver image target_intf foundation test_dump_inputs fmt)
  (inline_tests
   (deps
    (glob_files_rec %{workspace_root}/fixtures/compcert-3.17/return42/**)))

@@ -316,3 +316,38 @@ let%expect_test "canonical disassembly re-assembles to the same bytes" =
     arm      round trip: 32 bytes reproduced
     aarch64  round trip: 24 bytes reproduced
     |}]
+
+(* {1 The embedded copies}
+
+   test/dump embeds the four fixture texts as string literals, because a Melange
+   build shares no filesystem with the native one and a three-build driver that
+   read files would compare three programs with three different inputs. That
+   copy is only safe while it is a copy, so this is where it is checked. Without
+   this the embedded text could quietly drift into a second, easier input and
+   the three-build gate would still pass. *)
+let%expect_test "the embedded dump inputs are byte-identical to the fixtures" =
+  List.iter
+    (fun (name, embedded) ->
+      let path = Filename.concat (Filename.concat fixture_root name) "asm_test_entry.s" in
+      let committed = read path in
+      (* The fixture carries a two-line CompCert provenance banner that the
+         embedded copy drops: it is a comment, so it changes no output, and
+         keeping it would put a tool version inside a byte-compared artifact. *)
+      let strip_banner s =
+        match String.split_on_char '\n' s with
+        | a :: b :: rest when String.length a > 0 && (a.[0] = '#' || a.[0] = '@' || a.[0] = '/') ->
+            ignore b;
+            String.concat "\n" rest
+        | _ -> s
+      in
+      if String.equal (strip_banner committed) embedded then
+        Printf.printf "%-8s embedded copy matches the fixture\n" name
+      else Printf.printf "%-8s EMBEDDED COPY HAS DRIFTED FROM THE FIXTURE\n" name)
+    Test_dump_inputs.all;
+  [%expect
+    {|
+    x86_32   embedded copy matches the fixture
+    x86_64   embedded copy matches the fixture
+    arm      embedded copy matches the fixture
+    aarch64  embedded copy matches the fixture
+    |}]
