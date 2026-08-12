@@ -365,8 +365,8 @@ let entry_symbol = "asm_test_entry"
 (* One line, not a rendered diagnostic with its source excerpt. A blocked case
    is a row in a progress table; the full text is one [dune exec] away, and
    pasting it here would bury the twenty rows that do pass. *)
-let brief ds =
-  match ds with
+let brief e =
+  match Foundation.Diag.diagnostics e with
   | [] -> "failed with no diagnostic"
   | d :: rest ->
       Printf.sprintf "%s: %s%s" (Foundation.Diagnostic.code d) (Foundation.Diagnostic.message d)

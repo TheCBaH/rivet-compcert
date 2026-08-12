@@ -103,7 +103,7 @@ let assemble profile case =
   in
   let source = Foundation.Span.source ~name:file ~contents:(read file) in
   match D.assemble ~entry:"asm_test_entry" ~unit_name:"asm_test_entry" ~source () with
-  | Error ds -> Error (String.trim (Foundation.Diagnostic.render_all ds))
+  | Error ds -> Error (String.trim (Foundation.Diag.render ds))
   | Ok laid_out -> (
       let plan = Image.plan_of laid_out in
       let addresses =
@@ -112,7 +112,7 @@ let assemble profile case =
           plan.Image.segments
       in
       match Image.bind_image laid_out ~addresses with
-      | Error ds -> Error (String.trim (Foundation.Diagnostic.render_all ds))
+      | Error ds -> Error (String.trim (Foundation.Diag.render ds))
       | Ok img -> Ok img)
 
 (* {1 The manifest for a bound image}
