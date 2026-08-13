@@ -231,8 +231,16 @@ write_manifest() {
         grep "^ccomp-version:$t	" "$MANIFEST" || true
       fi
       printf 'ccomp-target:%s\t%s\n' "$t" "$CONFIGURE_TARGET"
-      printf 'ccomp-args:%s\t%s\n' "$t" "${CCOMP_EXTRA_ARGS[*]:-}"
-      printf 'ccomp-configure-args:%s\t%s\n' "$t" "${COMPCERT_CONFIGURE_ARGS[*]:-}"
+      if [ "${#CCOMP_EXTRA_ARGS[@]}" -eq 0 ]; then
+        printf 'ccomp-args:%s\n' "$t"
+      else
+        printf 'ccomp-args:%s\t%s\n' "$t" "${CCOMP_EXTRA_ARGS[*]}"
+      fi
+      if [ "${#COMPCERT_CONFIGURE_ARGS[@]}" -eq 0 ]; then
+        printf 'ccomp-configure-args:%s\n' "$t"
+      else
+        printf 'ccomp-configure-args:%s\t%s\n' "$t" "${COMPCERT_CONFIGURE_ARGS[*]}"
+      fi
     done
     local f
     while IFS= read -r f; do

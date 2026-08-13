@@ -1,0 +1,1 @@
+asm/fixtures/compcert-3.17/return42/riscv64/asm_test_entry.s

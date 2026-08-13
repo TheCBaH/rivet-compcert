@@ -1,0 +1,13 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <asm_test_entry>:
+   0:	00010f13          	mv	t5,sp
+   4:	ff010113          	addi	sp,sp,-16
+   8:	01e13023          	sd	t5,0(sp)
+   c:	00113423          	sd	ra,8(sp)
+  10:	02a0051b          	addiw	a0,zero,42
+  14:	00813083          	ld	ra,8(sp)
+  18:	01010113          	addi	sp,sp,16
+  1c:	00008067          	ret

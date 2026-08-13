@@ -41,13 +41,7 @@ open Asm_oracle
 open Asm_oracle_run
 
 let profiles = [ Abi.X86_32; Abi.X86_64; Abi.Arm; Abi.Aarch64 ]
-
-let target_of_profile = function
-  | Abi.X86_32 -> "x86_32"
-  | Abi.X86_64 -> "x86_64"
-  | Abi.Arm -> "arm"
-  | Abi.Aarch64 -> "aarch64"
-
+let target_of_profile = Abi.profile_name
 let case_id = 42
 let stack_16k = 16 * 1024
 
