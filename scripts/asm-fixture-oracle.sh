@@ -139,13 +139,15 @@ run_one() {
 
   # Assembled as `obj.o` in a scratch directory, so neither the object name nor
   # its path can reach the recorded output.
-  ( cd "$work" && "${TOOLPREFIX}as" -o obj.o "$src" )
+  ( cd "$work" && "${TOOLPREFIX}as" "${AS_FLAGS[@]}" -o obj.o "$src" )
 
   "${TOOLPREFIX}readelf" -SWsWr "$work/obj.o" \
-    | sed -e "s|$work/||g" -e 's/^File: .*$//' \
+    | sed -e "s|$work/||g" -e 's/^File: .*$//' -e 's/[[:space:]]*$//' \
     | awk 'NF || p { print } { p = NF }' > "$out/readelf.txt"
 
-  "${TOOLPREFIX}objdump" -dr "$work/obj.o" \
+  local objdump_flags=()
+  case "$target" in riscv32|riscv64) objdump_flags=(-M no-aliases,numeric) ;; esac
+  "${TOOLPREFIX}objdump" "${objdump_flags[@]}" -dr "$work/obj.o" \
     | sed -e "s|$work/||g" -e '1,2d' \
     > "$out/objdump.txt"
 
@@ -179,7 +181,7 @@ SECTIONS
   /DISCARD/ : { *(.eh_frame) *(.note.GNU-stack) *(.comment) *(.ARM.attributes) }
 }
 LD
-  ( cd "$work" && "${TOOLPREFIX}ld" -static -T link.ld -o linked.elf obj.o )
+  ( cd "$work" && "${TOOLPREFIX}ld" "${LD_FLAGS[@]}" -static -T link.ld -o linked.elf obj.o )
 
   mkdir -p "$out/linked"
   rm -f "$out/linked"/*.hex
@@ -223,6 +225,6 @@ mapfile -t cases < <(if [ "$#" -gt 0 ]; then printf '%s\n' "$@"; else all_cases;
 
 case "$target" in
   all) for t in "${ALL_TARGETS[@]}"; do for c in "${cases[@]}"; do run_one "$t" "$c"; done; done ;;
-  x86_32|x86_64|arm|aarch64) for c in "${cases[@]}"; do run_one "$target" "$c"; done ;;
+  x86_32|x86_64|arm|aarch64|riscv32|riscv64) for c in "${cases[@]}"; do run_one "$target" "$c"; done ;;
   *) usage; exit 2 ;;
 esac

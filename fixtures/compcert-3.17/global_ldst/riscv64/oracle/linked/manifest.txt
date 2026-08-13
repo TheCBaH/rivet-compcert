@@ -1,0 +1,2 @@
+.text	0x40000000	linked/text.hex
+.data	0x40020000	linked/data.hex

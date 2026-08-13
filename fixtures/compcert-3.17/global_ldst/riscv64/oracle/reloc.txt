@@ -1,0 +1,4 @@
+.text	0x00000010	rela	R_RISCV_PCREL_HI20	asm_test_global	0x0
+.text	0x00000014	rela	R_RISCV_PCREL_LO12_I	.L1^B1	0x0
+.text	0x0000001c	rela	R_RISCV_PCREL_HI20	asm_test_global	0x0
+.text	0x00000020	rela	R_RISCV_PCREL_LO12_S	.L1^B2	0x0

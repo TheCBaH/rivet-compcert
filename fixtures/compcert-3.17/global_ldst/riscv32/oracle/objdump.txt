@@ -1,0 +1,25 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_entry>:
+   0:	00010f13          	addi	x30,x2,0
+   4:	ff010113          	addi	x2,x2,-16
+   8:	01e12023          	sw	x30,0(x2)
+   c:	00112223          	sw	x1,4(x2)
+
+00000010 <.L1^B1>:
+  10:	00000f97          	auipc	x31,0x0
+			10: R_RISCV_PCREL_HI20	asm_test_global
+  14:	000fa303          	lw	x6,0(x31) # 10 <.L1^B1>
+			14: R_RISCV_PCREL_LO12_I	.L1^B1
+  18:	01630513          	addi	x10,x6,22
+
+0000001c <.L1^B2>:
+  1c:	00000f97          	auipc	x31,0x0
+			1c: R_RISCV_PCREL_HI20	asm_test_global
+  20:	00afa023          	sw	x10,0(x31) # 1c <.L1^B2>
+			20: R_RISCV_PCREL_LO12_S	.L1^B2
+  24:	00412083          	lw	x1,4(x2)
+  28:	01010113          	addi	x2,x2,16
+  2c:	00008067          	jalr	x0,0(x1)

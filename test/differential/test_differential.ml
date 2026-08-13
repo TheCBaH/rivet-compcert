@@ -24,7 +24,7 @@
    do would report the same success at every stage of the milestone. *)
 
 let corpus_root = "../../fixtures/compcert-3.17"
-let targets = [ "x86_32"; "x86_64"; "arm"; "aarch64" ]
+let targets = [ "x86_32"; "x86_64"; "arm"; "aarch64"; "riscv32"; "riscv64" ]
 
 let read path =
   let ic = open_in_bin path in
@@ -232,10 +232,26 @@ let is_branch_mnemonic target m =
          collision - but [br] and [blr] take registers, so the list is still a
          list. *)
       List.mem m ("b" :: "bl" :: List.map (fun c -> "b." ^ c) arm_conditions)
+  | "riscv32" | "riscv64" -> List.mem m [ "beq"; "bne"; "blt"; "bge"; "bltu"; "bgeu"; "jal" ]
   | _ -> (String.length m > 0 && m.[0] = 'j') || String.equal m "call"
 
 let branch_target_is_hex target side line =
   if side <> `Objdump then line
+  else if target = "riscv32" || target = "riscv64" then
+    match String.index_opt line ' ' with
+    | None -> line
+    | Some space ->
+        let m = String.sub line 0 space in
+        if not (is_branch_mnemonic target m) then line
+        else
+          let comma = String.rindex_opt line ',' in
+          let start = match comma with Some i -> i + 1 | None -> space + 1 in
+          let operand = String.sub line start (String.length line - start) in
+          if
+            operand <> ""
+            && String.for_all (fun c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) operand
+          then String.sub line 0 start ^ Int64.to_string (Int64.of_string ("0x" ^ operand))
+          else line
   else
     match String.split_on_char ' ' line with
     | [ m; operand ] when is_branch_mnemonic target m ->
@@ -425,26 +441,38 @@ let%expect_test "every bound segment matches the controlled reference link" =
     args_arith   x86_64   .text 103
     args_arith   arm      .text 120
     args_arith   aarch64  .text 104
+    args_arith   riscv32  .text 128
+    args_arith   riscv64  .text 128
     cond_select  x86_32   .text 94
     cond_select  x86_64   .text 95
     cond_select  arm      .text 120
     cond_select  aarch64  .text 108
+    cond_select  riscv32  .text 108
+    cond_select  riscv64  .text 108
     direct_call  x86_32   .text 63
     direct_call  x86_64   .text 64
     direct_call  arm      .text 72
     direct_call  aarch64  .text 56
+    direct_call  riscv32  .text 76
+    direct_call  riscv64  .text 76
     global_ldst  x86_32   .text 27, .data 4
     global_ldst  x86_64   .text 34, .data 4
     global_ldst  arm      .text 48, .data 4
     global_ldst  aarch64  .text 40, .data 4
+    global_ldst  riscv32  .text 48, .data 4
+    global_ldst  riscv64  .text 48, .data 4
     loop         x86_32   .text 43
     loop         x86_64   .text 49
     loop         arm      .text 68
     loop         aarch64  .text 60
+    loop         riscv32  .text 64
+    loop         riscv64  .text 64
     return42     x86_32   .text 19
     return42     x86_64   .text 23
     return42     arm      .text 32
-    return42     aarch64  .text 24 |}]
+    return42     aarch64  .text 24
+    return42     riscv32  .text 32
+    return42     riscv64  .text 32 |}]
 
 (* {1 Spelling, against objdump}
 
@@ -532,7 +560,13 @@ let check_disasm case target =
             match String.index_opt s ' ' with Some i -> String.sub s 0 i ^ " ..." | None -> s
           in
           let elide r t =
-            if List.exists (fun o -> o >= r.off && o < r.off + r.len) relocated then mnemonic_only t
+            if
+              List.exists
+                (fun o ->
+                  (o >= r.off && o < r.off + r.len)
+                  || ((target = "riscv32" || target = "riscv64") && o = r.off - 4))
+                relocated
+            then mnemonic_only t
             else t
           in
           let kept = List.filter (fun r -> not r.padding) rows in
@@ -571,26 +605,38 @@ let%expect_test "diagnostic spelling agrees with objdump after normalization" =
     args_arith   x86_64   26 lines agree
     args_arith   arm      30 lines agree
     args_arith   aarch64  26 lines agree
+    args_arith   riscv32  32 lines agree
+    args_arith   riscv64  32 lines agree
     cond_select  x86_32   29 lines agree
     cond_select  x86_64   27 lines agree
     cond_select  arm      30 lines agree
     cond_select  aarch64  27 lines agree
+    cond_select  riscv32  27 lines agree
+    cond_select  riscv64  27 lines agree
     direct_call  x86_32   16 lines agree (1 relocated operand compared as records instead)
     direct_call  x86_64   14 lines agree (1 relocated operand compared as records instead)
     direct_call  arm      18 lines agree (1 relocated operand compared as records instead)
     direct_call  aarch64  14 lines agree (1 relocated operand compared as records instead)
+    direct_call  riscv32  19 lines agree (2 relocated operands compared as records instead)
+    direct_call  riscv64  19 lines agree (2 relocated operands compared as records instead)
     global_ldst  x86_32   8 lines agree (2 relocated operands compared as records instead)
     global_ldst  x86_64   8 lines agree (2 relocated operands compared as records instead)
     global_ldst  arm      12 lines agree (2 relocated operands compared as records instead)
     global_ldst  aarch64  10 lines agree (4 relocated operands compared as records instead)
+    global_ldst  riscv32  12 lines agree (6 relocated operands compared as records instead)
+    global_ldst  riscv64  12 lines agree (6 relocated operands compared as records instead)
     loop         x86_32   15 lines agree
     loop         x86_64   15 lines agree
     loop         arm      17 lines agree
     loop         aarch64  15 lines agree
+    loop         riscv32  16 lines agree
+    loop         riscv64  16 lines agree
     return42     x86_32   6 lines agree
     return42     x86_64   6 lines agree
     return42     arm      8 lines agree
-    return42     aarch64  6 lines agree |}]
+    return42     aarch64  6 lines agree
+    return42     riscv32  8 lines agree
+    return42     riscv64  8 lines agree |}]
 
 (* {1 Reassembly}
 
@@ -637,26 +683,38 @@ let%expect_test "canonical disassembly reassembles to the same bytes" =
     args_arith   x86_64   103 bytes reproduced
     args_arith   arm      120 bytes reproduced
     args_arith   aarch64  104 bytes reproduced
+    args_arith   riscv32  128 bytes reproduced
+    args_arith   riscv64  128 bytes reproduced
     cond_select  x86_32   94 bytes reproduced
     cond_select  x86_64   95 bytes reproduced
     cond_select  arm      120 bytes reproduced
     cond_select  aarch64  108 bytes reproduced
+    cond_select  riscv32  108 bytes reproduced
+    cond_select  riscv64  108 bytes reproduced
     direct_call  x86_32   63 bytes reproduced
     direct_call  x86_64   64 bytes reproduced
     direct_call  arm      72 bytes reproduced
     direct_call  aarch64  56 bytes reproduced
+    direct_call  riscv32  76 bytes reproduced
+    direct_call  riscv64  76 bytes reproduced
     global_ldst  x86_32   27 bytes reproduced
     global_ldst  x86_64   34 bytes reproduced
     global_ldst  arm      48 bytes reproduced
     global_ldst  aarch64  40 bytes reproduced
+    global_ldst  riscv32  48 bytes reproduced
+    global_ldst  riscv64  48 bytes reproduced
     loop         x86_32   43 bytes reproduced
     loop         x86_64   49 bytes reproduced
     loop         arm      68 bytes reproduced
     loop         aarch64  60 bytes reproduced
+    loop         riscv32  64 bytes reproduced
+    loop         riscv64  64 bytes reproduced
     return42     x86_32   19 bytes reproduced
     return42     x86_64   23 bytes reproduced
     return42     arm      32 bytes reproduced
-    return42     aarch64  24 bytes reproduced |}]
+    return42     aarch64  24 bytes reproduced
+    return42     riscv32  32 bytes reproduced
+    return42     riscv64  32 bytes reproduced |}]
 
 (* {1 O1 - classify before comparing}
 
@@ -702,9 +760,12 @@ let classify ~target ~kind_name ~role ~defined ~same_section =
   | "x86_64", "pcrel32-call" -> (call, Linker_visible "R_X86_64_PLT32")
   | "arm", "pcrel-call" -> (call, Linker_visible "R_ARM_CALL")
   | "aarch64", "pcrel-call26" -> (call, Linker_visible "R_AARCH64_CALL26")
+  | ("riscv32" | "riscv64"), "call-hi20" -> (call, Linker_visible "R_RISCV_CALL_PLT")
+  | ("riscv32" | "riscv64"), "call-lo12-i" -> (call, Assembler_resolved)
   (* A branch to a symbol defined in this section is resolved while assembling
      on every target, and to one outside it is not reachable in M2 at all. *)
-  | _, ("pcrel8-branch" | "pcrel32-branch" | "pcrel-b26" | "pcrel-b19") ->
+  | _, ("pcrel8-branch" | "pcrel32-branch" | "pcrel-b26" | "pcrel-b19" | "pcrel-b13" | "pcrel-j21")
+    ->
       (branch, if defined && same_section then Assembler_resolved else Linker_visible "unsupported")
   (* Data addresses. x86-32 takes the absolute address, x86-64 a RIP-relative
      displacement, and the two fixed-width targets split one reference across
@@ -717,6 +778,9 @@ let classify ~target ~kind_name ~role ~defined ~same_section =
   | "aarch64", "add-lo12" -> (data, Linker_visible "R_AARCH64_ADD_ABS_LO12_NC")
   | "aarch64", "ldst32-lo12" -> (data, Linker_visible "R_AARCH64_LDST32_ABS_LO12_NC")
   | "aarch64", "ldst64-lo12" -> (data, Linker_visible "R_AARCH64_LDST64_ABS_LO12_NC")
+  | ("riscv32" | "riscv64"), "pcrel-hi20" -> (data, Linker_visible "R_RISCV_PCREL_HI20")
+  | ("riscv32" | "riscv64"), "pcrel-lo12-i" -> (data, Linker_visible "R_RISCV_PCREL_LO12_I")
+  | ("riscv32" | "riscv64"), "pcrel-lo12-s" -> (data, Linker_visible "R_RISCV_PCREL_LO12_S")
   | _ -> (Some (Printf.sprintf "no table row for %s on %s" kind_name target), Assembler_resolved)
 
 (* O2. Only the PC-relative classes subtract a place - an absolute relocation
@@ -734,6 +798,7 @@ let is_pcrel kind_name =
   | "pcrel8-branch" | "pcrel32-branch" | "pcrel32-call" | "pcrel32-data" | "pcrel-b26" | "pcrel-b19"
   | "pcrel-call" | "pcrel-call26" | "adrp-page" ->
       true
+  | "pcrel-b13" | "pcrel-j21" | "call-hi20" | "pcrel-hi20" -> true
   | _ -> false
 
 (* Keyed multisets, never positional: the order observations come out in is a
@@ -782,6 +847,12 @@ let check_relocs case target =
       let problems = ref [] and predicted = ref [] and resolved = ref 0 in
       let sites = ref [] in
       let note s = problems := s :: !problems in
+      let oracle_symbol s =
+        if target <> "riscv32" && target <> "riscv64" then s
+        else
+          try Scanf.sscanf s "#L%d#%d" (fun n k -> Printf.sprintf ".L%d^B%d" n (k + 1))
+          with _ -> s
+      in
       (* Each classified site is *named* in the transcript, not merely counted.
          An assembler-resolved fixup is absent from reloc.txt by definition, so a
          count is the only thing the record comparison can say about it; listing
@@ -828,7 +899,7 @@ let check_relocs case target =
                     ( site.Image.o_section,
                       site.Image.o_offset,
                       ty,
-                      r.Image.symbol,
+                      oracle_symbol r.Image.symbol,
                       if rela then
                         Some
                           (elf_addend ~pcrel:(is_pcrel site.Image.o_kind_name) ~site
@@ -856,6 +927,8 @@ let%expect_test "fixup observations classify to exactly the measured relocations
     args_arith   x86_64   0 linker-visible, 0 assembler-resolved
     args_arith   arm      0 linker-visible, 0 assembler-resolved
     args_arith   aarch64  0 linker-visible, 0 assembler-resolved
+    args_arith   riscv32  0 linker-visible, 0 assembler-resolved
+    args_arith   riscv64  0 linker-visible, 0 assembler-resolved
     cond_select  x86_32   0 linker-visible, 4 assembler-resolved
       .text+0x2b   pcrel8-branch    branch local  same-sec  assembler-resolved
       .text+0x31   pcrel8-branch    branch local  same-sec  assembler-resolved
@@ -876,6 +949,20 @@ let%expect_test "fixup observations classify to exactly the measured relocations
       .text+0x2c   pcrel-b26        branch local  same-sec  assembler-resolved
       .text+0x40   pcrel-b19        branch local  same-sec  assembler-resolved
       .text+0x48   pcrel-b26        branch local  same-sec  assembler-resolved
+    cond_select  riscv32  0 linker-visible, 6 assembler-resolved
+      .text+0x28   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x30   pcrel-j21        branch local  same-sec  assembler-resolved
+      .text+0x40   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x48   pcrel-j21        branch local  same-sec  assembler-resolved
+      .text+0x50   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x58   pcrel-j21        branch local  same-sec  assembler-resolved
+    cond_select  riscv64  0 linker-visible, 6 assembler-resolved
+      .text+0x28   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x30   pcrel-j21        branch local  same-sec  assembler-resolved
+      .text+0x40   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x48   pcrel-j21        branch local  same-sec  assembler-resolved
+      .text+0x50   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x58   pcrel-j21        branch local  same-sec  assembler-resolved
     direct_call  x86_32   1 linker-visible, 0 assembler-resolved
       .text+0x34   pcrel32-call     call   global same-sec  R_386_PC32
     direct_call  x86_64   1 linker-visible, 0 assembler-resolved
@@ -884,6 +971,12 @@ let%expect_test "fixup observations classify to exactly the measured relocations
       .text+0x34   pcrel-call       call   global same-sec  R_ARM_CALL
     direct_call  aarch64  1 linker-visible, 0 assembler-resolved
       .text+0x24   pcrel-call26     call   global same-sec  R_AARCH64_CALL26
+    direct_call  riscv32  1 linker-visible, 1 assembler-resolved
+      .text+0x34   call-hi20        call   global same-sec  R_RISCV_CALL_PLT
+      .text+0x38   call-lo12-i      call   global same-sec  assembler-resolved
+    direct_call  riscv64  1 linker-visible, 1 assembler-resolved
+      .text+0x34   call-hi20        call   global same-sec  R_RISCV_CALL_PLT
+      .text+0x38   call-lo12-i      call   global same-sec  assembler-resolved
     global_ldst  x86_32   2 linker-visible, 0 assembler-resolved
       .text+0xb    abs32            data-address global other-sec R_386_32
       .text+0x13   abs32            data-address global other-sec R_386_32
@@ -898,6 +991,16 @@ let%expect_test "fixup observations classify to exactly the measured relocations
       .text+0xc    ldst32-lo12      data-address global other-sec R_AARCH64_LDST32_ABS_LO12_NC
       .text+0x14   adrp-page        data-address global other-sec R_AARCH64_ADR_PREL_PG_HI21
       .text+0x18   ldst32-lo12      data-address global other-sec R_AARCH64_LDST32_ABS_LO12_NC
+    global_ldst  riscv32  4 linker-visible, 0 assembler-resolved
+      .text+0x10   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x14   pcrel-lo12-i     data-address local  same-sec  R_RISCV_PCREL_LO12_I
+      .text+0x1c   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x20   pcrel-lo12-s     data-address local  same-sec  R_RISCV_PCREL_LO12_S
+    global_ldst  riscv64  4 linker-visible, 0 assembler-resolved
+      .text+0x10   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x14   pcrel-lo12-i     data-address local  same-sec  R_RISCV_PCREL_LO12_I
+      .text+0x1c   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x20   pcrel-lo12-s     data-address local  same-sec  R_RISCV_PCREL_LO12_S
     loop         x86_32   0 linker-visible, 2 assembler-resolved
       .text+0x1e   pcrel8-branch    branch local  same-sec  assembler-resolved
       .text+0x26   pcrel8-branch    branch local  same-sec  assembler-resolved
@@ -910,14 +1013,22 @@ let%expect_test "fixup observations classify to exactly the measured relocations
     loop         aarch64  0 linker-visible, 2 assembler-resolved
       .text+0x20   pcrel-b19        branch local  same-sec  assembler-resolved
       .text+0x2c   pcrel-b26        branch local  same-sec  assembler-resolved
+    loop         riscv32  0 linker-visible, 2 assembler-resolved
+      .text+0x24   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x30   pcrel-j21        branch local  same-sec  assembler-resolved
+    loop         riscv64  0 linker-visible, 2 assembler-resolved
+      .text+0x24   pcrel-b13        branch local  same-sec  assembler-resolved
+      .text+0x30   pcrel-j21        branch local  same-sec  assembler-resolved
     return42     x86_32   0 linker-visible, 0 assembler-resolved
     return42     x86_64   0 linker-visible, 0 assembler-resolved
     return42     arm      0 linker-visible, 0 assembler-resolved
-    return42     aarch64  0 linker-visible, 0 assembler-resolved |}]
+    return42     aarch64  0 linker-visible, 0 assembler-resolved
+    return42     riscv32  0 linker-visible, 0 assembler-resolved
+    return42     riscv64  0 linker-visible, 0 assembler-resolved |}]
 
 (* {1 The embedded copies}
 
-   test/dump embeds the four fixture texts as string literals, because a Melange
+   test/dump embeds the six fixture texts as string literals, because a Melange
    build shares no filesystem with the native one and a three-build driver that
    read files would compare three programs with three different inputs. That
    copy is only safe while it is a copy, so this is where it is checked. Without
@@ -952,6 +1063,8 @@ let%expect_test "the embedded dump inputs are byte-identical to the fixtures" =
     x86_64   embedded copy matches the fixture
     arm      embedded copy matches the fixture
     aarch64  embedded copy matches the fixture
+    riscv32  embedded copy matches the fixture
+    riscv64  embedded copy matches the fixture
     |}]
 
 (* The comparison's own failure modes, which the corpus cannot exercise because

@@ -1,0 +1,32 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_entry>:
+   0:	00010f13          	addi	x30,x2,0
+   4:	ff010113          	addi	x2,x2,-16
+   8:	01e12023          	sw	x30,0(x2)
+   c:	00112223          	sw	x1,4(x2)
+  10:	01400313          	addi	x6,x0,20
+  14:	00612423          	sw	x6,8(x2)
+  18:	01600313          	addi	x6,x0,22
+  1c:	00612623          	sw	x6,12(x2)
+  20:	00812703          	lw	x14,8(x2)
+  24:	00c12603          	lw	x12,12(x2)
+  28:	00c74663          	blt	x14,x12,34 <asm_test_entry+0x34>
+  2c:	00812583          	lw	x11,8(x2)
+  30:	0080006f          	jal	x0,38 <asm_test_entry+0x38>
+  34:	00c12583          	lw	x11,12(x2)
+  38:	00812783          	lw	x15,8(x2)
+  3c:	00c12683          	lw	x13,12(x2)
+  40:	00f6c663          	blt	x13,x15,4c <asm_test_entry+0x4c>
+  44:	00c12503          	lw	x10,12(x2)
+  48:	0080006f          	jal	x0,50 <asm_test_entry+0x50>
+  4c:	00812503          	lw	x10,8(x2)
+  50:	00a58663          	beq	x11,x10,5c <asm_test_entry+0x5c>
+  54:	00000513          	addi	x10,x0,0
+  58:	0080006f          	jal	x0,60 <asm_test_entry+0x60>
+  5c:	01458513          	addi	x10,x11,20
+  60:	00412083          	lw	x1,4(x2)
+  64:	01010113          	addi	x2,x2,16
+  68:	00008067          	jalr	x0,0(x1)

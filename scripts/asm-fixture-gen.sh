@@ -9,7 +9,7 @@
 #             uses, and it is why the portable CI legs can run in full on a
 #             machine with no ccomp installed.
 #
-#   --regen   requires all four compilers, regenerates, and fails on any
+#   --regen   requires all six compilers, regenerates, and fails on any
 #             unexplained difference. A reviewed change: regeneration can alter
 #             accepted syntax, relocations, or instruction coverage, so a diff
 #             here is a change to the M1 scope and not a refresh.
@@ -29,7 +29,10 @@ REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
 WORK_ROOT="${CROSS_SMOKE_WORK:-$REPO_ROOT/.cross-smoke-work}"
 CORPUS_ROOT="$REPO_ROOT/asm/fixtures/compcert-3.17"
 
-usage() { echo "Usage: $0 --check | --regen | --rehash [case ...]" 1>&2; }
+usage() {
+  echo "Usage: $0 --check | --regen | --rehash [case ...]" >&2
+  echo "       $0 --verify <target> [case ...]" >&2
+}
 Fatal() { echo "FATAL: $*" 1>&2; exit 1; }
 
 # {1 The case list}
@@ -116,7 +119,7 @@ check_case() {
 
 require_compilers() {
   local t missing=()
-  for t in "${ALL_TARGETS[@]}"; do
+  for t in "${FIXTURE_TARGETS[@]}"; do
     [ -x "$WORK_ROOT/install/$t/bin/ccomp" ] || missing+=("$t")
   done
   if [ "${#missing[@]}" -gt 0 ]; then
@@ -140,7 +143,7 @@ require_compilers() {
 # way to notice.
 gate_case() {
   local c=$1 t rc=0 f
-  for t in "${ALL_TARGETS[@]}"; do
+  for t in "${FIXTURE_TARGETS[@]}"; do
     f="$CORPUS_ROOT/$c/$t/$STEM.s"
     if grep -qE '^[[:space:]]*\.(comm|local)\b' "$f"; then
       echo "GATE $c/$t: .comm/.local is M3 scope; give the global a non-zero initializer" >&2; rc=1
@@ -163,7 +166,7 @@ regen_case() {
   [ -f "$FIXTURE_ROOT/$SOURCE_REL" ] || Fatal "missing fixture source $FIXTURE_ROOT/$SOURCE_REL"
 
   local t
-  for t in "${ALL_TARGETS[@]}"; do
+  for t in "${FIXTURE_TARGETS[@]}"; do
     target_config "$t"
     mkdir -p "$FIXTURE_ROOT/$t"
     # Generated from *inside* the fixture directory with relative paths, so
@@ -175,6 +178,30 @@ regen_case() {
   done
   gate_case "$1"
   write_manifest
+}
+
+# Regenerate one profile in scratch storage, preserving the relative command
+# line embedded by CompCert, and compare it byte-for-byte with the committed
+# source assembly.  This is deliberately profile-local so RV32 and RV64 oracle
+# jobs do not depend on one another.
+verify_case() {
+  case_config "$1"
+  local target=$VERIFY_TARGET
+  local compiler="$WORK_ROOT/install/$target/bin/ccomp"
+  local scratch
+  scratch=$(mktemp -d)
+  mkdir -p "$scratch/$(dirname "$SOURCE_REL")" "$scratch/$target"
+  cp "$FIXTURE_ROOT/$SOURCE_REL" "$scratch/$SOURCE_REL"
+  target_config "$target"
+  (cd "$scratch" && "$compiler" -S "${CCOMP_EXTRA_ARGS[@]}" \
+    -o "$target/$STEM.s" "$SOURCE_REL")
+  if ! cmp -s "$scratch/$target/$STEM.s" "$FIXTURE_ROOT/$target/$STEM.s"; then
+    diff -u "$FIXTURE_ROOT/$target/$STEM.s" "$scratch/$target/$STEM.s" || true
+    rm -rf "$scratch"
+    Fatal "fixture regeneration differs for $1/$target"
+  fi
+  rm -rf "$scratch"
+  echo "fixtures: $1/$target regenerates byte-identically"
 }
 
 # Recompute the manifest without recompiling. Used after tools/asm-fixture-oracle.sh
@@ -195,7 +222,7 @@ write_manifest() {
   {
     echo "generator	tools/asm-fixture-gen.sh"
     echo "source	$SOURCE_REL"
-    for t in "${ALL_TARGETS[@]}"; do
+    for t in "${FIXTURE_TARGETS[@]}"; do
       target_config "$t"
       if [ -x "$WORK_ROOT/install/$t/bin/ccomp" ]; then
         v=$("$WORK_ROOT/install/$t/bin/ccomp" -version 2>&1 | head -1)
@@ -205,6 +232,7 @@ write_manifest() {
       fi
       printf 'ccomp-target:%s\t%s\n' "$t" "$CONFIGURE_TARGET"
       printf 'ccomp-args:%s\t%s\n' "$t" "${CCOMP_EXTRA_ARGS[*]:-}"
+      printf 'ccomp-configure-args:%s\t%s\n' "$t" "${COMPCERT_CONFIGURE_ARGS[*]:-}"
     done
     local f
     while IFS= read -r f; do
@@ -247,5 +275,16 @@ case "$mode" in
   --check) run_over_cases check_case "$@" ;;
   --regen) require_compilers; run_over_cases regen_case "$@" ;;
   --rehash) run_over_cases rehash_case "$@" ;;
+  --verify)
+    [ "$#" -gt 0 ] || { usage; exit 2; }
+    VERIFY_TARGET=$1; shift
+    case "$VERIFY_TARGET" in
+      riscv32|riscv64) ;;
+      *) Fatal "--verify supports riscv32 or riscv64, got '$VERIFY_TARGET'" ;;
+    esac
+    [ -x "$WORK_ROOT/install/$VERIFY_TARGET/bin/ccomp" ] \
+      || Fatal "no installed ccomp for $VERIFY_TARGET - run tools/compcert-riscv-fixture-setup.sh $VERIFY_TARGET"
+    run_over_cases verify_case "$@"
+    ;;
   *) usage; exit 2 ;;
 esac

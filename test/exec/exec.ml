@@ -192,7 +192,8 @@ let mutate profile bytes =
 (* {1 Running} *)
 
 let run profile manifest =
-  Qemu_user.run ~profile ~manifest:(Manifest.serialize manifest) ~expected_case_id:case_id ()
+  Qemu_user.run ~abi_version:1 ~profile ~manifest:(Manifest.serialize manifest)
+    ~expected_case_id:case_id ()
 
 type verdict = Ok_ of string | Bad of string
 
@@ -293,7 +294,7 @@ let () =
   List.iter
     (fun profile ->
       let name = target_of_profile profile in
-      match Qemu_user.provenance profile with
+      match Qemu_user.provenance ~abi_version:1 profile with
       | [] ->
           incr failures;
           Printf.printf "%s: FAIL no helper in %s (run `make asm-helpers`)\n" name

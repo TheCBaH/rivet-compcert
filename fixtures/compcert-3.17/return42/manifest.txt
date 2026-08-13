@@ -1,13 +1,25 @@
-ccomp-args:aarch64	
+ccomp-args:aarch64
 ccomp-args:arm	-marm
-ccomp-args:x86_32	
-ccomp-args:x86_64	
+ccomp-args:riscv32
+ccomp-args:riscv64
+ccomp-args:x86_32
+ccomp-args:x86_64
+ccomp-configure-args:aarch64
+ccomp-configure-args:arm
+ccomp-configure-args:riscv32	-no-runtime-lib -no-standard-headers
+ccomp-configure-args:riscv64	-no-runtime-lib -no-standard-headers
+ccomp-configure-args:x86_32
+ccomp-configure-args:x86_64
 ccomp-target:aarch64	aarch64-linux
 ccomp-target:arm	arm-linux
+ccomp-target:riscv32	rv32-linux
+ccomp-target:riscv64	rv64-linux
 ccomp-target:x86_32	x86_32-linux
 ccomp-target:x86_64	x86_64-linux
 ccomp-version:aarch64	The CompCert C verified compiler, version 3.17
 ccomp-version:arm	The CompCert C verified compiler, version 3.17
+ccomp-version:riscv32	The CompCert C verified compiler, version 3.17
+ccomp-version:riscv64	The CompCert C verified compiler, version 3.17
 ccomp-version:x86_32	The CompCert C verified compiler, version 3.17
 ccomp-version:x86_64	The CompCert C verified compiler, version 3.17
 generator	tools/asm-fixture-gen.sh
@@ -27,6 +39,22 @@ sha256:arm/oracle/reloc.txt	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495
 sha256:arm/oracle/symbols.txt	406f5c48aee63c190c87efaaa89ec9b39e88b3ee73e2ba5a9de92f28786392af
 sha256:arm/oracle/text.hex	c4909e61ceadbc111b6169ad7fc8bcbc1efa3983193d2541a7c99ad239d5e208
 sha256:arm/oracle/tool-versions.txt	75d5e93062bd6e9228dc0921cc4f7a4b54db958306f297ec5a83988e8584e18a
+sha256:riscv32/asm_test_entry.s	d095fdc738989cadd11cf2f8ff0a9651eb7dc5051eacd569e44ac4def22cfe05
+sha256:riscv32/oracle/linked/text.hex	5ee6a904fd214eed13e8e3a195d57c8f7e29273968fa0d8942385ac463551135
+sha256:riscv32/oracle/objdump.txt	c6b24eea8485f797d837d092159dfd0f906916d77f93e335f76bf704d6fdf5b5
+sha256:riscv32/oracle/readelf.txt	0fc439fecaca76537997cff21ad27dd1ed7138bde7dc136909d20474233d4684
+sha256:riscv32/oracle/reloc.txt	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+sha256:riscv32/oracle/symbols.txt	5360d2179c6d21cd73ff83c2adbfef69c69e41bf60fd3f0416323338d827d185
+sha256:riscv32/oracle/text.hex	5ee6a904fd214eed13e8e3a195d57c8f7e29273968fa0d8942385ac463551135
+sha256:riscv32/oracle/tool-versions.txt	75d5e93062bd6e9228dc0921cc4f7a4b54db958306f297ec5a83988e8584e18a
+sha256:riscv64/asm_test_entry.s	9bbfb46b1b92613de12d2c928eabaeaae65dc801d5601f9fbfb498b0072af2ea
+sha256:riscv64/oracle/linked/text.hex	2eabc5b5e8e30618dda1af850c2edc927150df4522555d746632ec722eacee1c
+sha256:riscv64/oracle/objdump.txt	ae39640995c77ac1e8fa50fdc8fafd41ea8046b8537185473b8389726e348db6
+sha256:riscv64/oracle/readelf.txt	ab28f12d6b5c070c85206c89dec2a1965d23d1d828f2f397cee81a8d3c643a65
+sha256:riscv64/oracle/reloc.txt	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+sha256:riscv64/oracle/symbols.txt	5cee444676102c52e09b72bfbae18f3848664924d2ad36017c15fd51ad7da721
+sha256:riscv64/oracle/text.hex	2eabc5b5e8e30618dda1af850c2edc927150df4522555d746632ec722eacee1c
+sha256:riscv64/oracle/tool-versions.txt	75d5e93062bd6e9228dc0921cc4f7a4b54db958306f297ec5a83988e8584e18a
 sha256:source/asm_test_entry.c	76b8a572d29f7aedb07a0fad1d84f4249de80aed0e614b6dd32e6bf841443813
 sha256:x86_32/asm_test_entry.s	72443ae19fba15427934b8a5118f9cfc5fc93c27c96042ff2a6b5a87e73e06f4
 sha256:x86_32/oracle/linked/text.hex	b4faae726e57bdc6cfcaa160130d219cd8f18a18f86eb27658983f10d816e733
