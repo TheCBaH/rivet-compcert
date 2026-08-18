@@ -378,8 +378,7 @@ type reloc_record = {
   ro_addend : int64 option;
 }
 
-let reloc_records case target =
-  let path = Filename.concat (case_dir case target) "oracle/reloc.txt" in
+let reloc_records_at path =
   if not (Sys.file_exists path) then []
   else
     read path |> String.split_on_char '\n'
@@ -447,6 +446,79 @@ let build case target =
       match Image.bind_image laid_out ~addresses with
       | Error ds -> Error ("BIND " ^ brief ds)
       | Ok bound -> Ok { laid_out; bound; addresses })
+
+(* {1 Per-unit oracle evidence, in merged coordinates}
+
+   [oracle/<unit>/objdump.txt] and [oracle/<unit>/reloc.txt] (a multi-source
+   case) are one unlinked object's own disassembly/relocations at ITS OWN,
+   object-relative offsets - not the merged, padded coordinates our single
+   diagnostic dump and single fixup-observation set describe. The base a
+   unit's contribution was placed at within the merged section is not a
+   guess: it is this assembler's own layout decision, already merge-padding-
+   aware (image.ml's per-contribution [bases], §3/§5), recorded per label as
+   [Image.Symtab.definition.d_offset] - the same number GNU's own linker
+   used to place the identical bytes there, which [check_bytes] already
+   establishes byte-for-byte. A unit's base is the lowest [d_offset] among
+   its own definitions in that section: CompCert always opens a unit's
+   contribution with the label the definition names (no unlabeled lead-in),
+   the same reason GNU's own per-unit [readelf.txt] shows that symbol at
+   [Value] 0. *)
+let unit_base_offset (b : built) ~section ~unit =
+  List.filter_map
+    (fun (d : Image.Symtab.definition) ->
+      if String.equal d.Image.Symtab.d_section section && String.equal d.Image.Symtab.d_unit unit
+      then Some d.Image.Symtab.d_offset
+      else None)
+    b.laid_out.Image.definitions
+  |> function
+  | [] -> None
+  | o :: os -> Some (List.fold_left min o os)
+
+(* The measured record set, generalized to a multi-source case: every unit
+   that never appears in [reloc.txt] contributes nothing there, so this is
+   the union of each unit's own pre-link records, translated into the one
+   merged section's coordinates via {!unit_base_offset}. A single-source
+   case is the base case where this is the identity - one unit, base 0 -
+   which is why its behavior is unchanged. A record whose unit has no
+   definition in its own section (should not occur: a relocation is always
+   sited inside bytes some label in that unit anchors) is dropped rather
+   than mis-based, since a wrong base would be a silent false mismatch. *)
+let reloc_records case target (b : built) =
+  match unit_paths case target with
+  | [ _ ] -> reloc_records_at (Filename.concat (case_dir case target) "oracle/reloc.txt")
+  | units ->
+      List.concat_map
+        (fun (unit, _) ->
+          reloc_records_at
+            (Filename.concat (case_dir case target) ("oracle/" ^ unit ^ "/reloc.txt"))
+          |> List.filter_map (fun r ->
+              match unit_base_offset b ~section:r.ro_section ~unit with
+              | None -> None
+              | Some base -> Some { r with ro_offset = r.ro_offset + base }))
+        units
+
+(* The disassembled instruction set, generalized the same way: a unit that
+   contributes no bytes to [.text] (a data-only unit, e.g. [cross_data]'s
+   [data] or [cross_bss]'s [data]) has no base to find and is skipped, since
+   its own [oracle/<unit>/objdump.txt] is empty for exactly that reason.
+   Sorted by offset after translation - the source of the offsets, not
+   [unit_paths]'s alphabetical order, is what has to agree with our own
+   merged dump's row order. *)
+let disasm_records case target (b : built) =
+  match unit_paths case target with
+  | [ _ ] ->
+      objdump_instructions target (Filename.concat (case_dir case target) "oracle/objdump.txt")
+  | units ->
+      List.concat_map
+        (fun (unit, _) ->
+          match unit_base_offset b ~section:".text" ~unit with
+          | None -> []
+          | Some base ->
+              objdump_instructions target
+                (Filename.concat (case_dir case target) ("oracle/" ^ unit ^ "/objdump.txt"))
+              |> List.map (fun (off, text) -> (off + base, text)))
+        units
+      |> List.sort (fun (a, _) (c, _) -> compare a c)
 
 let find_segment b name =
   List.find_opt (fun (s : Image.segment) -> String.equal s.Image.name name) b.Image.segments
@@ -610,102 +682,94 @@ let rows_of_dump ~base text =
             }
       | _ -> None)
 
-(* objdump.txt and reloc.txt are recorded PER UNIT (tools/lib/oracle_cmd.ml),
-   one unlinked object's own disassembly/relocations at ITS OWN offsets - not
-   the merged, padded coordinates our single diagnostic dump and single
-   fixup-observation set describe for a multi-source case. Attributing GNU's
-   per-unit records to the right unit's slice of the merged section, and
-   correcting their offsets by that unit's own merge-padding, is real work
-   this file does not do yet (.ai/asm_plan.md §12, M3 §11) - so a multi-source
-   case is reported as out of scope for these two checks, honestly, rather
-   than crashing on the now-absent flat oracle/objdump.txt (multi-source
-   cases never had one) or silently comparing against nothing and reporting a
-   false mismatch, which is what an unguarded reloc_records "file absent ->
-   []" would have done here. check_bytes - the strongest of the three checks
-   by this file's own header - already covers every case, single- or
-   multi-source, in full. *)
+(* [objdump.txt] and [reloc.txt] are recorded PER UNIT for a multi-source case
+   (tools/lib/oracle_cmd.ml), one unlinked object's own disassembly/
+   relocations at ITS OWN offsets - not the merged, padded coordinates our
+   single diagnostic dump and single fixup-observation set describe.
+   {!reloc_records} and {!disasm_records} do the attribution: a unit's own
+   base offset within the merged section comes from this assembler's own
+   layout ({!unit_base_offset}), not a guess, so [check_disasm] and
+   [check_relocs] below need no multi-source branch of their own - a
+   single-source case is simply the one-unit, base-0 case those two
+   functions already handle as their identity. [check_bytes] - the
+   strongest of the three checks by this file's own header - covers every
+   case, single- or multi-source, independently of this attribution. *)
 let is_multi_source case target = List.length (unit_paths case target) > 1
 
 let check_disasm case target =
-  if is_multi_source case target then
-    Printf.printf "%-12s %-8s (multi-source: spelling comparison not yet implemented per unit)\n"
-      case target
-  else
-    let (module D : Target_intf.Target.DRIVER) = target_of_name target in
-    match build case target with
-    | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
-    | Ok b -> (
-        let bytes = Option.value ~default:"" (segment_bytes b.bound ".text") in
-        (* Dumped at zero, because that is where objdump read the object. Our
+  let (module D : Target_intf.Target.DRIVER) = target_of_name target in
+  match build case target with
+  | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
+  | Ok b -> (
+      let bytes = Option.value ~default:"" (segment_bytes b.bound ".text") in
+      (* Dumped at zero, because that is where objdump read the object. Our
          bytes are the bound ones either way - an intra-section PC-relative
          displacement is base-independent, which is the same fact that lets
          relaxation run at plan time - so the only fields that can disagree are
          the relocated ones, and those are handled below. *)
-        match D.dump_disasm_diagnostic ~address:0L bytes with
-        | Error ds -> Printf.printf "%-12s %-8s DISASM %s\n" case target (brief ds)
-        | Ok text ->
-            let rows = rows_of_dump ~base:0L text in
-            (* Padding is dropped from *both* sides, and by address rather than by
+      match D.dump_disasm_diagnostic ~address:0L bytes with
+      | Error ds -> Printf.printf "%-12s %-8s DISASM %s\n" case target (brief ds)
+      | Ok text ->
+          let rows = rows_of_dump ~base:0L text in
+          (* Padding is dropped from *both* sides, and by address rather than by
              spelling: objdump decodes filler as instructions and this assembler
              prints the directive that produced it, so a spelling-based filter
              would be a list of nop renderings that could hide a real
              difference. The byte ranges come from our own dump, and that those
              bytes are right is what the comparison above already establishes
-             exactly. *)
-            let pads =
-              List.filter_map (fun r -> if r.padding then Some (r.off, r.len) else None) rows
-            in
-            let in_pad off = List.exists (fun (o, l) -> off >= o && off < o + l) pads in
-            (* A field GNU left for the linker holds a placeholder in the object
+             exactly. A multi-source case's merge-gap fill is exactly this kind
+             of padding, so it drops out here the same way M1/M2's alignment
+             padding always did - no unit-slicing needed on this side either. *)
+          let pads =
+            List.filter_map (fun r -> if r.padding then Some (r.off, r.len) else None) rows
+          in
+          let in_pad off = List.exists (fun (o, l) -> off >= o && off < o + l) pads in
+          (* A field GNU left for the linker holds a placeholder in the object
              and its final value in our bound image, so the two renderings of
              that *operand* cannot agree and there is nothing to learn from
              making them. The mnemonic still has to. Which fields those are is
              read from the measured record set, not guessed from the spelling,
              and the operands themselves are compared against that record set
              and against the post-link bytes - twice, and exactly. *)
-            let relocated = List.map (fun r -> r.ro_offset) (reloc_records case target) in
-            let mnemonic_only s =
-              match String.index_opt s ' ' with Some i -> String.sub s 0 i ^ " ..." | None -> s
+          let relocated = List.map (fun r -> r.ro_offset) (reloc_records case target b) in
+          let mnemonic_only s =
+            match String.index_opt s ' ' with Some i -> String.sub s 0 i ^ " ..." | None -> s
+          in
+          let elide r t =
+            if
+              List.exists
+                (fun o ->
+                  (o >= r.off && o < r.off + r.len)
+                  || ((target = "riscv32" || target = "riscv64") && o = r.off - 4))
+                relocated
+            then mnemonic_only t
+            else t
+          in
+          let kept = List.filter (fun r -> not r.padding) rows in
+          let theirs =
+            disasm_records case target b |> List.filter (fun (off, _) -> not (in_pad off))
+          in
+          if List.length kept <> List.length theirs then
+            Printf.printf "%-12s %-8s LENGTH DIFFERS: %d vs %d\n" case target (List.length kept)
+              (List.length theirs)
+          else
+            let pairs =
+              List.map2 (fun r (_, t) -> (elide r (normalize target r.text), elide r t)) kept theirs
             in
-            let elide r t =
-              if
-                List.exists
-                  (fun o ->
-                    (o >= r.off && o < r.off + r.len)
-                    || ((target = "riscv32" || target = "riscv64") && o = r.off - 4))
-                  relocated
-              then mnemonic_only t
-              else t
-            in
-            let kept = List.filter (fun r -> not r.padding) rows in
-            let theirs =
-              objdump_instructions target
-                (Filename.concat (case_dir case target) "oracle/objdump.txt")
-              |> List.filter (fun (off, _) -> not (in_pad off))
-            in
-            if List.length kept <> List.length theirs then
-              Printf.printf "%-12s %-8s LENGTH DIFFERS: %d vs %d\n" case target (List.length kept)
-                (List.length theirs)
+            let bad = List.filter (fun (a, b) -> not (String.equal a b)) pairs in
+            let elided = List.length (List.filter (fun r -> elide r "x y" <> "x y") kept) in
+            if bad = [] then
+              Printf.printf "%-12s %-8s %d lines agree%s\n" case target (List.length pairs)
+                (if elided = 0 then ""
+                 else
+                   Printf.sprintf " (%d relocated operand%s compared as records instead)" elided
+                     (if elided = 1 then "" else "s"))
             else
-              let pairs =
-                List.map2
-                  (fun r (_, t) -> (elide r (normalize target r.text), elide r t))
-                  kept theirs
-              in
-              let bad = List.filter (fun (a, b) -> not (String.equal a b)) pairs in
-              let elided = List.length (List.filter (fun r -> elide r "x y" <> "x y") kept) in
-              if bad = [] then
-                Printf.printf "%-12s %-8s %d lines agree%s\n" case target (List.length pairs)
-                  (if elided = 0 then ""
-                   else
-                     Printf.sprintf " (%d relocated operand%s compared as records instead)" elided
-                       (if elided = 1 then "" else "s"))
-              else
-                List.iter
-                  (fun (a, b) ->
-                    Printf.printf "%-12s %-8s DIFFERS\n    ours:    %s\n    objdump: %s\n" case
-                      target a b)
-                  bad)
+              List.iter
+                (fun (a, b) ->
+                  Printf.printf "%-12s %-8s DIFFERS\n    ours:    %s\n    objdump: %s\n" case target
+                    a b)
+                bad)
 
 let%expect_test "diagnostic spelling agrees with objdump after normalization" =
   List.iter (fun c -> List.iter (fun t -> check_disasm c t) targets) (cases ());
@@ -723,24 +787,24 @@ let%expect_test "diagnostic spelling agrees with objdump after normalization" =
     cond_select  aarch64  27 lines agree
     cond_select  riscv32  27 lines agree
     cond_select  riscv64  27 lines agree
-    cross_bss    x86_32   (multi-source: spelling comparison not yet implemented per unit)
-    cross_bss    x86_64   (multi-source: spelling comparison not yet implemented per unit)
-    cross_bss    arm      (multi-source: spelling comparison not yet implemented per unit)
-    cross_bss    aarch64  (multi-source: spelling comparison not yet implemented per unit)
-    cross_bss    riscv32  (multi-source: spelling comparison not yet implemented per unit)
-    cross_bss    riscv64  (multi-source: spelling comparison not yet implemented per unit)
-    cross_call   x86_32   (multi-source: spelling comparison not yet implemented per unit)
-    cross_call   x86_64   (multi-source: spelling comparison not yet implemented per unit)
-    cross_call   arm      (multi-source: spelling comparison not yet implemented per unit)
-    cross_call   aarch64  (multi-source: spelling comparison not yet implemented per unit)
-    cross_call   riscv32  (multi-source: spelling comparison not yet implemented per unit)
-    cross_call   riscv64  (multi-source: spelling comparison not yet implemented per unit)
-    cross_data   x86_32   (multi-source: spelling comparison not yet implemented per unit)
-    cross_data   x86_64   (multi-source: spelling comparison not yet implemented per unit)
-    cross_data   arm      (multi-source: spelling comparison not yet implemented per unit)
-    cross_data   aarch64  (multi-source: spelling comparison not yet implemented per unit)
-    cross_data   riscv32  (multi-source: spelling comparison not yet implemented per unit)
-    cross_data   riscv64  (multi-source: spelling comparison not yet implemented per unit)
+    cross_bss    x86_32   8 lines agree (2 relocated operands compared as records instead)
+    cross_bss    x86_64   8 lines agree (2 relocated operands compared as records instead)
+    cross_bss    arm      12 lines agree (2 relocated operands compared as records instead)
+    cross_bss    aarch64  10 lines agree (4 relocated operands compared as records instead)
+    cross_bss    riscv32  12 lines agree (6 relocated operands compared as records instead)
+    cross_bss    riscv64  12 lines agree (6 relocated operands compared as records instead)
+    cross_call   x86_32   16 lines agree (1 relocated operand compared as records instead)
+    cross_call   x86_64   14 lines agree (1 relocated operand compared as records instead)
+    cross_call   arm      18 lines agree (1 relocated operand compared as records instead)
+    cross_call   aarch64  14 lines agree (1 relocated operand compared as records instead)
+    cross_call   riscv32  19 lines agree (2 relocated operands compared as records instead)
+    cross_call   riscv64  19 lines agree (2 relocated operands compared as records instead)
+    cross_data   x86_32   8 lines agree (2 relocated operands compared as records instead)
+    cross_data   x86_64   8 lines agree (2 relocated operands compared as records instead)
+    cross_data   arm      12 lines agree (2 relocated operands compared as records instead)
+    cross_data   aarch64  10 lines agree (4 relocated operands compared as records instead)
+    cross_data   riscv32  12 lines agree (6 relocated operands compared as records instead)
+    cross_data   riscv64  12 lines agree (6 relocated operands compared as records instead)
     direct_call  x86_32   16 lines agree (1 relocated operand compared as records instead)
     direct_call  x86_64   14 lines agree (1 relocated operand compared as records instead)
     direct_call  arm      18 lines agree (1 relocated operand compared as records instead)
@@ -1001,87 +1065,83 @@ let compare_records ~predicted ~measured =
       measured
 
 let check_relocs case target =
-  if is_multi_source case target then
-    Printf.printf "%-12s %-8s (multi-source: relocation comparison not yet implemented per unit)\n"
-      case target
-  else
-    match build case target with
-    | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
-    | Ok b ->
-        let problems = ref [] and predicted = ref [] and resolved = ref 0 in
-        let sites = ref [] in
-        let note s = problems := s :: !problems in
-        let oracle_symbol s =
-          if target <> "riscv32" && target <> "riscv64" then s
-          else
-            try Scanf.sscanf s "#L%d#%d" (fun n k -> Printf.sprintf ".L%d^B%d" n (k + 1))
-            with _ -> s
-        in
-        (* Each classified site is *named* in the transcript, not merely counted.
+  match build case target with
+  | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
+  | Ok b ->
+      let problems = ref [] and predicted = ref [] and resolved = ref 0 in
+      let sites = ref [] in
+      let note s = problems := s :: !problems in
+      let oracle_symbol s =
+        if target <> "riscv32" && target <> "riscv64" then s
+        else
+          try Scanf.sscanf s "#L%d#%d" (fun n k -> Printf.sprintf ".L%d^B%d" n (k + 1))
+          with _ -> s
+      in
+      (* Each classified site is *named* in the transcript, not merely counted.
          An assembler-resolved fixup is absent from reloc.txt by definition, so a
          count is the only thing the record comparison can say about it; listing
          the sites is what makes "we resolved this one ourselves" a reviewable
          claim about a place in the image rather than a number. Every column O1
          indexes on is on the line, so changing any of them independently changes
          the transcript. *)
-        let site_line (site : Image.site) (r : Image.symbolic_ref) cls =
-          sites :=
-            Printf.sprintf "  %s+0x%-4x %-16s %-6s %-6s %-9s %s" site.Image.o_section
-              site.Image.o_offset site.Image.o_kind_name
-              (Asm_core.Lowered_ast.fixup_role_name site.Image.o_role)
-              (match r.Image.binding with `Local -> "local" | `Global -> "global")
-              (if not r.Image.defined then "undefined"
-               else if r.Image.same_section then "same-sec"
-               else "other-sec")
-              cls
-            :: !sites
-        in
-        List.iter
-          (fun o ->
-            match o with
-            | Image.Non_normalizable n ->
-                (* No single symbol, so no record to compare against; O2's
+      let site_line (site : Image.site) (r : Image.symbolic_ref) cls =
+        sites :=
+          Printf.sprintf "  %s+0x%-4x %-16s %-6s %-6s %-9s %s" site.Image.o_section
+            site.Image.o_offset site.Image.o_kind_name
+            (Asm_core.Lowered_ast.fixup_role_name site.Image.o_role)
+            (match r.Image.binding with `Local -> "local" | `Global -> "global")
+            (if not r.Image.defined then "undefined"
+             else if r.Image.same_section then "same-sec"
+             else "other-sec")
+            cls
+          :: !sites
+      in
+      List.iter
+        (fun o ->
+          match o with
+          | Image.Non_normalizable n ->
+              (* No single symbol, so no record to compare against; O2's
                  post-link byte comparison is what covers it. *)
-                note
-                  (Printf.sprintf "non-normalizable at %s+0x%x: %s" n.Image.nn_site.Image.o_section
-                     n.Image.nn_site.Image.o_offset n.Image.nn_expr)
-            | Image.Symbolic_ref r -> (
-                let site = r.Image.site in
-                let complaint, cls =
-                  classify ~target ~kind_name:site.Image.o_kind_name ~role:site.Image.o_role
-                    ~defined:r.Image.defined ~same_section:r.Image.same_section
-                in
-                Option.iter note complaint;
-                match cls with
-                | Assembler_resolved ->
-                    incr resolved;
-                    site_line site r "assembler-resolved"
-                | Linker_visible ty ->
-                    site_line site r ty;
-                    let rela = List.exists (fun x -> x.ro_rela) (reloc_records case target) in
-                    predicted :=
-                      ( site.Image.o_section,
-                        site.Image.o_offset,
-                        ty,
-                        oracle_symbol r.Image.symbol,
-                        if rela then
-                          Some
-                            (elf_addend ~pcrel:(is_pcrel site.Image.o_kind_name) ~site
-                               ~addend:r.Image.addend)
-                        else None )
-                      :: !predicted))
-          (Image.fixup_observations b.laid_out);
-        let measured =
-          List.map
-            (fun r -> (r.ro_section, r.ro_offset, r.ro_type, r.ro_symbol, r.ro_addend))
-            (reloc_records case target)
-        in
-        List.iter note (compare_records ~predicted:(List.rev !predicted) ~measured);
-        if !problems = [] then (
-          Printf.printf "%-12s %-8s %d linker-visible, %d assembler-resolved\n" case target
-            (List.length !predicted) !resolved;
-          List.iter print_endline (List.rev !sites))
-        else List.iter (fun p -> Printf.printf "%-12s %-8s %s\n" case target p) (List.rev !problems)
+              note
+                (Printf.sprintf "non-normalizable at %s+0x%x: %s" n.Image.nn_site.Image.o_section
+                   n.Image.nn_site.Image.o_offset n.Image.nn_expr)
+          | Image.Symbolic_ref r -> (
+              let site = r.Image.site in
+              let complaint, cls =
+                classify ~target ~kind_name:site.Image.o_kind_name ~role:site.Image.o_role
+                  ~defined:r.Image.defined ~same_section:r.Image.same_section
+              in
+              Option.iter note complaint;
+              match cls with
+              | Assembler_resolved ->
+                  incr resolved;
+                  site_line site r "assembler-resolved"
+              | Linker_visible ty ->
+                  site_line site r ty;
+                  let rela = List.exists (fun x -> x.ro_rela) (reloc_records case target b) in
+                  predicted :=
+                    ( site.Image.o_section,
+                      site.Image.o_offset,
+                      ty,
+                      oracle_symbol r.Image.symbol,
+                      if rela then
+                        Some
+                          (elf_addend ~pcrel:(is_pcrel site.Image.o_kind_name) ~site
+                             ~addend:r.Image.addend)
+                      else None )
+                    :: !predicted))
+        (Image.fixup_observations b.laid_out);
+      let measured =
+        List.map
+          (fun r -> (r.ro_section, r.ro_offset, r.ro_type, r.ro_symbol, r.ro_addend))
+          (reloc_records case target b)
+      in
+      List.iter note (compare_records ~predicted:(List.rev !predicted) ~measured);
+      if !problems = [] then (
+        Printf.printf "%-12s %-8s %d linker-visible, %d assembler-resolved\n" case target
+          (List.length !predicted) !resolved;
+        List.iter print_endline (List.rev !sites))
+      else List.iter (fun p -> Printf.printf "%-12s %-8s %s\n" case target p) (List.rev !problems)
 
 let%expect_test "fixup observations classify to exactly the measured relocations" =
   List.iter (fun c -> List.iter (fun t -> check_relocs c t) targets) (cases ());
@@ -1127,24 +1187,68 @@ let%expect_test "fixup observations classify to exactly the measured relocations
       .text+0x48   pcrel-j21        branch local  same-sec  assembler-resolved
       .text+0x50   pcrel-b13        branch local  same-sec  assembler-resolved
       .text+0x58   pcrel-j21        branch local  same-sec  assembler-resolved
-    cross_bss    x86_32   (multi-source: relocation comparison not yet implemented per unit)
-    cross_bss    x86_64   (multi-source: relocation comparison not yet implemented per unit)
-    cross_bss    arm      (multi-source: relocation comparison not yet implemented per unit)
-    cross_bss    aarch64  (multi-source: relocation comparison not yet implemented per unit)
-    cross_bss    riscv32  (multi-source: relocation comparison not yet implemented per unit)
-    cross_bss    riscv64  (multi-source: relocation comparison not yet implemented per unit)
-    cross_call   x86_32   (multi-source: relocation comparison not yet implemented per unit)
-    cross_call   x86_64   (multi-source: relocation comparison not yet implemented per unit)
-    cross_call   arm      (multi-source: relocation comparison not yet implemented per unit)
-    cross_call   aarch64  (multi-source: relocation comparison not yet implemented per unit)
-    cross_call   riscv32  (multi-source: relocation comparison not yet implemented per unit)
-    cross_call   riscv64  (multi-source: relocation comparison not yet implemented per unit)
-    cross_data   x86_32   (multi-source: relocation comparison not yet implemented per unit)
-    cross_data   x86_64   (multi-source: relocation comparison not yet implemented per unit)
-    cross_data   arm      (multi-source: relocation comparison not yet implemented per unit)
-    cross_data   aarch64  (multi-source: relocation comparison not yet implemented per unit)
-    cross_data   riscv32  (multi-source: relocation comparison not yet implemented per unit)
-    cross_data   riscv64  (multi-source: relocation comparison not yet implemented per unit)
+    cross_bss    x86_32   2 linker-visible, 0 assembler-resolved
+      .text+0xb    abs32            data-address local  other-sec R_386_32
+      .text+0x13   abs32            data-address local  other-sec R_386_32
+    cross_bss    x86_64   2 linker-visible, 0 assembler-resolved
+      .text+0xf    pcrel32-data     data-address local  other-sec R_X86_64_PC32
+      .text+0x19   pcrel32-data     data-address local  other-sec R_X86_64_PC32
+    cross_bss    arm      2 linker-visible, 0 assembler-resolved
+      .text+0x10   movw-abs-nc      data-address local  other-sec R_ARM_MOVW_ABS_NC
+      .text+0x14   movt-abs         data-address local  other-sec R_ARM_MOVT_ABS
+    cross_bss    aarch64  4 linker-visible, 0 assembler-resolved
+      .text+0x8    adrp-page        data-address local  other-sec R_AARCH64_ADR_PREL_PG_HI21
+      .text+0xc    ldst32-lo12      data-address local  other-sec R_AARCH64_LDST32_ABS_LO12_NC
+      .text+0x14   adrp-page        data-address local  other-sec R_AARCH64_ADR_PREL_PG_HI21
+      .text+0x18   ldst32-lo12      data-address local  other-sec R_AARCH64_LDST32_ABS_LO12_NC
+    cross_bss    riscv32  4 linker-visible, 0 assembler-resolved
+      .text+0x10   pcrel-hi20       data-address local  other-sec R_RISCV_PCREL_HI20
+      .text+0x14   pcrel-lo12-i     data-address local  same-sec  R_RISCV_PCREL_LO12_I
+      .text+0x1c   pcrel-hi20       data-address local  other-sec R_RISCV_PCREL_HI20
+      .text+0x20   pcrel-lo12-s     data-address local  same-sec  R_RISCV_PCREL_LO12_S
+    cross_bss    riscv64  4 linker-visible, 0 assembler-resolved
+      .text+0x10   pcrel-hi20       data-address local  other-sec R_RISCV_PCREL_HI20
+      .text+0x14   pcrel-lo12-i     data-address local  same-sec  R_RISCV_PCREL_LO12_I
+      .text+0x1c   pcrel-hi20       data-address local  other-sec R_RISCV_PCREL_HI20
+      .text+0x20   pcrel-lo12-s     data-address local  same-sec  R_RISCV_PCREL_LO12_S
+    cross_call   x86_32   1 linker-visible, 0 assembler-resolved
+      .text+0x34   pcrel32-call     call   global same-sec  R_386_PC32
+    cross_call   x86_64   1 linker-visible, 0 assembler-resolved
+      .text+0x33   pcrel32-call     call   global same-sec  R_X86_64_PLT32
+    cross_call   arm      1 linker-visible, 0 assembler-resolved
+      .text+0x34   pcrel-call       call   global same-sec  R_ARM_CALL
+    cross_call   aarch64  1 linker-visible, 0 assembler-resolved
+      .text+0x24   pcrel-call26     call   global same-sec  R_AARCH64_CALL26
+    cross_call   riscv32  1 linker-visible, 1 assembler-resolved
+      .text+0x34   call-hi20        call   global same-sec  R_RISCV_CALL_PLT
+      .text+0x38   call-lo12-i      call   global same-sec  assembler-resolved
+    cross_call   riscv64  1 linker-visible, 1 assembler-resolved
+      .text+0x34   call-hi20        call   global same-sec  R_RISCV_CALL_PLT
+      .text+0x38   call-lo12-i      call   global same-sec  assembler-resolved
+    cross_data   x86_32   2 linker-visible, 0 assembler-resolved
+      .text+0xb    abs32            data-address global other-sec R_386_32
+      .text+0x13   abs32            data-address global other-sec R_386_32
+    cross_data   x86_64   2 linker-visible, 0 assembler-resolved
+      .text+0xf    pcrel32-data     data-address global other-sec R_X86_64_PC32
+      .text+0x19   pcrel32-data     data-address global other-sec R_X86_64_PC32
+    cross_data   arm      2 linker-visible, 0 assembler-resolved
+      .text+0x10   movw-abs-nc      data-address global other-sec R_ARM_MOVW_ABS_NC
+      .text+0x14   movt-abs         data-address global other-sec R_ARM_MOVT_ABS
+    cross_data   aarch64  4 linker-visible, 0 assembler-resolved
+      .text+0x8    adrp-page        data-address global other-sec R_AARCH64_ADR_PREL_PG_HI21
+      .text+0xc    ldst32-lo12      data-address global other-sec R_AARCH64_LDST32_ABS_LO12_NC
+      .text+0x14   adrp-page        data-address global other-sec R_AARCH64_ADR_PREL_PG_HI21
+      .text+0x18   ldst32-lo12      data-address global other-sec R_AARCH64_LDST32_ABS_LO12_NC
+    cross_data   riscv32  4 linker-visible, 0 assembler-resolved
+      .text+0x10   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x14   pcrel-lo12-i     data-address local  same-sec  R_RISCV_PCREL_LO12_I
+      .text+0x1c   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x20   pcrel-lo12-s     data-address local  same-sec  R_RISCV_PCREL_LO12_S
+    cross_data   riscv64  4 linker-visible, 0 assembler-resolved
+      .text+0x10   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x14   pcrel-lo12-i     data-address local  same-sec  R_RISCV_PCREL_LO12_I
+      .text+0x1c   pcrel-hi20       data-address global other-sec R_RISCV_PCREL_HI20
+      .text+0x20   pcrel-lo12-s     data-address local  same-sec  R_RISCV_PCREL_LO12_S
     direct_call  x86_32   1 linker-visible, 0 assembler-resolved
       .text+0x34   pcrel32-call     call   global same-sec  R_386_PC32
     direct_call  x86_64   1 linker-visible, 0 assembler-resolved
