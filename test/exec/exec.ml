@@ -81,7 +81,15 @@ let address_for profile section =
   match section with
   | ".text" -> Abi.code_addr profile
   | ".rodata" -> Abi.rodata_addr profile
-  | ".data" | ".bss" -> Abi.data_addr profile
+  | ".data" -> Abi.data_addr profile
+  (* M3 (.ai/asm_plan.md §12): a real NOBITS section is now possible, so it
+     needs its own address rather than aliasing .data's - two segments at one
+     address was exactly M1's silent behavior Image.bind_image no longer
+     tolerates once more than one segment can be nonempty (image.ml's
+     overlap check). Abi_v2.bss_addr, not a new Abi (v1) constant: BSS
+     placement is a policy decision, not a wire-format one, and v1 is frozen
+     to its own. *)
+  | ".bss" -> Abi_v2.bss_addr profile
   | other -> failwith ("no ABI address for section " ^ other)
 
 let assemble profile case =

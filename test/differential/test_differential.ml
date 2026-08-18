@@ -314,13 +314,18 @@ let case_dir case target = Filename.concat (Filename.concat corpus_root case) ta
 
 (* CompCert writes its source path into the assembly banner, so the stem is the
    case's own and return42 keeps the [asm_test_entry] spelling its committed
-   bytes were generated with. Finding the one [.s] avoids a second place that
-   has to know that. *)
-let source_path case target =
+   bytes were generated with. Every [.s] under a target directory is one of the
+   case's own compilation units - one for the single-source cases M1/M2 added,
+   more than one for M3's - paired with its own stem, sorted so build order is
+   deterministic. This is also the unit name a multi-source case's own oracle
+   evidence is filed under (tools/lib/oracle_cmd.ml's [unit_dir]), since both
+   sides derive it the same way, from the same file. *)
+let unit_paths case target =
   let dir = case_dir case target in
-  match List.filter (fun f -> Filename.check_suffix f ".s") (Array.to_list (Sys.readdir dir)) with
-  | [ f ] -> Filename.concat dir f
-  | fs -> failwith (Printf.sprintf "%s/%s has %d .s files" case target (List.length fs))
+  Sys.readdir dir |> Array.to_list
+  |> List.filter (fun f -> Filename.check_suffix f ".s")
+  |> List.sort compare
+  |> List.map (fun f -> (Filename.chop_suffix f ".s", Filename.concat dir f))
 
 (* [oracle/linked/manifest.txt] is the checked-in address policy: one line per
    allocatable section giving the address the reference link used and the file
@@ -390,11 +395,24 @@ let brief e =
 
 type built = { laid_out : Image.laid_out; bound : Image.t; addresses : (string * int64) list }
 
+(* One unit reads exactly like every M1/M2 case always has: [D.assemble] with
+   the frozen entry name doubling as its unit name. More than one goes through
+   M3's [D.assemble_many] instead, each unit named after its own stem - the
+   same name its own oracle evidence is filed under. *)
 let build case target =
   let (module D : Target_intf.Target.DRIVER) = target_of_name target in
-  let path = source_path case target in
-  let source = Foundation.Span.source ~name:path ~contents:(read path) in
-  match D.assemble ~entry:entry_symbol ~unit_name:entry_symbol ~source () with
+  let units = unit_paths case target in
+  let sourced =
+    List.map
+      (fun (stem, path) -> (stem, Foundation.Span.source ~name:path ~contents:(read path)))
+      units
+  in
+  let result =
+    match sourced with
+    | [ (_, source) ] -> D.assemble ~entry:entry_symbol ~unit_name:entry_symbol ~source ()
+    | many -> D.assemble_many ~entry:entry_symbol many ()
+  in
+  match result with
   | Error ds -> Error ("ASSEMBLE " ^ brief ds)
   | Ok laid_out -> (
       let addresses = List.map (fun (s, a, _) -> (s, a)) (linked_sections case target) in
