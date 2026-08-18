@@ -4,14 +4,17 @@
    own output is the thing that runs. Every earlier gate compares this
    assembler's bytes to GNU as's bytes; this one binds the image at the ABI-v1
    profile addresses, hands it to the checked-in user-mode helper, and requires
-   the guest to have actually returned 42.
+   the guest to have actually returned the value its own [expected-status.txt]
+   declares.
 
    Four conditions, all of them, per §16.3 and the M1.6 acceptance:
 
      termination  = completed
      result       = recovered
      record_state = returned
-     status       = passed, committed, with expected = [42] and values = [42]
+     status       = passed, committed, with expected and values both matching
+                    the case's expected-status.txt (42 for every case but
+                    cross_bss, which is 22)
 
    The commit marker is what makes the actuals evidence at all. A record whose
    status field reads "passed" without its commit bit set has not been written
@@ -19,11 +22,14 @@
    been stored to.
 
    X1 is what makes this generalize past return42. Every case's entry is a
-   zero-argument [asm_test_entry] returning 42, because the ABI helpers install
-   no arguments (exec-abi-v1.md §11) and a fixture consuming unspecified ones
-   has no deterministic result. A case needing operands supplies them as
-   constants from inside that entry - which for args_arith and direct_call is
-   also what produces the non-tail call the fixture gate requires.
+   zero-argument [asm_test_entry] returning its own expected-status.txt value
+   - 42 for every case except cross_bss, which returns 22 because its whole
+   point is a zero-initialized `.comm` reservation plus 22, not a materialized
+   42 - because the ABI helpers install no arguments (exec-abi-v1.md §11) and a
+   fixture consuming unspecified ones has no deterministic result. A case
+   needing operands supplies them as constants from inside that entry - which
+   for args_arith and direct_call is also what produces the non-tail call the
+   fixture gate requires.
 
    The induced-failure control is the other half. A gate that cannot fail is not
    a gate, and a random bit flip is not good enough: most flips in this code
@@ -58,6 +64,20 @@ let read path =
   let s = really_input_string ic n in
   close_in ic;
   s
+
+(* Almost every case's [asm_test_entry] returns 42 by construction (see the
+   file header), but a case is free to declare a different value in its own
+   [expected-status.txt] - cross_bss does, since its whole point is a
+   zero-initialized `.comm` reservation plus 22, not 42 (asm-fixtures-check,
+   a prerequisite of this target, is what already validates every fixture's
+   expected-status.txt is a canonical decimal integer; this just trusts and
+   parses it). *)
+let expected_value case =
+  let path = Filename.concat (Filename.concat corpus_root case) "expected-status.txt" in
+  let text = read path in
+  match String.index_opt text '\n' with
+  | Some i -> Int64.of_string (String.sub text 0 i)
+  | None -> failwith (path ^ ": expected-status.txt must end with a newline")
 
 let cases () =
   Sys.readdir corpus_root |> Array.to_list
@@ -304,7 +324,8 @@ let maybe_trace ~abi_version ~profile ~manifest = function
           | None -> Printf.printf "  trace (ASM_QEMU_TRACE): qemu wrote none\n"))
 
 let run_case profile case =
-  let label = Printf.sprintf "%s returns 42" case in
+  let expected = expected_value case in
+  let label = Printf.sprintf "%s returns %Ld" case expected in
   match assemble profile case with
   | Error why ->
       (* Not a failure of this gate: it is the assembler not yet accepting the
@@ -316,13 +337,13 @@ let run_case profile case =
         (match String.index_opt why '\n' with Some i -> String.sub why 0 i | None -> why)
   | Ok img -> (
       Printf.printf "  %s: %s\n" case (describe img);
-      match manifest_of_image profile img ~expected:[ 42L ] with
+      match manifest_of_image profile img ~expected:[ expected ] with
       | Error why ->
           incr failures;
           Printf.printf "  FAIL %-24s %s\n" label why
       | Ok m ->
           let v =
-            verdict ~want_status:Abi.Passed ~want_values:[ 42L ]
+            verdict ~want_status:Abi.Passed ~want_values:[ expected ]
               (run ~abi_version:Abi.abi_version profile m)
           in
           report label v;

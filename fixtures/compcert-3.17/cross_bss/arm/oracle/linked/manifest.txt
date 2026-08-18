@@ -1,0 +1,2 @@
+.text	progbits	0x30000000	0x30	linked/text.hex
+.bss	nobits	0x30080000	0x4	-

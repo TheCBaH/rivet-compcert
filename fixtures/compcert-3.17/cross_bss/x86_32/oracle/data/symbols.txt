@@ -1,0 +1,1 @@
+shared_value	global	default	COM	defined

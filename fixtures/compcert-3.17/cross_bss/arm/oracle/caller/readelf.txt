@@ -1,0 +1,44 @@
+There are 12 section headers, starting at offset 0x200:
+
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        00000000 000034 000030 00  AX  0   0  4
+  [ 2] .rel.text         REL             00000000 000188 000010 08   I  9   1  4
+  [ 3] .data             PROGBITS        00000000 000064 000000 00  WA  0   0  1
+  [ 4] .bss              NOBITS          00000000 000064 000000 00  WA  0   0  1
+  [ 5] .note.GNU-stack   PROGBITS        00000000 000064 000000 00      0   0  1
+  [ 6] .eh_frame         PROGBITS        00000000 000064 00002c 00   A  0   0  4
+  [ 7] .rel.eh_frame     REL             00000000 000198 000008 08   I  9   6  4
+  [ 8] .ARM.attributes   ARM_ATTRIBUTES  00000000 000090 000021 00      0   0  1
+  [ 9] .symtab           SYMTAB          00000000 0000b4 0000b0 10     10   9  4
+  [10] .strtab           STRTAB          00000000 000164 000023 00      0   0  1
+  [11] .shstrtab         STRTAB          00000000 0001a0 00005e 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  D (mbind), y (purecode), p (processor specific)
+
+Relocation section '.rel.text' at offset 0x188 contains 2 entries:
+ Offset     Info    Type                Sym. Value  Symbol's Name
+00000010  00000a2b R_ARM_MOVW_ABS_NC      00000000   shared_value
+00000014  00000a2c R_ARM_MOVT_ABS         00000000   shared_value
+
+Relocation section '.rel.eh_frame' at offset 0x198 contains 1 entry:
+ Offset     Info    Type                Sym. Value  Symbol's Name
+0000001c  00000103 R_ARM_REL32            00000000   .text
+
+Symbol table '.symtab' contains 11 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND
+     1: 00000000     0 SECTION LOCAL  DEFAULT    1 .text
+     2: 00000000     0 SECTION LOCAL  DEFAULT    3 .data
+     3: 00000000     0 SECTION LOCAL  DEFAULT    4 .bss
+     4: 00000000     0 NOTYPE  LOCAL  DEFAULT    1 $a
+     5: 00000000     0 SECTION LOCAL  DEFAULT    5 .note.GNU-stack
+     6: 00000014     0 NOTYPE  LOCAL  DEFAULT    6 $d
+     7: 00000000     0 SECTION LOCAL  DEFAULT    6 .eh_frame
+     8: 00000000     0 SECTION LOCAL  DEFAULT    8 .ARM.attributes
+     9: 00000000    48 FUNC    GLOBAL DEFAULT    1 asm_test_entry
+    10: 00000000     0 NOTYPE  GLOBAL DEFAULT  UND shared_value

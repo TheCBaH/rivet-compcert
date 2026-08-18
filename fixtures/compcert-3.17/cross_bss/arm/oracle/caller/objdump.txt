@@ -1,0 +1,19 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_entry>:
+   0:	e1a0c00d 	mov	ip, sp
+   4:	e24dd008 	sub	sp, sp, #8
+   8:	e58dc000 	str	ip, [sp]
+   c:	e58de004 	str	lr, [sp, #4]
+  10:	e3001000 	movw	r1, #0
+			10: R_ARM_MOVW_ABS_NC	shared_value
+  14:	e3401000 	movt	r1, #0
+			14: R_ARM_MOVT_ABS	shared_value
+  18:	e5912000 	ldr	r2, [r1]
+  1c:	e2820016 	add	r0, r2, #22
+  20:	e5810000 	str	r0, [r1]
+  24:	e59de004 	ldr	lr, [sp, #4]
+  28:	e28dd008 	add	sp, sp, #8
+  2c:	e12fff1e 	bx	lr

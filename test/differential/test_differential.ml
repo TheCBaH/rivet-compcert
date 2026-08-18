@@ -519,6 +519,12 @@ let%expect_test "every bound segment matches the controlled reference link" =
     cond_select  aarch64  .text 108
     cond_select  riscv32  .text 108
     cond_select  riscv64  .text 108
+    cross_bss    x86_32   .text 27, .bss 4 bytes (nobits)
+    cross_bss    x86_64   .text 34, .bss 4 bytes (nobits)
+    cross_bss    arm      .text 48, .bss 4 bytes (nobits)
+    cross_bss    aarch64  .text 40, .bss 4 bytes (nobits)
+    cross_bss    riscv32  .text 48, .bss 4 bytes (nobits)
+    cross_bss    riscv64  .text 48, .bss 4 bytes (nobits)
     cross_call   x86_32   .text 63
     cross_call   x86_64   .text 64
     cross_call   arm      .text 72
@@ -717,6 +723,12 @@ let%expect_test "diagnostic spelling agrees with objdump after normalization" =
     cond_select  aarch64  27 lines agree
     cond_select  riscv32  27 lines agree
     cond_select  riscv64  27 lines agree
+    cross_bss    x86_32   (multi-source: spelling comparison not yet implemented per unit)
+    cross_bss    x86_64   (multi-source: spelling comparison not yet implemented per unit)
+    cross_bss    arm      (multi-source: spelling comparison not yet implemented per unit)
+    cross_bss    aarch64  (multi-source: spelling comparison not yet implemented per unit)
+    cross_bss    riscv32  (multi-source: spelling comparison not yet implemented per unit)
+    cross_bss    riscv64  (multi-source: spelling comparison not yet implemented per unit)
     cross_call   x86_32   (multi-source: spelling comparison not yet implemented per unit)
     cross_call   x86_64   (multi-source: spelling comparison not yet implemented per unit)
     cross_call   arm      (multi-source: spelling comparison not yet implemented per unit)
@@ -821,6 +833,12 @@ let%expect_test "canonical disassembly reassembles to the same bytes" =
     cond_select  aarch64  108 bytes reproduced
     cond_select  riscv32  108 bytes reproduced
     cond_select  riscv64  108 bytes reproduced
+    cross_bss    x86_32   (multi-source: round-trip comparison not yet implemented per unit)
+    cross_bss    x86_64   (multi-source: round-trip comparison not yet implemented per unit)
+    cross_bss    arm      (multi-source: round-trip comparison not yet implemented per unit)
+    cross_bss    aarch64  (multi-source: round-trip comparison not yet implemented per unit)
+    cross_bss    riscv32  (multi-source: round-trip comparison not yet implemented per unit)
+    cross_bss    riscv64  (multi-source: round-trip comparison not yet implemented per unit)
     cross_call   x86_32   (multi-source: round-trip comparison not yet implemented per unit)
     cross_call   x86_64   (multi-source: round-trip comparison not yet implemented per unit)
     cross_call   arm      (multi-source: round-trip comparison not yet implemented per unit)
@@ -1109,6 +1127,12 @@ let%expect_test "fixup observations classify to exactly the measured relocations
       .text+0x48   pcrel-j21        branch local  same-sec  assembler-resolved
       .text+0x50   pcrel-b13        branch local  same-sec  assembler-resolved
       .text+0x58   pcrel-j21        branch local  same-sec  assembler-resolved
+    cross_bss    x86_32   (multi-source: relocation comparison not yet implemented per unit)
+    cross_bss    x86_64   (multi-source: relocation comparison not yet implemented per unit)
+    cross_bss    arm      (multi-source: relocation comparison not yet implemented per unit)
+    cross_bss    aarch64  (multi-source: relocation comparison not yet implemented per unit)
+    cross_bss    riscv32  (multi-source: relocation comparison not yet implemented per unit)
+    cross_bss    riscv64  (multi-source: relocation comparison not yet implemented per unit)
     cross_call   x86_32   (multi-source: relocation comparison not yet implemented per unit)
     cross_call   x86_64   (multi-source: relocation comparison not yet implemented per unit)
     cross_call   arm      (multi-source: relocation comparison not yet implemented per unit)
