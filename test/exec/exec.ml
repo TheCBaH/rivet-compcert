@@ -92,19 +92,34 @@ let address_for profile section =
   | ".bss" -> Abi_v2.bss_addr profile
   | other -> failwith ("no ABI address for section " ^ other)
 
+(* Sorted lexicographically by filename, each unit named after its own stem -
+   the same convention [test_differential.ml]'s [unit_paths]/[build] use, so a
+   multi-source case (M3's [cross_call]/[cross_data]) gets a deterministic,
+   collision-free set of unit names instead of every file sharing the single
+   entry-name unit this function used before it supported more than one. *)
+let units_of dir =
+  Sys.readdir dir |> Array.to_list
+  |> List.filter (fun f -> Filename.check_suffix f ".s")
+  |> List.sort compare
+  |> List.map (fun f -> (Filename.chop_suffix f ".s", Filename.concat dir f))
+
 let assemble profile case =
   let name = target_of_profile profile in
   let (module D : Target_intf.Target.DRIVER) =
     match Driver.Registry.find name with Some d -> d | None -> failwith ("no such target: " ^ name)
   in
   let dir = Filename.concat (Filename.concat corpus_root case) name in
-  let file =
-    match List.filter (fun f -> Filename.check_suffix f ".s") (Array.to_list (Sys.readdir dir)) with
-    | [ f ] -> Filename.concat dir f
-    | _ -> failwith (dir ^ " does not hold exactly one .s")
+  let units = units_of dir in
+  let sourced =
+    List.map (fun (stem, path) -> (stem, Foundation.Span.source ~name:path ~contents:(read path))) units
   in
-  let source = Foundation.Span.source ~name:file ~contents:(read file) in
-  match D.assemble ~entry:"asm_test_entry" ~unit_name:"asm_test_entry" ~source () with
+  let result =
+    match sourced with
+    | [] -> failwith (dir ^ " holds no .s files")
+    | [ (_, source) ] -> D.assemble ~entry:"asm_test_entry" ~unit_name:"asm_test_entry" ~source ()
+    | many -> D.assemble_many ~entry:"asm_test_entry" many ()
+  in
+  match result with
   | Error ds -> Error (String.trim (Foundation.Diag.render ds))
   | Ok laid_out -> (
       let plan = Image.plan_of laid_out in
@@ -147,6 +162,7 @@ let manifest_of_image profile (img : Image.t) ~expected =
           stack_size = stack_16k;
           timeout_ms = 2000;
           expected;
+          observations = [];
           segments =
             List.map
               (fun (s : Image.segment) ->
