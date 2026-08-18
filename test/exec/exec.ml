@@ -111,7 +111,9 @@ let assemble profile case =
   let dir = Filename.concat (Filename.concat corpus_root case) name in
   let units = units_of dir in
   let sourced =
-    List.map (fun (stem, path) -> (stem, Foundation.Span.source ~name:path ~contents:(read path))) units
+    List.map
+      (fun (stem, path) -> (stem, Foundation.Span.source ~name:path ~contents:(read path)))
+      units
   in
   let result =
     match sourced with
