@@ -24,6 +24,6 @@ Relocation section '.rel.eh_frame' at offset 0xcc contains 1 entry:
 
 Symbol table '.symtab' contains 3 entries:
    Num:    Value  Size Type    Bind   Vis      Ndx Name
-     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND
      1: 00000000     0 SECTION LOCAL  DEFAULT    1 .text
      2: 00000000    43 FUNC    GLOBAL DEFAULT    1 asm_test_entry

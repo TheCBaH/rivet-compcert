@@ -25,7 +25,7 @@ Relocation section '.rela.eh_frame' at offset 0x208 contains 2 entries:
 
 Symbol table '.symtab' contains 10 entries:
    Num:    Value          Size Type    Bind   Vis      Ndx Name
-     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND
      1: 0000000000000000     0 SECTION LOCAL  DEFAULT    1 .text
      2: 0000000000000000     0 SECTION LOCAL  DEFAULT    2 .data
      3: 0000000000000000     0 SECTION LOCAL  DEFAULT    3 .bss
