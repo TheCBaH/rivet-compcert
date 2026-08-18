@@ -211,8 +211,16 @@ let mutate profile bytes =
 
 (* {1 Running} *)
 
-let run profile manifest =
-  Qemu_user.run ~abi_version:1 ~profile ~manifest:(Manifest.serialize manifest)
+(* M4 Phase 4: [abi_version] is now a parameter of exec.ml's own driver rather
+   than a literal 1 - [Qemu_user]/[Record]/[Abi] were already version-
+   parametric (M4 Phase 2.4's dispatch-site table), but this local wrapper was
+   the one remaining hardcoded call site. Every existing call site still
+   passes [~abi_version:1] explicitly (return42/run_control's fixed point);
+   Phase 5.3 is what will make a case's own manifest record choose the
+   version. *)
+let run ~abi_version profile manifest =
+  Qemu_user.run ~abi_version ~profile
+    ~manifest:(Manifest.serialize ~abi_version manifest)
     ~expected_case_id:case_id ()
 
 type verdict = Ok_ of string | Bad of string
@@ -220,9 +228,15 @@ type verdict = Ok_ of string | Bad of string
 (* Every one of the four conditions is checked separately and named separately.
    A single boolean would report "did not pass" for a guest that faulted, for a
    guest that returned the wrong value, and for a record that was never
-   committed - three different failures with three different causes. *)
-let verdict ~want_status ~want_value (o : Qemu_user.t) =
+   committed - three different failures with three different causes.
+
+   [want_values] generalizes the old singleton [want_value]: v1/v2 callers
+   pass a one-element list, and the element-wise comparison against
+   [r.Record.values] is exactly v3's own "expected == actual, in order"
+   contract (docs/exec-abi-v3.md §4), so no v3-specific branch is needed here. *)
+let verdict ~want_status ~want_values (o : Qemu_user.t) =
   let fail f = Bad (Printf.sprintf "%s (actual: %s)" f (Fmt.str "%a" Qemu_user.pp o)) in
+  let want = Array.of_list want_values in
   match o.Qemu_user.termination with
   | Qemu_user.Completed -> (
       match o.Qemu_user.record with
@@ -232,14 +246,15 @@ let verdict ~want_status ~want_value (o : Qemu_user.t) =
       | Some (Record.Valid r) ->
           if r.Record.record_state <> Abi.Returned then fail "record_state is not returned"
           else if r.Record.status <> want_status then fail "status is not the expected one"
-          else if r.Record.values <> [| want_value |] then fail "values are not the expected ones"
-          else if want_status = Abi.Passed && r.Record.expected <> [| want_value |] then
-            fail "expected[] does not hold the value the manifest declared"
+          else if r.Record.values <> want then fail "values are not the expected ones"
+          else if want_status = Abi.Passed && r.Record.expected <> want then
+            fail "expected[] does not hold the values the manifest declared"
           else
             Ok_
-              (Printf.sprintf "%s, record_state=returned, values=[%Ld]"
+              (Fmt.str "%s, record_state=returned, values=%a"
                  (if want_status = Abi.Passed then "passed" else "failed")
-                 want_value))
+                 (Fmt.array ~sep:(Fmt.any ",") (fun ppf v -> Fmt.pf ppf "%Ld" v))
+                 want))
   | _ -> fail "termination is not completed"
 
 let failures = ref 0
@@ -277,7 +292,9 @@ let run_case profile case =
       | Error why ->
           incr failures;
           Printf.printf "  FAIL %-24s %s\n" label why
-      | Ok m -> report label (verdict ~want_status:Abi.Passed ~want_value:42L (run profile m)))
+      | Ok m ->
+          report label
+            (verdict ~want_status:Abi.Passed ~want_values:[ 42L ] (run ~abi_version:Abi.abi_version profile m)))
 
 (* The control declares expected = [42] and gets 41, so the helper publishes
    [failed]. Declaring [41] instead would make the mutated image "pass" and
@@ -302,11 +319,55 @@ let run_control profile =
                   Printf.printf "  FAIL %-24s %s\n" "induced-failure control" why
               | Ok m ->
                   report "induced 41"
-                    (verdict ~want_status:Abi.Failed ~want_value:41L (run profile m))))
+                    (verdict ~want_status:Abi.Failed ~want_values:[ 41L ]
+                       (run ~abi_version:Abi.abi_version profile m))))
       | segs ->
           incr failures;
           Printf.printf "  FAIL %-24s return42 has %d segments, the control splices one\n"
             "induced-failure control" (List.length segs))
+
+(* M4 Phase 4's own exit criterion: a direct proof that the *generalized*
+   [run]/[verdict] above - not [Qemu_user]/[Record], already proven generic by
+   [abi_v3_smoke.ml] - report a multi-value result correctly at
+   [~abi_version:3]. No fixture reaches v3 through [cases()] yet (that is
+   Phase 5/6), so this hand-builds a manifest the same way
+   [abi_v3_smoke.ml] does: a tiny machine-code segment that writes a known
+   constant to a data segment and returns 42, observed as a second value. *)
+let run_v3_plumbing_check () =
+  let label = "v3 plumbing (Phase 4)" in
+  let profile = Abi.X86_64 in
+  match Qemu_user.provenance ~abi_version:Abi_v3.abi_version profile with
+  | [] ->
+      incr failures;
+      Printf.printf "  FAIL %-24s no v3 helper in %s (run `make asm-helpers`)\n" label
+        (Qemu_user.helpers_dir ())
+  | _ ->
+      (* x86-64: movabs $0x40020000,%rax ; movl $0x11223344,(%rax) ; movl $42,%eax ; ret *)
+      let code =
+        "\x48\xb8\x00\x00\x02\x40\x00\x00\x00\x00\xc7\x00\x44\x33\x22\x11\xb8\x2a\x00\x00\x00\xc3"
+      in
+      let observed_value = 0x11223344L in
+      let manifest =
+        {
+          (Manifest.single_code ~case_id ~expected:[ 42L; observed_value ] profile code) with
+          Manifest.segments =
+            [
+              Manifest.code_segment profile code;
+              {
+                Manifest.vaddr = Abi.data_addr profile;
+                init = "";
+                zero_len = 4L;
+                align = 16;
+                perms = Abi.perm_r lor Abi.perm_w;
+              };
+            ];
+          observations =
+            [ { Manifest.obs_vaddr = Abi.data_addr profile; width = 4; sign_extend = false } ];
+        }
+      in
+      report label
+        (verdict ~want_status:Abi.Passed ~want_values:[ 42L; observed_value ]
+           (run ~abi_version:Abi_v3.abi_version profile manifest))
 
 let () =
   Printf.printf "asm-exec: E5, the assembler's own image under QEMU user mode\n";
@@ -325,6 +386,7 @@ let () =
           List.iter (fun c -> run_case profile c) cases;
           run_control profile)
     profiles;
+  run_v3_plumbing_check ();
   Printf.printf "asm-exec: %d profiles x %d cases, %d blocked on unimplemented forms, %d failures\n"
     (List.length profiles) (List.length cases) !blocked !failures;
   if !failures = 0 then exit 0 else exit 1
