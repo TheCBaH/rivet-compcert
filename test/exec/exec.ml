@@ -275,6 +275,34 @@ let describe (img : Image.t) =
            (Asm_core.Perms.to_string s.Image.perms))
        img.Image.segments)
 
+(* M4 Phase 9: an opt-in retry with QEMU's own tracing, decided here rather
+   than inside [Qemu_user.run] - [run_control]'s own induced "41 instead of
+   42" case is a *designed* failure of [want_status]/[want_values], not
+   evidence of a defect, and only this layer knows which verdict was wanted.
+   [Qemu_user.run] has no notion of an expected outcome and cannot tell "this
+   is run_control working as intended" from "this is a real conformance
+   failure" - so the retry decision, and the [ASM_QEMU_TRACE] gate, live here.
+
+   Only re-runs on an actual failure, and only when opted in: a default run
+   (env unset) never calls [Qemu_user.run] a second time, so its output is
+   byte-identical to before this phase. *)
+let maybe_trace ~abi_version ~profile ~manifest = function
+  | Ok_ _ -> ()
+  | Bad _ -> (
+      match Sys.getenv_opt "ASM_QEMU_TRACE" with
+      | None -> ()
+      | Some _ -> (
+          let traced =
+            Qemu_user.run ~abi_version ~profile
+              ~manifest:(Manifest.serialize ~abi_version manifest)
+              ~expected_case_id:case_id
+              ~qemu_args:[ "-d"; "in_asm,strace"; "-D"; Qemu_user.trace_file_name ]
+              ()
+          in
+          match traced.Qemu_user.trace with
+          | Some t -> Printf.printf "  trace (ASM_QEMU_TRACE):\n%s\n" t
+          | None -> Printf.printf "  trace (ASM_QEMU_TRACE): qemu wrote none\n"))
+
 let run_case profile case =
   let label = Printf.sprintf "%s returns 42" case in
   match assemble profile case with
@@ -293,8 +321,12 @@ let run_case profile case =
           incr failures;
           Printf.printf "  FAIL %-24s %s\n" label why
       | Ok m ->
-          report label
-            (verdict ~want_status:Abi.Passed ~want_values:[ 42L ] (run ~abi_version:Abi.abi_version profile m)))
+          let v =
+            verdict ~want_status:Abi.Passed ~want_values:[ 42L ]
+              (run ~abi_version:Abi.abi_version profile m)
+          in
+          report label v;
+          maybe_trace ~abi_version:Abi.abi_version ~profile ~manifest:m v)
 
 (* The control declares expected = [42] and gets 41, so the helper publishes
    [failed]. Declaring [41] instead would make the mutated image "pass" and
@@ -318,9 +350,12 @@ let run_control profile =
                   incr failures;
                   Printf.printf "  FAIL %-24s %s\n" "induced-failure control" why
               | Ok m ->
-                  report "induced 41"
-                    (verdict ~want_status:Abi.Failed ~want_values:[ 41L ]
-                       (run ~abi_version:Abi.abi_version profile m))))
+                  let v =
+                    verdict ~want_status:Abi.Failed ~want_values:[ 41L ]
+                      (run ~abi_version:Abi.abi_version profile m)
+                  in
+                  report "induced 41" v;
+                  maybe_trace ~abi_version:Abi.abi_version ~profile ~manifest:m v))
       | segs ->
           incr failures;
           Printf.printf "  FAIL %-24s return42 has %d segments, the control splices one\n"
