@@ -1,0 +1,19 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <asm_test_entry>:
+   0:	910003ef 	mov	x15, sp
+   4:	a9bf7bef 	stp	x15, x30, [sp, #-16]!
+   8:	90000010 	adrp	x16, 0 <shared_value>
+			8: R_AARCH64_ADR_PREL_PG_HI21	shared_value
+   c:	b9400200 	ldr	w0, [x16]
+			c: R_AARCH64_LDST32_ABS_LO12_NC	shared_value
+  10:	11005800 	add	w0, w0, #0x16
+  14:	90000010 	adrp	x16, 0 <shared_value>
+			14: R_AARCH64_ADR_PREL_PG_HI21	shared_value
+  18:	b9000200 	str	w0, [x16]
+			18: R_AARCH64_LDST32_ABS_LO12_NC	shared_value
+  1c:	f94007fe 	ldr	x30, [sp, #8]
+  20:	910043ff 	add	sp, sp, #0x10
+  24:	d65f03c0 	ret

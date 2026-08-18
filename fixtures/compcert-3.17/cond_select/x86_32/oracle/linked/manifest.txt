@@ -1,1 +1,1 @@
-.text	0x30000000	linked/text.hex
+.text	progbits	0x30000000	0x5e	linked/text.hex

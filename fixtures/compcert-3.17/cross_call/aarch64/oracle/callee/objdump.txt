@@ -1,0 +1,11 @@
+
+
+Disassembly of section .text:
+
+0000000000000000 <asm_test_callee>:
+   0:	910003ef 	mov	x15, sp
+   4:	a9bf7bef 	stp	x15, x30, [sp, #-16]!
+   8:	0b000000 	add	w0, w0, w0
+   c:	f94007fe 	ldr	x30, [sp, #8]
+  10:	910043ff 	add	sp, sp, #0x10
+  14:	d65f03c0 	ret

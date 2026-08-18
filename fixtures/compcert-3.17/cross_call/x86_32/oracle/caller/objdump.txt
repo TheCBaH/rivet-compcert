@@ -1,0 +1,15 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_entry>:
+   0:	83 ec 0c             	sub    $0xc,%esp
+   3:	8d 44 24 10          	lea    0x10(%esp),%eax
+   7:	89 44 24 04          	mov    %eax,0x4(%esp)
+   b:	b8 14 00 00 00       	mov    $0x14,%eax
+  10:	89 04 24             	mov    %eax,(%esp)
+  13:	e8 fc ff ff ff       	call   14 <asm_test_entry+0x14>
+			14: R_386_PC32	asm_test_callee
+  18:	8d 40 02             	lea    0x2(%eax),%eax
+  1b:	83 c4 0c             	add    $0xc,%esp
+  1e:	c3                   	ret

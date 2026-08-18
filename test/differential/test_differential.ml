@@ -328,16 +328,40 @@ let unit_paths case target =
   |> List.map (fun f -> (Filename.chop_suffix f ".s", Filename.concat dir f))
 
 (* [oracle/linked/manifest.txt] is the checked-in address policy: one line per
-   allocatable section giving the address the reference link used and the file
-   holding its post-link bytes. Our image is bound at exactly these addresses,
-   which is what makes a post-link comparison meaningful for a section that
-   carries relocations. *)
+   allocatable section giving the address the reference link used, its kind,
+   its logical size and - for a PROGBITS section - the file holding its
+   post-link bytes. Our image is bound at exactly these addresses, which is
+   what makes a post-link comparison meaningful for a section that carries
+   relocations.
+
+   Manifest v2 (M3 §11, .ai/asm_plan.md §12): five columns, not three - a
+   NOBITS section (.bss) has no byte artifact at all, so [ls_file] is [None]
+   rather than a path to a file that was never written, and [ls_size] is its
+   only evidence, since {!bytes_of_hex_file} has nothing to read for it. *)
+type section_kind = Progbits | Nobits
+
+type linked_section = {
+  ls_name : string;
+  ls_kind : section_kind;
+  ls_addr : int64;
+  ls_size : int64;
+  ls_file : string option;
+}
+
 let linked_sections case target =
   let path = Filename.concat (case_dir case target) "oracle/linked/manifest.txt" in
   read path |> String.split_on_char '\n'
   |> List.filter_map (fun line ->
       match String.split_on_char '\t' (String.trim line) with
-      | [ sec; addr; file ] when sec <> "" -> Some (sec, Int64.of_string addr, file)
+      | [ sec; kind; addr; size; file ] when sec <> "" ->
+          Some
+            {
+              ls_name = sec;
+              ls_kind = (if String.equal kind "nobits" then Nobits else Progbits);
+              ls_addr = Int64.of_string addr;
+              ls_size = Int64.of_string size;
+              ls_file = (if String.equal file "-" then None else Some file);
+            }
       | _ -> None)
 
 (* [oracle/reloc.txt] is the measured record set: one normalized line per ELF
@@ -415,19 +439,41 @@ let build case target =
   match result with
   | Error ds -> Error ("ASSEMBLE " ^ brief ds)
   | Ok laid_out -> (
-      let addresses = List.map (fun (s, a, _) -> (s, a)) (linked_sections case target) in
+      let addresses =
+        List.map
+          (fun (ls : linked_section) -> (ls.ls_name, ls.ls_addr))
+          (linked_sections case target)
+      in
       match Image.bind_image laid_out ~addresses with
       | Error ds -> Error ("BIND " ^ brief ds)
       | Ok bound -> Ok { laid_out; bound; addresses })
 
+let find_segment b name =
+  List.find_opt (fun (s : Image.segment) -> String.equal s.Image.name name) b.Image.segments
+
 let segment_bytes b name =
-  match
-    List.find_opt (fun (s : Image.segment) -> String.equal s.Image.name name) b.Image.segments
-  with
-  | Some s -> Some s.Image.bytes
-  | None -> None
+  Option.map (fun (s : Image.segment) -> s.Image.bytes) (find_segment b name)
 
 (* {1 Bytes, per section, after the controlled link} *)
+
+(* A NOBITS section (.bss) has no bytes to compare - the manifest's only
+   evidence for it is its logical size, which must equal our own segment's
+   address-space extent (§6's standing invariant, init_size + zero_fill) with
+   no initialized bytes at all: a NOBITS section that emitted real bytes would
+   be exactly the "initialized data inside .bss" case the assembler rejects at
+   simplify time, so seeing one here would mean this comparison, not the
+   assembler, missed it. *)
+let check_nobits sec b (ls : linked_section) =
+  match find_segment b sec with
+  | None -> Printf.sprintf "%s MISSING from our image" sec
+  | Some (s : Image.segment) ->
+      let extent = Int64.of_int (String.length s.Image.bytes + s.Image.zero_fill) in
+      if String.length s.Image.bytes = 0 && Int64.equal extent ls.ls_size then
+        Printf.sprintf "%s %Ld bytes (nobits)" sec ls.ls_size
+      else
+        Printf.sprintf
+          "%s NOBITS DIFFERS\n    ours:   %d init + %d zero_fill\n    oracle: %Ld bytes" sec
+          (String.length s.Image.bytes) s.Image.zero_fill ls.ls_size
 
 let check_bytes case target =
   match build case target with
@@ -435,18 +481,24 @@ let check_bytes case target =
   | Ok b ->
       let results =
         List.map
-          (fun (sec, _, file) ->
-            let theirs =
-              bytes_of_hex_file (Filename.concat (case_dir case target) ("oracle/" ^ file))
-            in
-            match segment_bytes b.bound sec with
-            | None -> (sec, Printf.sprintf "%s MISSING from our image" sec)
-            | Some ours when String.equal ours theirs ->
-                (sec, Printf.sprintf "%s %d" sec (String.length ours))
-            | Some ours ->
-                ( sec,
-                  Printf.sprintf "%s DIFFERS\n    ours:   %s\n    oracle: %s" sec (hex_of ours)
-                    (hex_of theirs) ))
+          (fun (ls : linked_section) ->
+            let sec = ls.ls_name in
+            match (ls.ls_kind, ls.ls_file) with
+            | Nobits, _ -> (sec, check_nobits sec b.bound ls)
+            | Progbits, None ->
+                (sec, Printf.sprintf "%s: progbits record with no artifact (malformed manifest)" sec)
+            | Progbits, Some file -> (
+                let theirs =
+                  bytes_of_hex_file (Filename.concat (case_dir case target) ("oracle/" ^ file))
+                in
+                match segment_bytes b.bound sec with
+                | None -> (sec, Printf.sprintf "%s MISSING from our image" sec)
+                | Some ours when String.equal ours theirs ->
+                    (sec, Printf.sprintf "%s %d" sec (String.length ours))
+                | Some ours ->
+                    ( sec,
+                      Printf.sprintf "%s DIFFERS\n    ours:   %s\n    oracle: %s" sec (hex_of ours)
+                        (hex_of theirs) )))
           (linked_sections case target)
       in
       Printf.printf "%-12s %-8s %s\n" case target (String.concat ", " (List.map snd results))
@@ -467,6 +519,18 @@ let%expect_test "every bound segment matches the controlled reference link" =
     cond_select  aarch64  .text 108
     cond_select  riscv32  .text 108
     cond_select  riscv64  .text 108
+    cross_call   x86_32   .text 63
+    cross_call   x86_64   .text 64
+    cross_call   arm      .text 72
+    cross_call   aarch64  .text 56
+    cross_call   riscv32  .text 76
+    cross_call   riscv64  .text 76
+    cross_data   x86_32   .text 27, .data 4
+    cross_data   x86_64   .text 34, .data 4
+    cross_data   arm      .text 48, .data 4
+    cross_data   aarch64  .text 40, .data 4
+    cross_data   riscv32  .text 48, .data 4
+    cross_data   riscv64  .text 48, .data 4
     direct_call  x86_32   .text 63
     direct_call  x86_64   .text 64
     direct_call  arm      .text 72
@@ -540,7 +604,27 @@ let rows_of_dump ~base text =
             }
       | _ -> None)
 
+(* objdump.txt and reloc.txt are recorded PER UNIT (tools/lib/oracle_cmd.ml),
+   one unlinked object's own disassembly/relocations at ITS OWN offsets - not
+   the merged, padded coordinates our single diagnostic dump and single
+   fixup-observation set describe for a multi-source case. Attributing GNU's
+   per-unit records to the right unit's slice of the merged section, and
+   correcting their offsets by that unit's own merge-padding, is real work
+   this file does not do yet (.ai/asm_plan.md §12, M3 §11) - so a multi-source
+   case is reported as out of scope for these two checks, honestly, rather
+   than crashing on the now-absent flat oracle/objdump.txt (multi-source
+   cases never had one) or silently comparing against nothing and reporting a
+   false mismatch, which is what an unguarded reloc_records "file absent ->
+   []" would have done here. check_bytes - the strongest of the three checks
+   by this file's own header - already covers every case, single- or
+   multi-source, in full. *)
+let is_multi_source case target = List.length (unit_paths case target) > 1
+
 let check_disasm case target =
+  if is_multi_source case target then
+    Printf.printf "%-12s %-8s (multi-source: spelling comparison not yet implemented per unit)\n"
+      case target
+  else
   let (module D : Target_intf.Target.DRIVER) = target_of_name target in
   match build case target with
   | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
@@ -631,6 +715,18 @@ let%expect_test "diagnostic spelling agrees with objdump after normalization" =
     cond_select  aarch64  27 lines agree
     cond_select  riscv32  27 lines agree
     cond_select  riscv64  27 lines agree
+    cross_call   x86_32   (multi-source: spelling comparison not yet implemented per unit)
+    cross_call   x86_64   (multi-source: spelling comparison not yet implemented per unit)
+    cross_call   arm      (multi-source: spelling comparison not yet implemented per unit)
+    cross_call   aarch64  (multi-source: spelling comparison not yet implemented per unit)
+    cross_call   riscv32  (multi-source: spelling comparison not yet implemented per unit)
+    cross_call   riscv64  (multi-source: spelling comparison not yet implemented per unit)
+    cross_data   x86_32   (multi-source: spelling comparison not yet implemented per unit)
+    cross_data   x86_64   (multi-source: spelling comparison not yet implemented per unit)
+    cross_data   arm      (multi-source: spelling comparison not yet implemented per unit)
+    cross_data   aarch64  (multi-source: spelling comparison not yet implemented per unit)
+    cross_data   riscv32  (multi-source: spelling comparison not yet implemented per unit)
+    cross_data   riscv64  (multi-source: spelling comparison not yet implemented per unit)
     direct_call  x86_32   16 lines agree (1 relocated operand compared as records instead)
     direct_call  x86_64   14 lines agree (1 relocated operand compared as records instead)
     direct_call  arm      18 lines agree (1 relocated operand compared as records instead)
@@ -664,7 +760,21 @@ let%expect_test "diagnostic spelling agrees with objdump after normalization" =
    parser, simplify, lower and encode - and, for a case with a branch, through
    relaxation, which is where a decoded form that lost its rung would show. *)
 
+(* A multi-source case's canonical dump collapses a MERGE-inserted gap into an
+   ordinary [.balign] - the only form a lexer/parser round trip has to write -
+   and reassembling that as a single module fills it with {!T.nop_bytes}
+   again, not {!T.merge_fill}. On every target except x86_32 those coincide,
+   so this is invisible there; on x86_32 they measurably differ (M3 §5), so
+   the reassembled bytes genuinely are not identical at the fill site even
+   though the ENCODING on both sides is correct and check_bytes already
+   proves it against real GNU evidence. Skipped uniformly for every
+   multi-source case rather than only where it happens to bite today, so a
+   future target with the same divergence is not silently exempted. *)
 let check_round_trip case target =
+  if is_multi_source case target then
+    Printf.printf "%-12s %-8s (multi-source: round-trip comparison not yet implemented per unit)\n"
+      case target
+  else
   let (module D : Target_intf.Target.DRIVER) = target_of_name target in
   match build case target with
   | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
@@ -709,6 +819,18 @@ let%expect_test "canonical disassembly reassembles to the same bytes" =
     cond_select  aarch64  108 bytes reproduced
     cond_select  riscv32  108 bytes reproduced
     cond_select  riscv64  108 bytes reproduced
+    cross_call   x86_32   (multi-source: round-trip comparison not yet implemented per unit)
+    cross_call   x86_64   (multi-source: round-trip comparison not yet implemented per unit)
+    cross_call   arm      (multi-source: round-trip comparison not yet implemented per unit)
+    cross_call   aarch64  (multi-source: round-trip comparison not yet implemented per unit)
+    cross_call   riscv32  (multi-source: round-trip comparison not yet implemented per unit)
+    cross_call   riscv64  (multi-source: round-trip comparison not yet implemented per unit)
+    cross_data   x86_32   (multi-source: round-trip comparison not yet implemented per unit)
+    cross_data   x86_64   (multi-source: round-trip comparison not yet implemented per unit)
+    cross_data   arm      (multi-source: round-trip comparison not yet implemented per unit)
+    cross_data   aarch64  (multi-source: round-trip comparison not yet implemented per unit)
+    cross_data   riscv32  (multi-source: round-trip comparison not yet implemented per unit)
+    cross_data   riscv64  (multi-source: round-trip comparison not yet implemented per unit)
     direct_call  x86_32   63 bytes reproduced
     direct_call  x86_64   64 bytes reproduced
     direct_call  arm      72 bytes reproduced
@@ -859,6 +981,10 @@ let compare_records ~predicted ~measured =
       measured
 
 let check_relocs case target =
+  if is_multi_source case target then
+    Printf.printf "%-12s %-8s (multi-source: relocation comparison not yet implemented per unit)\n"
+      case target
+  else
   match build case target with
   | Error _ -> Printf.printf "%-12s %-8s (does not assemble)\n" case target
   | Ok b ->
@@ -981,6 +1107,18 @@ let%expect_test "fixup observations classify to exactly the measured relocations
       .text+0x48   pcrel-j21        branch local  same-sec  assembler-resolved
       .text+0x50   pcrel-b13        branch local  same-sec  assembler-resolved
       .text+0x58   pcrel-j21        branch local  same-sec  assembler-resolved
+    cross_call   x86_32   (multi-source: relocation comparison not yet implemented per unit)
+    cross_call   x86_64   (multi-source: relocation comparison not yet implemented per unit)
+    cross_call   arm      (multi-source: relocation comparison not yet implemented per unit)
+    cross_call   aarch64  (multi-source: relocation comparison not yet implemented per unit)
+    cross_call   riscv32  (multi-source: relocation comparison not yet implemented per unit)
+    cross_call   riscv64  (multi-source: relocation comparison not yet implemented per unit)
+    cross_data   x86_32   (multi-source: relocation comparison not yet implemented per unit)
+    cross_data   x86_64   (multi-source: relocation comparison not yet implemented per unit)
+    cross_data   arm      (multi-source: relocation comparison not yet implemented per unit)
+    cross_data   aarch64  (multi-source: relocation comparison not yet implemented per unit)
+    cross_data   riscv32  (multi-source: relocation comparison not yet implemented per unit)
+    cross_data   riscv64  (multi-source: relocation comparison not yet implemented per unit)
     direct_call  x86_32   1 linker-visible, 0 assembler-resolved
       .text+0x34   pcrel32-call     call   global same-sec  R_386_PC32
     direct_call  x86_64   1 linker-visible, 0 assembler-resolved

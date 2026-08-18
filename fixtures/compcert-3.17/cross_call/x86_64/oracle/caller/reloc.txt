@@ -1,0 +1,1 @@
+.text	0x00000013	rela	R_X86_64_PLT32	asm_test_callee	-0x4

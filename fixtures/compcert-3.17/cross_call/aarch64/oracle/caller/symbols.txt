@@ -1,0 +1,9 @@
+$d	local	default	6	defined
+$x	local	default	1	defined
+.bss	local	default	4	defined
+.data	local	default	3	defined
+.eh_frame	local	default	6	defined
+.note.GNU-stack	local	default	5	defined
+.text	local	default	1	defined
+asm_test_callee	global	default	UND	undefined
+asm_test_entry	global	default	1	defined

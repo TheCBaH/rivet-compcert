@@ -1,0 +1,1 @@
+.text	0x00000014	rel	R_386_PC32	asm_test_callee	-

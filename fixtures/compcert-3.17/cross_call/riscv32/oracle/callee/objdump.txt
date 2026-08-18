@@ -1,0 +1,13 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_callee>:
+   0:	00010f13          	addi	x30,x2,0
+   4:	ff010113          	addi	x2,x2,-16
+   8:	01e12023          	sw	x30,0(x2)
+   c:	00112223          	sw	x1,4(x2)
+  10:	00a50533          	add	x10,x10,x10
+  14:	00412083          	lw	x1,4(x2)
+  18:	01010113          	addi	x2,x2,16
+  1c:	00008067          	jalr	x0,0(x1)

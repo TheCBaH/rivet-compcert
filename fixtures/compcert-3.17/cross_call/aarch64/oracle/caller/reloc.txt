@@ -1,0 +1,1 @@
+.text	0x0000000c	rela	R_AARCH64_CALL26	asm_test_callee	0x0
