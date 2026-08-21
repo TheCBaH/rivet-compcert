@@ -1,0 +1,26 @@
+; The CompCert Asm.program -> Normalized_ast adapter (next.md "the direct
+; CompCert integration", Order item 2 - aarch64 return42 only).
+;
+; Gated exactly like asm/melange/* (see asm/melange/dune): depending on
+; compcert_aarch64 unconditionally would require compcert-lib-build-aarch64's
+; Rocq-extracted output on OCAMLPATH for every `dune build @all`/`@runtest`,
+; breaking make asm-build/asm-test/asm-ci's "neither Rocq nor a cross
+; toolchain" guarantee. ASM_COMPCERT_ADAPTER is set explicitly by the new
+; asm-compcert-adapter-test Makefile target, never left to a default.
+;
+; compcert_aarch64 is resolved via OCAMLPATH (an installed dune package from
+; ../../compcert-lib-aarch64, a separate dune project/workspace - see that
+; project's src/dune), not via a shared dune-workspace: none exists in this
+; repo, and introducing one would relocate asm/'s _build directory, which
+; several Makefile targets and scripts hard-code the path of.
+
+(library
+ (name compcert_adapter)
+ (modules adapter test_adapter)
+ (modes byte native)
+ (libraries compcert_aarch64 foundation asm_core aarch64 test_coherence fmt)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect))
+ (enabled_if
+  (= %{env:ASM_COMPCERT_ADAPTER=false} true)))

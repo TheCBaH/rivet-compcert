@@ -1,0 +1,51 @@
+
+
+Disassembly of section .text:
+
+00000000 <asm_test_entry>:
+   0:	83 ec 2c             	sub    $0x2c,%esp
+   3:	8d 44 24 30          	lea    0x30(%esp),%eax
+   7:	89 44 24 10          	mov    %eax,0x10(%esp)
+   b:	89 5c 24 14          	mov    %ebx,0x14(%esp)
+   f:	89 74 24 18          	mov    %esi,0x18(%esp)
+  13:	a1 00 00 00 00       	mov    0x0,%eax
+			14: R_386_32	i64_divmod_dividend
+  18:	8b 0d 04 00 00 00    	mov    0x4,%ecx
+			1a: R_386_32	i64_divmod_dividend
+  1e:	8b 1d 00 00 00 00    	mov    0x0,%ebx
+			20: R_386_32	i64_divmod_divisor
+  24:	8b 35 04 00 00 00    	mov    0x4,%esi
+			26: R_386_32	i64_divmod_divisor
+  2a:	89 74 24 0c          	mov    %esi,0xc(%esp)
+  2e:	89 5c 24 08          	mov    %ebx,0x8(%esp)
+  32:	89 4c 24 04          	mov    %ecx,0x4(%esp)
+  36:	89 04 24             	mov    %eax,(%esp)
+  39:	e8 fc ff ff ff       	call   3a <asm_test_entry+0x3a>
+			3a: R_386_PC32	__compcert_i64_sdiv
+  3e:	a3 00 00 00 00       	mov    %eax,0x0
+			3f: R_386_32	i64_divmod_quotient
+  43:	89 15 04 00 00 00    	mov    %edx,0x4
+			45: R_386_32	i64_divmod_quotient
+  49:	8b 1d 00 00 00 00    	mov    0x0,%ebx
+			4b: R_386_32	i64_divmod_dividend
+  4f:	8b 35 04 00 00 00    	mov    0x4,%esi
+			51: R_386_32	i64_divmod_dividend
+  55:	a1 00 00 00 00       	mov    0x0,%eax
+			56: R_386_32	i64_divmod_divisor
+  5a:	8b 0d 04 00 00 00    	mov    0x4,%ecx
+			5c: R_386_32	i64_divmod_divisor
+  60:	89 4c 24 0c          	mov    %ecx,0xc(%esp)
+  64:	89 44 24 08          	mov    %eax,0x8(%esp)
+  68:	89 74 24 04          	mov    %esi,0x4(%esp)
+  6c:	89 1c 24             	mov    %ebx,(%esp)
+  6f:	e8 fc ff ff ff       	call   70 <asm_test_entry+0x70>
+			70: R_386_PC32	__compcert_i64_smod
+  74:	a3 00 00 00 00       	mov    %eax,0x0
+			75: R_386_32	i64_divmod_remainder
+  79:	89 15 04 00 00 00    	mov    %edx,0x4
+			7b: R_386_32	i64_divmod_remainder
+  7f:	b8 2a 00 00 00       	mov    $0x2a,%eax
+  84:	8b 5c 24 14          	mov    0x14(%esp),%ebx
+  88:	8b 74 24 18          	mov    0x18(%esp),%esi
+  8c:	83 c4 2c             	add    $0x2c,%esp
+  8f:	c3                   	ret

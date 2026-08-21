@@ -1,0 +1,37 @@
+
+
+Disassembly of section .text:
+
+00000000 <__compcert_i64_sdiv>:
+   0:	55                   	push   %ebp
+   1:	56                   	push   %esi
+   2:	57                   	push   %edi
+   3:	8b 74 24 14          	mov    0x14(%esp),%esi
+   7:	89 f5                	mov    %esi,%ebp
+   9:	85 f6                	test   %esi,%esi
+   b:	7d 0d                	jge    1a <__compcert_i64_sdiv+0x1a>
+   d:	f7 5c 24 10          	negl   0x10(%esp)
+  11:	83 d6 00             	adc    $0x0,%esi
+  14:	f7 de                	neg    %esi
+  16:	89 74 24 14          	mov    %esi,0x14(%esp)
+  1a:	8b 74 24 1c          	mov    0x1c(%esp),%esi
+  1e:	31 f5                	xor    %esi,%ebp
+  20:	85 f6                	test   %esi,%esi
+  22:	7d 0d                	jge    31 <__compcert_i64_sdiv+0x31>
+  24:	f7 5c 24 18          	negl   0x18(%esp)
+  28:	83 d6 00             	adc    $0x0,%esi
+  2b:	f7 de                	neg    %esi
+  2d:	89 74 24 1c          	mov    %esi,0x1c(%esp)
+  31:	e8 fc ff ff ff       	call   32 <__compcert_i64_sdiv+0x32>
+			32: R_386_PC32	__compcert_i64_udivmod
+  36:	85 ed                	test   %ebp,%ebp
+  38:	7d 07                	jge    41 <__compcert_i64_sdiv+0x41>
+  3a:	f7 de                	neg    %esi
+  3c:	83 d7 00             	adc    $0x0,%edi
+  3f:	f7 df                	neg    %edi
+  41:	89 f0                	mov    %esi,%eax
+  43:	89 fa                	mov    %edi,%edx
+  45:	5f                   	pop    %edi
+  46:	5e                   	pop    %esi
+  47:	5d                   	pop    %ebp
+  48:	c3                   	ret

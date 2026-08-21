@@ -1,3 +1,4 @@
+abi-version	3
 ccomp-args:aarch64	-fno-pie
 ccomp-args:arm	-marm -fno-pie
 ccomp-args:riscv32	-fno-pie
@@ -22,7 +23,9 @@ ccomp-version:riscv32	The CompCert C verified compiler, version 3.17
 ccomp-version:riscv64	The CompCert C verified compiler, version 3.17
 ccomp-version:x86_32	The CompCert C verified compiler, version 3.17
 ccomp-version:x86_64	The CompCert C verified compiler, version 3.17
+expected-value:1	42
 generator	compcert-tools fixture regen
+observation:1	asm_test_global 4 1
 sha256:aarch64/global_ldst.s	3c003b9dc50fd4b92def60557c0ced5055436f803c6625c962713e197527b927
 sha256:aarch64/oracle/linked/data.hex	2b1a83b125b127770b3b7acbbaf4becec510429c00e16e1e834be1316710d94f
 sha256:aarch64/oracle/linked/text.hex	ffe3501452e62e8d797bc565b598833f5b16182523185a264ce90ba617ddd8e9

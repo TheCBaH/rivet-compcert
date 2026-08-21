@@ -1,0 +1,2 @@
+__compcert_i64_sdiv	global	default	1	defined
+__compcert_i64_udivmod	global	default	UND	undefined

@@ -171,7 +171,7 @@ let assemble profile case =
    This lives here and not in [Manifest] on purpose: asm_oracle reaches no part
    of the assembler, so that a broken assembler cannot make the ABI conformance
    suite pass. *)
-let manifest_of_image profile (img : Image.t) ~expected =
+let manifest_of_image profile (img : Image.t) ~expected ~observations =
   match img.Image.entry with
   | None -> Error "the image has no entry symbol, so there is no address to enter it at"
   | Some entry_addr ->
@@ -184,7 +184,7 @@ let manifest_of_image profile (img : Image.t) ~expected =
           stack_size = stack_16k;
           timeout_ms = 2000;
           expected;
-          observations = [];
+          observations;
           segments =
             List.map
               (fun (s : Image.segment) ->
@@ -323,31 +323,111 @@ let maybe_trace ~abi_version ~profile ~manifest = function
           | Some t -> Printf.printf "  trace (ASM_QEMU_TRACE):\n%s\n" t
           | None -> Printf.printf "  trace (ASM_QEMU_TRACE): qemu wrote none\n"))
 
+(* M4 (.ai/asm_plan.md §12): how many profiles each REQUIRED case (one whose
+   manifest declares [abi-version: 3] - an opt-in, not the default) was
+   actually attempted on, i.e. reached [assemble] rather than being skipped
+   for an unsupported target. Checked after the whole profile loop
+   ([check_required_cases_attempted] below): a required case that is present
+   in [cases()] but never attempted on a profile it declares support for is a
+   failure in its own right, not merely an absence - a directory-discovery or
+   target-filter bug could otherwise silently skip it on every profile and
+   still report a clean run. *)
+let required_attempted : (string, int) Hashtbl.t = Hashtbl.create 8
+
 let run_case profile case =
-  let expected = expected_value case in
-  let label = Printf.sprintf "%s returns %Ld" case expected in
-  match assemble profile case with
-  | Error why ->
-      (* Not a failure of this gate: it is the assembler not yet accepting the
-         fixture, which the differential transcript already records case by
-         case. Counting it here as well would report the same missing
-         instruction form as two independent problems. *)
-      incr blocked;
-      Printf.printf "  --   %-24s not assembled yet (%s)\n" label
-        (match String.index_opt why '\n' with Some i -> String.sub why 0 i | None -> why)
-  | Ok img -> (
-      Printf.printf "  %s: %s\n" case (describe img);
-      match manifest_of_image profile img ~expected:[ expected ] with
-      | Error why ->
+  let dir = Filename.concat corpus_root case in
+  let meta = Fixture_meta.read dir in
+  (* Opt-in, not "declared any v3 field": [abi-version: 3] is the one
+     explicit signal a fixture author gives that this case must actually
+     prove the v3 protocol, not merely be permitted to exercise it. *)
+  let required = meta.Fixture_meta.abi_version = 3 in
+  if not (Fixture_meta.supports profile meta) then
+    Printf.printf "  --   %-24s skipped (%s does not declare support for %s)\n" case case
+      (target_of_profile profile)
+  else begin
+    Hashtbl.replace required_attempted case
+      (1 + Option.value ~default:0 (Hashtbl.find_opt required_attempted case));
+    let expected = expected_value case in
+    (* Element 0 is always [expected-status.txt] (unchanged convention);
+       elements 1..N-1, if any, come from the case's own
+       [expected-value:]/[observation:] records - a non-v3 case's
+       [expected_tail] is [], so [want_values] degrades to exactly today's
+       one-element list. *)
+    let want_values = expected :: meta.Fixture_meta.expected_tail in
+    let label = Printf.sprintf "%s returns %Ld" case expected in
+    match assemble profile case with
+    | Error why ->
+        let msg =
+          match String.index_opt why '\n' with Some i -> String.sub why 0 i | None -> why
+        in
+        if required then (
+          (* Required means this milestone's exit criterion depends on this
+             case actually running - "not yet implemented" is not an
+             acceptable outcome for it the way it is for an ordinary case. *)
           incr failures;
-          Printf.printf "  FAIL %-24s %s\n" label why
-      | Ok m ->
-          let v =
-            verdict ~want_status:Abi.Passed ~want_values:[ expected ]
-              (run ~abi_version:Abi.abi_version profile m)
-          in
-          report label v;
-          maybe_trace ~abi_version:Abi.abi_version ~profile ~manifest:m v)
+          Printf.printf "  FAIL %-24s required v3 case did not assemble (%s)\n" label msg)
+        else (
+          (* Not a failure of this gate: it is the assembler not yet accepting
+             the fixture, which the differential transcript already records
+             case by case. Counting it here as well would report the same
+             missing instruction form as two independent problems. *)
+          incr blocked;
+          Printf.printf "  --   %-24s not assembled yet (%s)\n" label msg)
+    | Ok img -> (
+        Printf.printf "  %s: %s\n" case (describe img);
+        (* Symbol resolution happens here, against this specific build's
+           [Image.exports] - the wire protocol itself has no symbolic
+           observation (docs/exec-abi-v3.md), only [vaddr]/[width]/
+           [sign_extend]. A declared symbol absent from the built image is a
+           hard failure, not a silently skipped observation: the manifest
+           promised it would be observable. *)
+        match
+          List.fold_left
+            (fun acc (symbol, width, sign_extend) ->
+              match acc with
+              | Error _ as e -> e
+              | Ok acc -> (
+                  match List.assoc_opt symbol img.Image.exports with
+                  | Some obs_vaddr -> Ok ({ Manifest.obs_vaddr; width; sign_extend } :: acc)
+                  | None ->
+                      Error
+                        (Printf.sprintf "observation symbol %S is not in the built image's exports"
+                           symbol)))
+            (Ok []) meta.Fixture_meta.observations
+        with
+        | Error why ->
+            incr failures;
+            Printf.printf "  FAIL %-24s %s\n" label why
+        | Ok observations -> (
+            let observations = List.rev observations in
+            match manifest_of_image profile img ~expected:want_values ~observations with
+            | Error why ->
+                incr failures;
+                Printf.printf "  FAIL %-24s %s\n" label why
+            | Ok m ->
+                let v =
+                  verdict ~want_status:Abi.Passed ~want_values
+                    (run ~abi_version:meta.Fixture_meta.abi_version profile m)
+                in
+                report label v;
+                maybe_trace ~abi_version:meta.Fixture_meta.abi_version ~profile ~manifest:m v))
+  end
+
+(* M4: a required case present in [cases] must have been attempted (see
+   [required_attempted] above) on every profile whose target it declares
+   support for - not merely at least once. *)
+let check_required_cases_attempted cases =
+  List.iter
+    (fun case ->
+      let meta = Fixture_meta.read (Filename.concat corpus_root case) in
+      if meta.Fixture_meta.abi_version = 3 then
+        let declared_profiles = List.filter (fun p -> Fixture_meta.supports p meta) profiles in
+        let attempted = Option.value ~default:0 (Hashtbl.find_opt required_attempted case) in
+        if attempted <> List.length declared_profiles then (
+          incr failures;
+          Printf.printf "  FAIL %-24s required v3 case attempted on %d/%d declared profiles\n" case
+            attempted (List.length declared_profiles)))
+    cases
 
 (* The control declares expected = [42] and gets 41, so the helper publishes
    [failed]. Declaring [41] instead would make the mutated image "pass" and
@@ -366,7 +446,7 @@ let run_control profile =
               Printf.printf "  FAIL %-24s %s\n" "induced-failure control" m
           | Ok mutated -> (
               let img = { img with Image.segments = [ { s with Image.bytes = mutated } ] } in
-              match manifest_of_image profile img ~expected:[ 42L ] with
+              match manifest_of_image profile img ~expected:[ 42L ] ~observations:[] with
               | Error why ->
                   incr failures;
                   Printf.printf "  FAIL %-24s %s\n" "induced-failure control" why
@@ -442,6 +522,7 @@ let () =
           List.iter (fun c -> run_case profile c) cases;
           run_control profile)
     profiles;
+  check_required_cases_attempted cases;
   run_v3_plumbing_check ();
   Printf.printf "asm-exec: %d profiles x %d cases, %d blocked on unimplemented forms, %d failures\n"
     (List.length profiles) (List.length cases) !blocked !failures;

@@ -1,0 +1,8 @@
+.text	local	default	1	defined
+__compcert_i64_sdiv	global	default	UND	undefined
+__compcert_i64_smod	global	default	UND	undefined
+asm_test_entry	global	default	1	defined
+i64_divmod_dividend	global	default	3	defined
+i64_divmod_divisor	global	default	3	defined
+i64_divmod_quotient	global	default	3	defined
+i64_divmod_remainder	global	default	3	defined
