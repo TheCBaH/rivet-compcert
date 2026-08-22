@@ -1,0 +1,15 @@
+; Corpus_classify_cmd: hermetic fakes/stubs, plus one integration test against
+; the real, already-built asm.exe - matching test_process.ml's ../fake
+; convention and asm/test/cram/dune's ../../tool/asm.exe dep, one directory
+; deeper here.
+
+(executable
+ (name test_corpus_classify)
+ (modes byte native)
+ (libraries compcert_tools err_trace fpath unix))
+
+(rule
+ (alias runtest)
+ (deps ../../../tool/asm.exe)
+ (action
+  (run ./test_corpus_classify.exe)))
