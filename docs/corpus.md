@@ -27,12 +27,29 @@ Makefile targets: `make asm-corpus-classify-c-x86_64` and
 `make asm-corpus-check-c`; the latter is part of `asm-ci`.
 `asm/fixtures/corpus/c/x86_64/manifest.txt`/`summary.txt` are committed, from
 a real `classify-c` run against CompCert 3.17 (`modules/CompCert` HEAD at the
-revision recorded in the manifest): 2 of the 24 files are accepted, 22 are
-rejected - overwhelmingly on `%xmm*` register operands ("unknown register")
-and on a memory-operand shape this project's x86_64 parser does not yet
-accept ("cannot parse operand"). See `summary.txt` for the full breakdown;
-this is real M5 corpus evidence to triage, not a tooling bug - the rejected
-files are the next concrete instruction/addressing-mode coverage work.
+revision recorded in the manifest): **24 of 24 files are accepted.** The prior
+17 rejections were three gaps, all now fixed: a general octal string-escape
+(`\NNN`, 1-3 digits) in the lexer; `%r8b`-`%r15b` (8-bit REX-extended
+sub-registers, a register-table addition); and `%xmm0`-`%xmm15` plus the
+SSE2 scalar-float instruction family CompCert's x86_64 double/float codegen
+needs (`addsd`/`movsd`/`cvtsi2sd`/etc. - a new register class and ~11 codec
+forms, byte-verified against real GNU `as`/`objdump`). A separate,
+already-fixed gap (base-less scaled-index addressing, `leaq 0(,%rcx,8),
+%rdi`) preceded these three; see git history for that fix.
+
+**"24/24 accepted" means parse-level acceptance only** (`classify-c` calls
+`asm --target x86_64 --dump-source-ast`, i.e. just the `parse` phase) - it
+does **not** mean this corpus fully assembles. Mnemonic validity is checked
+in a later phase (`simplify_instruction`) that parse-level classification
+never reaches, so a mnemonic can parse (any `mnemonic operand, operand` shape
+whose operands parse is accepted) without this project knowing what it means.
+Confirmed unimplemented and still present throughout this corpus:
+`movzbl`/`movzwl` (zero-extending byte/word move), `movslq` (sign-extending
+move, 18 of 24 files), `setl`/`sete`/etc. (byte-set-on-condition), and
+likely more once those are addressed. Actually assembling this corpus
+(simplify + lower + encode all 24 files) is a materially larger follow-up
+needing its own runner - `classify-c`'s `--dump-source-ast` cannot measure
+it - and is not scoped here.
 
 ## The manifest format
 
@@ -107,9 +124,28 @@ diagnostic rather than silently deleted.
 
 ## Follow-ups
 
-- Triage the 22 rejected `test/c/` files' reasons (`%xmm*` registers, the
-  unsupported memory-operand shape) into concrete instruction/addressing-mode
-  work, per the decision bullet below.
+- **Actually assemble this corpus, not just parse it.** `movzbl`/`movzwl`,
+  `movslq`, `setl`/`sete`/etc. are unimplemented in `simplify_instruction`
+  and appear throughout these 24 files; classify-c's parse-only check can't
+  see that. Needs a new runner (not `--dump-source-ast`) plus the missing
+  instruction support.
+- A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
+  decoder already handle it (the SIB "no base" codec alternative uses the
+  same fixup-carrying displacement codec as RIP-relative addressing), only
+  the parser needs a fourth case for an `Ident`-led token shape. Currently
+  masked in `asm/fixtures/gas-xref/frontier/x86_32/helper-helper/input.s` by
+  an unrelated earlier lexer error.
+- A negative-displacement three-register SIB form (`-1(%rbp,%rcx,2)`,
+  base+index+scale all present): no existing parser pattern covers it. Not
+  evidenced by any corpus rejection; fix if and when a fixture needs it.
+- A permanent GNU-`as`/`objdump` differential regression test for the new
+  base-less-SIB form: verified once by hand against the real, installed
+  cross binutils (byte-for-byte match), but not wired into a permanent
+  fixture - `asm/test/snippets/snippet_ast.ml`'s `X86_shared` corpus, which
+  feeds both `gas-xref`'s generated corpus and the QEMU exec-ABI harness, is
+  a closed nine-case ABI-conformance record (`return42`, `trap`, `spin`,
+  ...), not an open list of operand-coverage snippets, so a new differential
+  case needs its own small fixture design rather than an entry there.
 - Add `classify-c-arm`, `classify-c-aarch64`, etc. (each its own explicit
   subcommand, never a `--target` flag with unimplemented values) for the
   other five targets.
