@@ -37,19 +37,51 @@ forms, byte-verified against real GNU `as`/`objdump`). A separate,
 already-fixed gap (base-less scaled-index addressing, `leaq 0(,%rcx,8),
 %rdi`) preceded these three; see git history for that fix.
 
-**"24/24 accepted" means parse-level acceptance only** (`classify-c` calls
-`asm --target x86_64 --dump-source-ast`, i.e. just the `parse` phase) - it
-does **not** mean this corpus fully assembles. Mnemonic validity is checked
-in a later phase (`simplify_instruction`) that parse-level classification
-never reaches, so a mnemonic can parse (any `mnemonic operand, operand` shape
-whose operands parse is accepted) without this project knowing what it means.
-Confirmed unimplemented and still present throughout this corpus:
-`movzbl`/`movzwl` (zero-extending byte/word move), `movslq` (sign-extending
-move, 18 of 24 files), `setl`/`sete`/etc. (byte-set-on-condition), and
-likely more once those are addressed. Actually assembling this corpus
-(simplify + lower + encode all 24 files) is a materially larger follow-up
-needing its own runner - `classify-c`'s `--dump-source-ast` cannot measure
-it - and is not scoped here.
+**"24/24 accepted" is `classify-c`'s own metric and still means parse-level
+acceptance only** (`classify-c` calls `asm --target x86_64
+--dump-source-ast`, i.e. just the `parse` phase) - `classify-c` itself was
+not changed to measure further than that; see "Actually assembling this
+corpus" below for the separate, now-completed check that goes past it.
+
+**Actually assembling this corpus (2026-08-23).** Running the full
+`parse -> simplify -> lower -> encode -> plan_image` pipeline (`asm.exe`'s
+default, no `--dump-source-ast`) over all 24 generated `.s` files - not
+merely parsing them - now succeeds for every file up to symbol resolution.
+The gaps `classify-c`'s parse-only check could not see are closed:
+`movzbl`/`movzwl`/`movsbl`/`movslq` (zero-/sign-extending move: the `0F
+B6/B7/BE/BF` family plus `movslq`'s own `0x63`), `setl`/`sete`/etc.
+(byte-set-on-condition, `0F 90+cc`), `orl`/`orq`/`andq`/`xorq` in the
+operand shapes CompCert's own codegen needs (register-register, the
+mem-source `Alu_r_rm` direction, and the group-1 immediate form), the
+general group-2 shift/rotate forms (`rorl $27,%eax`, `sall $16,%eax`,
+`sall %cl,%eax` - the `0xC1 ib`/`0xD3` encodings beyond the M4-era
+shift-by-1-only `0xD1`), TEST's own immediate form (`0xF7 /0 id`), the
+two-operand `imul $imm,reg` form (`0x69`/`0x6B`), 8-bit register-to-register
+and register-to-memory `mov` (opcode `0x88`/`0x8A` - a genuinely different
+opcode byte from the 16/32/64-bit forms, not a width variant of them - which
+also surfaced a real encoding bug: `%spl`/`%bpl`/`%sil`/`%dil` need an empty
+REX prefix to be selected over the legacy `%ah`/`%ch`/`%dh`/`%bh` encoding
+this project's register table has no representation for, and `prefixes_of`
+was not forcing one), a 64-bit absolute data relocation (`Abs64`, for `.quad
+symbol`), `.ascii`/`.asciz`/`.string`, and an unsigned 64-bit `.quad`
+literal (`0x8000000000000000` and friends - `Bigint.to_uint64_opt` as a
+fallback where `to_int64_opt` rejects the bit pattern as "too large").
+Every new encoding was checked byte-for-byte against the real, installed
+`x86_64-linux-gnu-as`/`objdump` before being written down, and
+`make asm-fixture-oracle-x86_64`/`-x86_32` (the full differential/QEMU-execution
+suite over the hand-picked fixture corpus) stayed green throughout with no
+fixture drift, so this is additive coverage rather than a change to any
+previously-verified encoding.
+
+What still blocks a *complete* image (not a `classify-c` concern, and not
+fixed here) is symbol resolution: every one of the 24 files references at
+least one libc function (`malloc`, `atoi`, `printf`, `cos`, `memcmp`, ...)
+or a symbol defined in a CompCert test-suite file this corpus does not also
+compile (`i`, `p`, `data`, `arch_big_endian`), and `plan_image` correctly
+reports each as `image.undefined` - libc linking is `.ai/asm_plan.md` §2.2's
+explicit non-goal, and multi-file linking of the *rest* of the suite (not
+just `test/c/`) is unstarted. There is no committed manifest/summary for
+this "assemble" stage (unlike `classify-c`'s) - see Follow-ups.
 
 ## The manifest format
 
@@ -124,11 +156,18 @@ diagnostic rather than silently deleted.
 
 ## Follow-ups
 
-- **Actually assemble this corpus, not just parse it.** `movzbl`/`movzwl`,
-  `movslq`, `setl`/`sete`/etc. are unimplemented in `simplify_instruction`
-  and appear throughout these 24 files; classify-c's parse-only check can't
-  see that. Needs a new runner (not `--dump-source-ast`) plus the missing
-  instruction support.
+- **A committed "assemble" manifest, mirroring `classify-c`'s.** The
+  pipeline-level check described above ("Actually assembling this corpus")
+  was run and verified this session but has no `corpus assemble-c`
+  subcommand, no checked-in manifest/summary, and no `check`-style
+  re-verification - unlike `classify-c`, it is not yet CI-enforced or
+  regenerable by a single documented command. Needs its own runner (the
+  default `asm.exe` invocation reaches `plan_image`, which is as far as a
+  single-TU compile can honestly go without a linker for the rest of the
+  program) and a manifest format that can distinguish "blocked on an
+  undefined external symbol" (expected, given `.ai/asm_plan.md` §2.2) from
+  a real encoding gap, rather than collapsing both into one `rejected`
+  bucket the way `classify-c`'s does.
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
   decoder already handle it (the SIB "no base" codec alternative uses the
   same fixup-carrying displacement codec as RIP-relative addressing), only
