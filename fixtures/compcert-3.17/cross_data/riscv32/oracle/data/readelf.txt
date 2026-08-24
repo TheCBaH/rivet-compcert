@@ -1,4 +1,4 @@
-There are 9 section headers, starting at offset 0x150:
+There are 9 section headers, starting at offset 0x158:
 
 Section Headers:
   [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
@@ -7,10 +7,10 @@ Section Headers:
   [ 2] .data             PROGBITS        00000000 000034 000004 00  WA  0   0  4
   [ 3] .bss              NOBITS          00000000 000038 000000 00  WA  0   0  1
   [ 4] .note.GNU-stack   PROGBITS        00000000 000038 000000 00      0   0  1
-  [ 5] .riscv.attributes RISCV_ATTRIBUTES 00000000 000038 00004a 00      0   0  1
-  [ 6] .symtab           SYMTAB          00000000 000084 000070 10      7   6  4
-  [ 7] .strtab           STRTAB          00000000 0000f4 00000e 00      0   0  1
-  [ 8] .shstrtab         STRTAB          00000000 000102 00004e 00      0   0  1
+  [ 5] .riscv.attributes RISCV_ATTRIBUTES 00000000 000038 000053 00      0   0  1
+  [ 6] .symtab           SYMTAB          00000000 00008c 000070 10      7   6  4
+  [ 7] .strtab           STRTAB          00000000 0000fc 00000e 00      0   0  1
+  [ 8] .shstrtab         STRTAB          00000000 00010a 00004e 00      0   0  1
 Key to Flags:
   W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
   L (link order), O (extra OS processing required), G (group), T (TLS),

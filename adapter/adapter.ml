@@ -1,8 +1,7 @@
 (* CompCert Asm.program -> Normalized_ast.module_, scoped to exactly the six
-   instruction forms the aarch64 return42/asm_test_entry fixture needs
-   (next.md "the direct CompCert integration", Order item 2). Not a general
-   N-instruction, N-global program converter - see next.md step 3 for
-   widening past this one fixture.
+   instruction forms the aarch64 return42/asm_test_entry fixture needs. Not a
+   general N-instruction, N-global program converter - widening past this
+   one fixture is future work.
 
    The directive synthesis in [items_of_function] below (.text/.align/
    .globl/.type/.size/.note.GNU-stack) is validated against this fixture's

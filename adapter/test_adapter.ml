@@ -3,8 +3,7 @@
    aarch64, run through Adapter.convert, compared against
    asm/test/coherence/test_coherence.ml's direct_normalized/direct_lowered
    and against the text (parse/simplify) path - the "fourth producer" against
-   the same assertions that file already makes (next.md "the direct CompCert
-   integration", Order item 2). *)
+   the same assertions that file already makes. *)
 
 module CC = Compcert_aarch64
 module P = Driver.Registry.Aarch64

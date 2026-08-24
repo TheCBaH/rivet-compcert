@@ -37,13 +37,12 @@ preflight_target() {
   local target=$1 tool probe
   target_config "$target"
 
-  # Both RISC-V profiles share TOOLPREFIX=riscv64-linux-gnu-; the ABI is
-  # selected by riscv-gcc-wrapper.sh through the probe symlink's name, so the
-  # probe binary to look for is the shared one.
-  case "$target" in
-    riscv32 | riscv64) probe="riscv64-linux-gnu-gcc" ;;
-    *) probe="${TOOLPREFIX}gcc" ;;
-  esac
+  # Both RISC-V profiles go through riscv-gcc-wrapper.sh (see run_target
+  # below), which bakes the exact march/mabi this project needs into the
+  # probe rather than trusting each toolchain's default multilib selection;
+  # the wrapper execs each profile's own dedicated cross-gcc (TOOLPREFIX), so
+  # the probe binary to check for here is the same as every other target's.
+  probe="${TOOLPREFIX}gcc"
 
   for tool in "$probe" "${TOOLPREFIX}as" "${TOOLPREFIX}ld" \
               "${TOOLPREFIX}readelf" "${TOOLPREFIX}objcopy" \

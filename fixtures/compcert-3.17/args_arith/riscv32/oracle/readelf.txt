@@ -1,4 +1,4 @@
-There are 11 section headers, starting at offset 0x32c:
+There are 11 section headers, starting at offset 0x33c:
 
 Section Headers:
   [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
@@ -8,22 +8,22 @@ Section Headers:
   [ 3] .bss              NOBITS          00000000 0000b4 000000 00  WA  0   0  1
   [ 4] .note.GNU-stack   PROGBITS        00000000 0000b4 000000 00      0   0  1
   [ 5] .eh_frame         PROGBITS        00000000 0000b4 000044 00   A  0   0  4
-  [ 6] .rela.eh_frame    RELA            00000000 000284 000048 0c   I  8   5  4
-  [ 7] .riscv.attributes RISCV_ATTRIBUTES 00000000 0000f8 00004a 00      0   0  1
-  [ 8] .symtab           SYMTAB          00000000 000144 0000e0 10      9  12  4
-  [ 9] .strtab           STRTAB          00000000 000224 00005d 00      0   0  1
-  [10] .shstrtab         STRTAB          00000000 0002cc 00005d 00      0   0  1
+  [ 6] .rela.eh_frame    RELA            00000000 000294 000048 0c   I  8   5  4
+  [ 7] .riscv.attributes RISCV_ATTRIBUTES 00000000 0000f8 000053 00      0   0  1
+  [ 8] .symtab           SYMTAB          00000000 00014c 0000e0 10      9  12  4
+  [ 9] .strtab           STRTAB          00000000 00022c 000066 00      0   0  1
+  [10] .shstrtab         STRTAB          00000000 0002dc 00005d 00      0   0  1
 Key to Flags:
   W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
   L (link order), O (extra OS processing required), G (group), T (TLS),
   C (compressed), x (unknown), o (OS specific), E (exclude),
   D (mbind), p (processor specific)
 
-Relocation section '.rela.eh_frame' at offset 0x284 contains 6 entries:
+Relocation section '.rela.eh_frame' at offset 0x294 contains 6 entries:
  Offset     Info    Type                Sym. Value  Symbol's Name + Addend
-0000001c  00000539 R_RISCV_32_PCREL       00000000   .L0  + 0
+0000001c  00000439 R_RISCV_32_PCREL       00000000   .L0  + 0
 00000020  00000623 R_RISCV_ADD32          00000028   .L0  + 0
-00000020  00000527 R_RISCV_SUB32          00000000   .L0  + 0
+00000020  00000427 R_RISCV_SUB32          00000000   .L0  + 0
 00000034  00000739 R_RISCV_32_PCREL       00000028   .L0  + 0
 00000038  00000823 R_RISCV_ADD32          00000080   .L0  + 0
 00000038  00000727 R_RISCV_SUB32          00000028   .L0  + 0
@@ -34,8 +34,8 @@ Symbol table '.symtab' contains 14 entries:
      1: 00000000     0 SECTION LOCAL  DEFAULT    1 .text
      2: 00000000     0 SECTION LOCAL  DEFAULT    2 .data
      3: 00000000     0 SECTION LOCAL  DEFAULT    3 .bss
-     4: 00000000     0 NOTYPE  LOCAL  DEFAULT    1 $xrv32i2p0_m2p0_a2p0_f2p0_d2p0_zmmul1p0_zaamo1p0_zalrsc1p0
-     5: 00000000     0 NOTYPE  LOCAL  DEFAULT    1 .L0
+     4: 00000000     0 NOTYPE  LOCAL  DEFAULT    1 .L0
+     5: 00000000     0 NOTYPE  LOCAL  DEFAULT    1 $xrv32i2p1_m2p0_a2p1_f2p2_d2p2_zicsr2p0_zmmul1p0_zaamo1p0_zalrsc1p0
      6: 00000028     0 NOTYPE  LOCAL  DEFAULT    1 .L0
      7: 00000028     0 NOTYPE  LOCAL  DEFAULT    1 .L0
      8: 00000080     0 NOTYPE  LOCAL  DEFAULT    1 .L0

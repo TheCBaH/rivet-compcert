@@ -1,5 +1,5 @@
-/* M3's cross-file .bss/.comm slice (.ai/asm_plan.md Milestone 3, follow-up 2;
-   see next.md's "M3 follow-ups"). shared_value is declared but never
+/* M3's cross-file .bss/.comm slice (.ai/asm_plan.md Milestone 3, follow-up
+   2). shared_value is declared but never
    defined in this translation unit - the defining half lives in data.c, a
    separate input to the same link, exactly as in cross_data. The
    difference from cross_data is entirely in data.c: there the global is

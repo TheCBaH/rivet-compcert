@@ -1,5 +1,5 @@
-; The CompCert Asm.program -> Normalized_ast adapter (next.md "the direct
-; CompCert integration", Order item 2 - aarch64 return42 only).
+; The CompCert Asm.program -> Normalized_ast adapter (aarch64 return42
+; only).
 ;
 ; Gated exactly like asm/melange/* (see asm/melange/dune): depending on
 ; compcert_aarch64 unconditionally would require compcert-lib-build-aarch64's
