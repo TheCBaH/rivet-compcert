@@ -1,9 +1,10 @@
 (** M5 corpus growth: classify CompCert's own [test/c/] suite against this
-    project's parser, for x86_64 only.
+    project's parser, one target at a time.
 
-    Scope is deliberately narrow: one target, one corpus, parse-level
-    classification only (not a GNU-[as] differential, not execution). See
-    [asm/docs/corpus.md]. *)
+    Scope is deliberately narrow: one corpus, parse-level classification only
+    (not a GNU-[as] differential, not execution) - but now over any of the six
+    targets, each published under its own [asm/fixtures/corpus/c/<target>/].
+    See [asm/docs/corpus.md]. *)
 
 (** {1 The parser-runner seam}
 
@@ -27,6 +28,10 @@ val normalize : raw_outcome -> parse_outcome
     [Runner_failed] passes through unchanged. *)
 
 type runner = generated_s_rel:string -> raw_outcome
+
+val real_runner : Repo.t -> Target.t -> runner
+(** Invokes the real, already-built [asm.exe] with [--target <t>
+    --dump-source-ast]. *)
 
 (** {1 One compiled corpus file} *)
 
@@ -105,8 +110,8 @@ val check_revision_matches : git_probe -> expected:string -> (unit, Tool_error.t
 
 (** {1 Publication} *)
 
-val publish : Repo.t -> manifest -> (unit, Tool_error.t) Err.t
-(** Creates [asm/fixtures/corpus/c/x86_64/] if absent, then installs
+val publish : Repo.t -> target:Target.t -> manifest -> (unit, Tool_error.t) Err.t
+(** Creates [asm/fixtures/corpus/c/<target>/] if absent, then installs
     [manifest.txt] and [summary.txt] so the destination is always either the
     last known-good pair or the new pair, including on the very first run (no
     prior manifest) and including when the second install fails after the
@@ -124,6 +129,7 @@ val default_commit : commit_step
 
 val publish_with :
   Repo.t ->
+  target:Target.t ->
   manifest ->
   commit_manifest:commit_step ->
   commit_summary:commit_step ->
@@ -137,25 +143,40 @@ val publish_with :
 (** {1 CLI entry points} *)
 
 val classify_c_core :
-  Repo.t -> git:git_probe -> runner:runner -> compiler:Fpath.t -> (string, Tool_error.t) Err.t
+  Repo.t ->
+  git:git_probe ->
+  runner:runner ->
+  compiler:Fpath.t ->
+  target:Target.t ->
+  (string, Tool_error.t) Err.t
 (** {!classify_c}'s body, parameterized over the CompCert checkout probe, the
-    parser runner and the compiler path, so a test can supply a dirty [git]
-    stub and confirm the run stops at {!check_clean_checkout} - before
-    [modules/CompCert/test/c] is even read - rather than reaching the
+    parser runner, the compiler path and the target, so a test can supply a
+    dirty [git] stub and confirm the run stops at {!check_clean_checkout} -
+    before [modules/CompCert/test/c] is even read - rather than reaching the
     compiler at all. *)
 
-val classify_c : Repo.t -> Command.t
-(** The heavy path: requires the x86_64 cross compiler
-    ([make asm-cross-setup]) and a clean [modules/CompCert] checkout. Compiles
-    all of [test/c/*.c], classifies each with the real parser, and publishes. *)
+val classify_c : Repo.t -> Target.t -> Command.t
+(** The heavy path for one target: requires that target's cross compiler
+    ([make asm-cross-setup], or a single-target
+    [tools/compcert-fixture-setup.sh <target>]) and a clean [modules/CompCert]
+    checkout. Compiles all of [test/c/*.c] for it, classifies each with the
+    real parser, and publishes to [asm/fixtures/corpus/c/<target>/]. *)
 
-val check_with : Repo.t -> git:git_probe -> Command.t
-(** {!check}'s body, parameterized over the CompCert checkout probe so a test
-    can exercise revision-mismatch and dirty-checkout handling without a real
-    git checkout. *)
+val check_with : Repo.t -> git:git_probe -> Target.t -> Command.t
+(** {!check}'s body for one target, parameterized over the CompCert checkout
+    probe so a test can exercise revision-mismatch and dirty-checkout
+    handling without a real git checkout. *)
+
+val published_targets : Repo.t -> Target.t list
+(** Every target with a [manifest.txt] already published under
+    [asm/fixtures/corpus/c/<target>/], in {!Target.all} order - not every one
+    of the six, since a target's manifest lands only once its own
+    [classify-c-<target>] has actually been run against a real compiler. *)
 
 val check : Repo.t -> Command.t
-(** The cheap path: no cross toolchain, no CompCert build, no [asm.exe].
-    Fails on the first structural problem; see [asm/docs/corpus.md] for
-    exactly what is re-verified against the live tree versus recorded only
-    for audit. *)
+(** The cheap path: no cross toolchain, no CompCert build, no [asm.exe]. Runs
+    {!check_with} against every {!published_targets} target and accumulates
+    every target's output and failures (P4: a later target's success is never
+    hidden by an earlier target's failure). Fails outright if no target has
+    been published yet. See [asm/docs/corpus.md] for exactly what is
+    re-verified against the live tree versus recorded only for audit. *)

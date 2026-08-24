@@ -260,9 +260,9 @@ let read p = match Tool_fs.read p with Ok s -> s | Error _ -> failwith "read fai
 let test_publish_first_run_no_prior () =
   with_tmp (fun root ->
       let repo = make_repo root in
-      let dest = Repo.corpus_c_x86_64 repo in
+      let dest = Repo.corpus_c repo Target.X86_64 in
       check "publish: the destination directory does not exist yet" (not (exists dest));
-      match publish repo sample_manifest with
+      match publish repo ~target:Target.X86_64 sample_manifest with
       | Error _ -> check "publish: a from-scratch run creates the directory and both files" false
       | Ok () ->
           check "publish: the destination directory now exists" (exists dest);
@@ -278,8 +278,8 @@ let other_manifest = { sample_manifest with files = [ List.hd sample_manifest.fi
 let test_publish_rollback_with_prior () =
   with_tmp (fun root ->
       let repo = make_repo root in
-      let dest = Repo.corpus_c_x86_64 repo in
-      match publish repo sample_manifest with
+      let dest = Repo.corpus_c repo Target.X86_64 in
+      match publish repo ~target:Target.X86_64 sample_manifest with
       | Error _ -> check "publish: seeding a prior pair" false
       | Ok () -> (
           let prior_manifest = read Fpath.(dest / "manifest.txt") in
@@ -290,7 +290,7 @@ let test_publish_rollback_with_prior () =
           Sys.remove (Fpath.to_string Fpath.(dest / "summary.txt"));
           Unix.mkdir (Fpath.to_string Fpath.(dest / "summary.txt")) 0o700;
           Unix.mkdir (Fpath.to_string Fpath.(dest / "summary.txt" / "blocker")) 0o700;
-          match publish repo other_manifest with
+          match publish repo ~target:Target.X86_64 other_manifest with
           | Ok () -> check "publish: a summary-install failure with a prior pair is reported" false
           | Error _ ->
               check_eq "publish: on rollback, manifest.txt is restored byte-for-byte"
@@ -300,11 +300,11 @@ let test_publish_rollback_with_prior () =
 let test_publish_first_run_rollback_removes_manifest () =
   with_tmp (fun root ->
       let repo = make_repo root in
-      let dest = Repo.corpus_c_x86_64 repo in
+      let dest = Repo.corpus_c repo Target.X86_64 in
       ignore (Tool_fs.mkdir_p dest);
       Unix.mkdir (Fpath.to_string Fpath.(dest / "summary.txt")) 0o700;
       Unix.mkdir (Fpath.to_string Fpath.(dest / "summary.txt" / "blocker")) 0o700;
-      match publish repo sample_manifest with
+      match publish repo ~target:Target.X86_64 sample_manifest with
       | Ok () -> check "publish: a first-run summary-install failure is reported" false
       | Error _ ->
           check
@@ -328,7 +328,7 @@ let test_publish_rollback_itself_fails () =
           (Tool_error.v Tool_error.Write_file "summary stub always fails")
       in
       match
-        Corpus_classify_cmd.publish_with repo sample_manifest
+        Corpus_classify_cmd.publish_with repo ~target:Target.X86_64 sample_manifest
           ~commit_manifest:Corpus_classify_cmd.default_commit ~commit_summary:always_fail_summary
           ~restore:always_fail_restore
       with
@@ -386,7 +386,7 @@ let build_and_seed repo ~git =
         ];
     }
   in
-  let* () = publish repo m in
+  let* () = publish repo ~target:Target.X86_64 m in
   Ok m
 
 let command_is_success (c : Command.t) = c.exit = `Success
@@ -406,7 +406,7 @@ let test_check_with_happy_path () =
       | Error _ -> check "check_with: seeding a valid corpus" false
       | Ok _ ->
           check "check_with: a freshly published, matching corpus passes"
-            (command_is_success (check_with repo ~git)))
+            (command_is_success (check_with repo ~git Target.X86_64)))
 
 let test_check_with_dirty_checkout () =
   with_tmp (fun root ->
@@ -418,7 +418,7 @@ let test_check_with_dirty_checkout () =
           let dirty_git =
             stub_git ~status:" M modules/CompCert/lib/Foo.v\n" ~head:(String.make 40 '5') ()
           in
-          let c = check_with repo ~git:dirty_git in
+          let c = check_with repo ~git:dirty_git Target.X86_64 in
           check "check_with: a dirty checkout fails" (not (command_is_success c));
           check "check_with: a dirty checkout is reported distinctly from a HEAD mismatch"
             (command_fatal_contains c "dirty"))
@@ -431,7 +431,7 @@ let test_check_with_revision_mismatch () =
       | Error _ -> check "check_with: seeding a valid corpus" false
       | Ok _ ->
           let other_git = stub_git ~head:(String.make 40 '6') () in
-          let c = check_with repo ~git:other_git in
+          let c = check_with repo ~git:other_git Target.X86_64 in
           check "check_with: a HEAD mismatch fails" (not (command_is_success c));
           check "check_with: a HEAD mismatch names both revisions"
             (command_fatal_contains c (String.make 40 '5')))
@@ -447,7 +447,7 @@ let test_check_with_source_hash_mismatch () =
             Fpath.(Repo.path repo / "modules" / "CompCert" / "test" / "c" / "aes.c")
             "int aes; /* tampered */\n";
           check "check_with: a tampered source file is caught"
-            (not (command_is_success (check_with repo ~git))))
+            (not (command_is_success (check_with repo ~git Target.X86_64))))
 
 let test_check_with_inventory_mismatch () =
   with_tmp (fun root ->
@@ -460,7 +460,7 @@ let test_check_with_inventory_mismatch () =
             Fpath.(Repo.path repo / "modules" / "CompCert" / "test" / "c" / "extra.c")
             "int extra;\n";
           check "check_with: an unlisted extra file fails the inventory check"
-            (not (command_is_success (check_with repo ~git))))
+            (not (command_is_success (check_with repo ~git Target.X86_64))))
 
 let test_check_with_fixed_header_literal () =
   with_tmp (fun root ->
@@ -474,11 +474,11 @@ let test_check_with_fixed_header_literal () =
              the check compares against the hard-coded literal, not just
              "well-formed". *)
           let wrong = { m with header = { m.header with target = "arm" } } in
-          let dest = Repo.corpus_c_x86_64 repo in
+          let dest = Repo.corpus_c repo Target.X86_64 in
           write Fpath.(dest / "manifest.txt") (render_manifest wrong);
           write Fpath.(dest / "summary.txt") (render_summary wrong);
           check "check_with: a manifest declaring the wrong target is rejected"
-            (not (command_is_success (check_with repo ~git))))
+            (not (command_is_success (check_with repo ~git Target.X86_64))))
 
 let test_check_with_reordered_manifest () =
   with_tmp (fun root ->
@@ -490,13 +490,13 @@ let test_check_with_reordered_manifest () =
           (* Same records, reversed order - individually valid, but not what
              render_manifest would have produced. *)
           let reordered = { m with files = List.rev m.files } in
-          let dest = Repo.corpus_c_x86_64 repo in
+          let dest = Repo.corpus_c repo Target.X86_64 in
           write
             Fpath.(dest / "manifest.txt")
             (String.concat "" (List.rev (String.split_on_char '\n' (render_manifest reordered)))
             ^ "\n");
           check "check_with: a manifest.txt that is not the canonical rendering is rejected"
-            (not (command_is_success (check_with repo ~git))))
+            (not (command_is_success (check_with repo ~git Target.X86_64))))
 
 let test_check_with_stale_summary () =
   with_tmp (fun root ->
@@ -505,10 +505,10 @@ let test_check_with_stale_summary () =
       match build_and_seed repo ~git with
       | Error _ -> check "check_with: seeding a valid corpus" false
       | Ok _ ->
-          let dest = Repo.corpus_c_x86_64 repo in
+          let dest = Repo.corpus_c repo Target.X86_64 in
           write Fpath.(dest / "summary.txt") "total:2\naccepted:2\nrejected:0\n";
           check "check_with: a stale summary.txt (wrong totals) is rejected"
-            (not (command_is_success (check_with repo ~git))))
+            (not (command_is_success (check_with repo ~git Target.X86_64))))
 
 (* {1 One integration test against the real, already-built asm.exe} *)
 

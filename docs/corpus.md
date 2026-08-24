@@ -6,28 +6,34 @@ fixture corpus beyond the 10 hand-picked cases under
 this project's parser and recording, per file, whether it was accepted.
 
 The first (and currently only) increment covers `modules/CompCert/test/c/`
-(24 files), x86_64 only, parse-level classification only - not a GNU `as`
-differential, not execution. Wider targets, other CompCert test suites
-(`regression`, `abi`, `compression`), and later pipeline stages are
-follow-ups; see the bottom of this document.
+(24 files), parse-level classification only - not a GNU `as` differential,
+not execution. Other CompCert test suites (`regression`, `abi`,
+`compression`) and later pipeline stages are follow-ups; see the bottom of
+this document.
 
 ## Commands
 
-- `compcert-tools corpus classify-c` - the heavy path. Requires the x86_64
-  cross compiler (`make asm-cross-setup`) and a clean `modules/CompCert`
-  checkout. Compiles every `test/c/*.c` file with CompCert, classifies the
-  generated assembly with this project's own parser
-  (`asm --target x86_64 --dump-source-ast`), and publishes
-  `asm/fixtures/corpus/c/x86_64/{manifest.txt,summary.txt}`.
+- `compcert-tools corpus classify-c-<target>` - the heavy path, one explicit
+  subcommand per target (`classify-c-x86_32`, `classify-c-x86_64`,
+  `classify-c-arm`, `classify-c-aarch64`, `classify-c-riscv32`,
+  `classify-c-riscv64` - never a `--target` flag accepting an unimplemented
+  value). Requires that target's cross compiler (`make asm-cross-setup`) and
+  a clean `modules/CompCert` checkout. Compiles every `test/c/*.c` file with
+  CompCert, classifies the generated assembly with this project's own parser
+  (`asm --target <target> --dump-source-ast`), and publishes
+  `asm/fixtures/corpus/c/<target>/{manifest.txt,summary.txt}`.
 - `compcert-tools corpus check` - the cheap path. No cross toolchain, no
-  CompCert build, no `asm.exe`. Verifies the committed manifest and summary
+  CompCert build, no `asm.exe`. Discovers every target with an already-
+  published manifest and verifies each one's committed manifest and summary
   against the live tree; see "What `check` verifies" below.
 
-Makefile targets: `make asm-corpus-classify-c-x86_64` and
+Makefile targets: `make asm-corpus-classify-c-<target>` (one per target, a
+static pattern rule over the same six targets as the fixture goals) and
 `make asm-corpus-check-c`; the latter is part of `asm-ci`.
 `asm/fixtures/corpus/c/x86_64/manifest.txt`/`summary.txt` are committed, from
-a real `classify-c` run against CompCert 3.17 (`modules/CompCert` HEAD at the
-revision recorded in the manifest): **24 of 24 files are accepted.** The prior
+a real `classify-c-x86_64` run against CompCert 3.17 (`modules/CompCert` HEAD
+at the revision recorded in the manifest): **24 of 24 files are accepted.**
+The other five targets are not yet classified; see Follow-ups. The prior
 17 rejections were three gaps, all now fixed: a general octal string-escape
 (`\NNN`, 1-3 digits) in the lexer; `%r8b`-`%r15b` (8-bit REX-extended
 sub-registers, a register-table addition); and `%xmm0`-`%xmm15` plus the
@@ -185,9 +191,18 @@ diagnostic rather than silently deleted.
   a closed nine-case ABI-conformance record (`return42`, `trap`, `spin`,
   ...), not an open list of operand-coverage snippets, so a new differential
   case needs its own small fixture design rather than an entry there.
-- Add `classify-c-arm`, `classify-c-aarch64`, etc. (each its own explicit
-  subcommand, never a `--target` flag with unimplemented values) for the
-  other five targets.
+- `classify-c-arm`/`-aarch64`/`-riscv32`/`-riscv64`/`-x86_32` subcommands are
+  landed (see Commands above) and have been run for real against
+  `modules/CompCert/test/c/`, the same iterative way the x86_64 gaps above
+  were closed: arm 0→24/24 (register-offset addressing; a new VFP
+  double-precision family), aarch64 0→24/24 (`add ..., #:lo12:sym`; FP
+  immediates; register-offset+extend addressing), riscv64 24/24 with no
+  gaps found. x86_32 8→21/24 (xmm0-7 register table; symbolic base-less SIB;
+  `jmp *sym(,%reg,scale)`); 3 files still rejected on a related,
+  not-yet-fixed gap (`disp(%base)` with a symbolic displacement, no
+  index/scale). riscv32 is blocked before any parser code runs: no
+  ilp32d-ABI cross-libc-dev package exists in Debian's repos, only the
+  lp64d one riscv64 uses.
 - Add `classify-regression`, `classify-abi`, `classify-compression`
   subcommands for CompCert's other three test suites.
 - Add a differential stage (GNU `as`/`objdump` cross-check) for accepted

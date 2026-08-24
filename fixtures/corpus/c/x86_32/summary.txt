@@ -1,0 +1,6 @@
+total:24
+accepted:21
+rejected:3
+reason:1	.corpus-work/c/x86_32/almabench/output.s:770:8: error[x86.operand]: cannot parse operand a(%eax)
+reason:1	.corpus-work/c/x86_32/nbody/output.s:366:8: error[x86.operand]: cannot parse operand (bodies + 24)(%eax)
+reason:1	.corpus-work/c/x86_32/sha3/output.s:1354:7: error[x86.operand]: cannot parse operand (testvec + 4)(%edx)

@@ -22,7 +22,7 @@ let normalize = function
 
 let asm_exe repo = Fpath.(Repo.path repo / "asm" / "_build" / "default" / "tool" / "asm.exe")
 
-let real_runner repo : runner =
+let real_runner repo (target : Target.t) : runner =
  fun ~generated_s_rel ->
   match
     Tool_process.exec
@@ -30,7 +30,7 @@ let real_runner repo : runner =
          ~stderr:Tool_process.Err_capture ~parsed_output:true ~accepted:Process_status.Any_exit
          ~label:"corpus-classify-parse"
          (Fpath.to_string (asm_exe repo))
-         [ "--target"; "x86_64"; "--dump-source-ast"; generated_s_rel ])
+         [ "--target"; Target.to_string target; "--dump-source-ast"; generated_s_rel ])
   with
   | Ok { Tool_process.status = Process_status.Exited code; stderr; _ } ->
       Exited { code; stderr = Option.value stderr ~default:"" }
@@ -355,15 +355,15 @@ let discover_c_files repo =
         |> List.filter (fun f -> Filename.check_suffix f ".c")
         |> List.sort String.compare)
 
-let compile_entry repo ~compiler ~args ~corpus_work_root file =
+let compile_entry repo ~compiler ~args ~corpus_work_root ~(target : Target.t) file =
+  let target_s = Target.to_string target in
   let stem = Filename.remove_extension (Filename.basename file) in
-  let* dir = Tool_workspace.child_of_recreatable corpus_work_root [ "c"; stem ] in
+  let* dir = Tool_workspace.child_of_recreatable corpus_work_root [ "c"; target_s; stem ] in
   let* () = Tool_workspace.ensure dir in
-  let out_rel = ".corpus-work/c/" ^ stem ^ "/output.s" in
+  let out_rel = ".corpus-work/c/" ^ target_s ^ "/" ^ stem ^ "/output.s" in
   let source_rel = "modules/CompCert/test/c/" ^ file in
   let* () =
-    Ccomp.compile_s ~compiler ~cwd:(Repo.path repo) ~args ~out_rel ~source_rel ~case:stem
-      ~target:Target.X86_64
+    Ccomp.compile_s ~compiler ~cwd:(Repo.path repo) ~args ~out_rel ~source_rel ~case:stem ~target
   in
   let* source_sha256 = Tool_fs.sha256 Fpath.(Repo.path repo // v source_rel) in
   let* generated_sha256 = Tool_fs.sha256 Fpath.(Repo.path repo // v out_rel) in
@@ -399,8 +399,9 @@ let default_restore : restore_step =
       Ok ()
     with Sys_error m -> err ~path:manifest_path Tool_error.Write_file m
 
-let publish_with repo (m : manifest) ~commit_manifest ~commit_summary ~restore =
-  let dest_dir = Repo.corpus_c_x86_64 repo in
+let publish_with repo ~(target : Target.t) (m : manifest) ~commit_manifest ~commit_summary ~restore
+    =
+  let dest_dir = Repo.corpus_c repo target in
   (* After all compilation/classification has already succeeded, and
      idempotent on every later run - this is a brand-new corpus and
      Tool_fs.write never creates a missing parent directory. *)
@@ -429,25 +430,25 @@ let publish_with repo (m : manifest) ~commit_manifest ~commit_summary ~restore =
                    (Fpath.to_string summary_path)
                    (if prior_exists then ", " ^ Fpath.to_string backup else ""))))
 
-let publish repo (m : manifest) =
-  publish_with repo m ~commit_manifest:default_commit ~commit_summary:default_commit
+let publish repo ~target (m : manifest) =
+  publish_with repo ~target m ~commit_manifest:default_commit ~commit_summary:default_commit
     ~restore:default_restore
 
 (* {1 classify-c} *)
 
-let classify_c_core repo ~git ~runner ~compiler =
+let classify_c_core repo ~git ~runner ~compiler ~(target : Target.t) =
   let* () = check_clean_checkout git in
   let* files = discover_c_files repo in
   if files = [] then err Tool_error.Validate "modules/CompCert/test/c contains no .c files"
   else
     let* corpus_work_root = Tool_workspace.corpus_work repo in
     let* () = Tool_workspace.recreate_root corpus_work_root in
-    let args = (Target.config Target.X86_64).Target.ccomp_args in
+    let args = (Target.config target).Target.ccomp_args in
     let* entries =
       List.fold_left
         (fun acc f ->
           let* es = acc in
-          let* e = compile_entry repo ~compiler ~args ~corpus_work_root f in
+          let* e = compile_entry repo ~compiler ~args ~corpus_work_root ~target f in
           Ok (e :: es))
         (Ok []) files
     in
@@ -462,7 +463,7 @@ let classify_c_core repo ~git ~runner ~compiler =
     let header =
       {
         suite = "c";
-        target = "x86_64";
+        target = Target.to_string target;
         ccomp_version;
         ccomp_args = String.concat " " args;
         compcert_revision;
@@ -471,38 +472,41 @@ let classify_c_core repo ~git ~runner ~compiler =
       }
     in
     let manifest = { header; files = records } in
-    let* () = publish repo manifest in
+    let* () = publish repo ~target manifest in
     let accepted =
       List.length (List.filter (fun (r : file_record) -> r.outcome = Rec_accepted) records)
     in
     Ok
-      (Printf.sprintf "corpus classify-c: %d accepted, %d rejected (of %d)" accepted
+      (Printf.sprintf "corpus classify-c-%s: %d accepted, %d rejected (of %d)"
+         (Target.to_string target) accepted
          (List.length records - accepted)
          (List.length records))
 
 let fixture_work_root repo =
   Result.map Tool_workspace.read_path (Tool_workspace.fixture_work repo ~env:Sys.getenv_opt)
 
-let classify_c repo =
+let classify_c repo (target : Target.t) =
   let step =
     let* work_root = fixture_work_root repo in
-    let* () = Ccomp.require_all [ Target.X86_64 ] ~work_root in
-    let compiler = Ccomp.path Target.X86_64 ~work_root in
-    classify_c_core repo ~git:(real_git_probe repo) ~runner:(real_runner repo) ~compiler
+    let* () = Ccomp.require_all [ target ] ~work_root in
+    let compiler = Ccomp.path target ~work_root in
+    classify_c_core repo ~git:(real_git_probe repo) ~runner:(real_runner repo target) ~compiler
+      ~target
   in
   match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
 
 (* {1 corpus check} *)
 
-let check_with repo ~git =
-  let dest_dir = Repo.corpus_c_x86_64 repo in
+let check_with repo ~git (target : Target.t) =
+  let target_s = Target.to_string target in
+  let dest_dir = Repo.corpus_c repo target in
   let manifest_path = Fpath.(dest_dir / "manifest.txt") in
   let summary_path = Fpath.(dest_dir / "summary.txt") in
   let step =
     if not (Sys.file_exists (Fpath.to_string manifest_path)) then
       err ~path:manifest_path Tool_error.Read_file
-        (Printf.sprintf "no manifest at %s - run 'make asm-corpus-classify-c-x86_64' first"
-           (Fpath.to_string manifest_path))
+        (Printf.sprintf "no manifest at %s - run 'make asm-corpus-classify-c-%s' first"
+           (Fpath.to_string manifest_path) target_s)
     else
       let* manifest_text = Tool_fs.read manifest_path in
       let* m = parse_manifest manifest_text in
@@ -513,10 +517,10 @@ let check_with repo ~git =
             (Printf.sprintf "manifest suite is %S, expected \"c\"" m.header.suite)
       in
       let* () =
-        if String.equal m.header.target "x86_64" then Ok ()
+        if String.equal m.header.target target_s then Ok ()
         else
           err Tool_error.Validate
-            (Printf.sprintf "manifest target is %S, expected \"x86_64\"" m.header.target)
+            (Printf.sprintf "manifest target is %S, expected %S" m.header.target target_s)
       in
       let* () =
         if String.equal m.header.shared_header_path "test/endian.h" then Ok ()
@@ -575,10 +579,31 @@ let check_with repo ~git =
         List.length (List.filter (fun (r : file_record) -> r.outcome = Rec_accepted) m.files)
       in
       Ok
-        (Printf.sprintf "corpus check: %d files match (%d accepted, %d rejected)"
+        (Printf.sprintf "corpus check-%s: %d files match (%d accepted, %d rejected)" target_s
            (List.length m.files) accepted
            (List.length m.files - accepted))
   in
   match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
 
-let check repo = check_with repo ~git:(real_git_probe repo)
+(* Every target that has a published manifest so far - not a fixed list of
+   six, since a target's manifest lands only once its classify-c has actually
+   been run for real (corpus.md: "checked-in provenance manifests where CI
+   cannot regenerate them"). A target with no manifest yet is silently
+   skipped here rather than failing check - that is what lets classify-c-arm
+   etc. land one target at a time without check breaking for the rest. *)
+let published_targets repo =
+  List.filter
+    (fun target ->
+      Sys.file_exists (Fpath.to_string Fpath.(Repo.corpus_c repo target / "manifest.txt")))
+    Target.all
+
+let check repo =
+  let git = real_git_probe repo in
+  match published_targets repo with
+  | [] ->
+      Command.of_error
+        (Err.Error.make ~pos:__POS__ ~pp_error:Tool_error.pp
+           (Tool_error.v Tool_error.Read_file
+              "no corpus/c manifest published yet for any target - run a 'corpus \
+               classify-c-<target>' first"))
+  | targets -> Command.accumulate targets ~f:(fun target -> check_with repo ~git target)
