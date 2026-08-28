@@ -29,12 +29,14 @@ this document.
 
 Makefile targets: `make asm-corpus-classify-c-<target>` (one per target, a
 static pattern rule over the same six targets as the fixture goals) and
-`make asm-corpus-check-c`; the latter is part of `asm-ci`.
-`asm/fixtures/corpus/c/x86_64/manifest.txt`/`summary.txt` are committed, from
-a real `classify-c-x86_64` run against CompCert 3.17 (`modules/CompCert` HEAD
-at the revision recorded in the manifest): **24 of 24 files are accepted.**
-The other five targets are not yet classified; see Follow-ups. The prior
-17 rejections were three gaps, all now fixed: a general octal string-escape
+`make asm-corpus-check-c`; the latter is part of `asm-ci`. All six targets are
+now classified and their `manifest.txt`/`summary.txt` committed under
+`asm/fixtures/corpus/c/<target>/`, from real `classify-c-<target>` runs
+against CompCert 3.17 (`modules/CompCert` HEAD at the revision recorded in
+each manifest): x86_64, arm, aarch64, riscv32, and riscv64 each accept
+**24 of 24 files**; x86_32 accepts 21 of 24 (see Follow-ups for the three
+remaining rejections). The x86_64 corpus's prior 17 rejections were three
+gaps, all now fixed: a general octal string-escape
 (`\NNN`, 1-3 digits) in the lexer; `%r8b`-`%r15b` (8-bit REX-extended
 sub-registers, a register-table addition); and `%xmm0`-`%xmm15` plus the
 SSE2 scalar-float instruction family CompCert's x86_64 double/float codegen
@@ -191,18 +193,20 @@ diagnostic rather than silently deleted.
   a closed nine-case ABI-conformance record (`return42`, `trap`, `spin`,
   ...), not an open list of operand-coverage snippets, so a new differential
   case needs its own small fixture design rather than an entry there.
-- `classify-c-arm`/`-aarch64`/`-riscv32`/`-riscv64`/`-x86_32` subcommands are
-  landed (see Commands above) and have been run for real against
-  `modules/CompCert/test/c/`, the same iterative way the x86_64 gaps above
-  were closed: arm 0→24/24 (register-offset addressing; a new VFP
-  double-precision family), aarch64 0→24/24 (`add ..., #:lo12:sym`; FP
-  immediates; register-offset+extend addressing), riscv64 24/24 with no
-  gaps found. x86_32 8→21/24 (xmm0-7 register table; symbolic base-less SIB;
-  `jmp *sym(,%reg,scale)`); 3 files still rejected on a related,
-  not-yet-fixed gap (`disp(%base)` with a symbolic displacement, no
-  index/scale). riscv32 is blocked before any parser code runs: no
-  ilp32d-ABI cross-libc-dev package exists in Debian's repos, only the
-  lp64d one riscv64 uses.
+- All six `classify-c-<target>` subcommands (see Commands above) have now been
+  run for real against `modules/CompCert/test/c/`, the same iterative way the
+  x86_64 gaps above were closed: arm 0→24/24 (register-offset addressing; a
+  new VFP double-precision family), aarch64 0→24/24 (`add ..., #:lo12:sym`;
+  FP immediates; register-offset+extend addressing), riscv64 24/24 with no
+  gaps found, riscv32 24/24 with no gaps found (once the published
+  `riscv32-linux-gnu` toolchain gave it a real `ilp32d`-ABI cross compiler -
+  it no longer shares RV64's GNU-tool prefix or its libc gap; see
+  `asm/docs/riscv-inventory.md`). x86_32 8→21/24 (xmm0-7 register table;
+  symbolic base-less SIB; `jmp *sym(,%reg,scale)`); 3 files still rejected on
+  a related, not-yet-fixed gap (`disp(%base)` with a symbolic displacement, no
+  index/scale, e.g. `a(%eax)`); see `.ai/asm_plan.md` §12's next-steps list
+  for the fix criteria (focused parser/codec test plus GNU-`as` differential
+  evidence before regenerating the manifest).
 - Add `classify-regression`, `classify-abi`, `classify-compression`
   subcommands for CompCert's other three test suites.
 - Add a differential stage (GNU `as`/`objdump` cross-check) for accepted
