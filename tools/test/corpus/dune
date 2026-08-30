@@ -27,3 +27,17 @@
  (deps ../../../tool/asm.exe)
  (action
   (run ./test_corpus_assemble.exe)))
+
+; Corpus_classify_gcc_cmd: same hermetic-plus-one-integration-test shape as
+; test_corpus_classify above, its own classify-c-gcc sibling.
+
+(executable
+ (name test_corpus_classify_gcc)
+ (modes byte native)
+ (libraries compcert_tools err_trace fpath unix))
+
+(rule
+ (alias runtest)
+ (deps ../../../tool/asm.exe)
+ (action
+  (run ./test_corpus_classify_gcc.exe)))

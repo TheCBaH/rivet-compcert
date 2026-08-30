@@ -15,8 +15,12 @@ files) and `test/compression/` (12 files) - `classify-regression`/
 `classify-compression`, below. `test/abi/`'s sources are generator-produced
 (some with an explicit random seed) rather than committed, so it does not fit
 this "hash a committed `.c` file" model and is deliberately not covered; see
-Follow-ups. A GNU `as` differential and execution over the wider corpus are
-also follow-ups; see the bottom of this document.
+Follow-ups. A fourth increment classifies the same `test/c/` corpus a second
+time, compiled with the system cross `gcc` instead of `ccomp`
+(`classify-c-gcc`, below) - independent evidence of this project's real-world
+GNU-syntax coverage, since gcc's own assembly idioms are not the ones `ccomp`
+emits. A GNU `as` differential and execution over the wider corpus are also
+follow-ups; see the bottom of this document.
 
 ## Commands
 
@@ -59,14 +63,27 @@ also follow-ups; see the bottom of this document.
   `asm/fixtures/corpus/compression/<target>/`.
 - `compcert-tools corpus check-regression` / `check-compression` - `check`'s
   cheap-path siblings for those two suites' manifests.
+- `compcert-tools corpus classify-c-gcc-<target>` - `classify-c`'s second,
+  independent-compiler sibling: the identical `test/c/*.c` corpus, compiled
+  with the *system cross `gcc`* instead of `ccomp`, then classified the same
+  parse-level `--dump-source-ast` way. Needs no cross-compiler build (all six
+  cross `gcc` toolchains are already on the container's PATH) and no
+  `modules/CompCert` build - only a clean checkout, to compile from. Published
+  under `asm/fixtures/corpus/c-gcc/<target>/`, with its own manifest header
+  (`gcc-version`/`gcc-args` rather than `ccomp-version`/`ccomp-args`) so a
+  classify-c regression and a classify-c-gcc regression are never conflated.
+  See "classify-c-gcc: a second, independent-compiler corpus" below.
+- `compcert-tools corpus check-c-gcc` - `check`'s cheap-path sibling for
+  `classify-c-gcc`'s manifests.
 
 Makefile targets: `make asm-corpus-classify-c-<target>` / `make
 asm-corpus-assemble-c-<target>` / `make asm-corpus-classify-regression-<target>`
-/ `make asm-corpus-classify-compression-<target>` (one per target each, static
-pattern rules over the same six targets as the fixture goals) and `make
-asm-corpus-check-c` / `make asm-corpus-check-assemble-c` / `make
-asm-corpus-check-regression` / `make asm-corpus-check-compression`; all four
-`check` targets are part of `asm-ci`. All six targets are classified and their
+/ `make asm-corpus-classify-compression-<target>` / `make
+asm-corpus-classify-c-gcc-<target>` (one per target each, static pattern rules
+over the same six targets as the fixture goals) and `make asm-corpus-check-c` /
+`make asm-corpus-check-assemble-c` / `make asm-corpus-check-regression` / `make
+asm-corpus-check-compression` / `make asm-corpus-check-c-gcc`; all five `check`
+targets are part of `asm-ci`. All six targets are classified and their
 `manifest.txt`/`summary.txt` committed under `asm/fixtures/corpus/c/<target>/`,
 from real `classify-c-<target>` runs against CompCert 3.17 (`modules/CompCert`
 HEAD at the revision recorded in each manifest): x86_64, x86_32, arm,
@@ -216,6 +233,83 @@ hung `classify-regression` run - and, since it is in `asm-ci`, a hung CI
 pipeline. The underlying performance pathology itself is unfixed; see
 Follow-ups.
 
+## `classify-c-gcc`: a second, independent-compiler corpus
+
+Every classification above compiles `test/c/*.c` with CompCert's own `ccomp`.
+`classify-c-gcc` compiles the *identical* 24 files with the *system cross
+`gcc`* instead - a genuinely different code generator, whose GNU-syntax idioms
+(CFI directives, `$symbol`-style symbolic immediates, frame-pointer-based
+prologues, ...) are not the ones `ccomp` happens to emit. Its accepted/
+rejected split is therefore new, independent evidence of this project's
+real-world GNU-assembler compatibility, not a restatement of `classify-c`'s
+own findings - and, unlike every `classify-*`/`assemble-*` command above, it
+needs no `make asm-cross-setup`: all six cross `gcc` toolchains are already on
+the container's PATH (five Debian cross packages plus the published riscv32
+toolchain `asm-cross-setup`'s own riscv32 leg installs), so `classify-c-gcc`
+depends on nothing but a clean `modules/CompCert` checkout to compile from.
+`Gcc` (`asm/tools/lib/gcc.ml`) resolves each target's `gcc` by bare name
+through the child's PATH - `Gnu_tools.installed`'s own convention, applied to
+`gcc` instead of `as`/`ld` - and `classify-c-gcc-<target>`'s `-S` flags are
+each target's `ccomp_args` (`-fno-pie`, plus `-marm` on arm) with RISC-V
+additionally pinned to `-march=rv<32|64>imafd -mabi=<ilp32d|lp64d> -mno-relax`
+- without it, the riscv64 cross-package defaults to
+`rv64imafdc_zicsr_zifencei` (compressed instructions included), a strictly
+wider ISA than the `imafd` profile every other target-aware tool in this
+project assumes, and would silently test the wrong instruction set.
+
+First real run against all six targets (CompCert 3.17, `modules/CompCert`
+HEAD at the revision each manifest records; every `.c` file compiles cleanly
+with `gcc` on every target - 24/24, no `outcome:compile-failed` case exists in
+this manifest format at all):
+
+| target  | accepted | rejected |
+|---------|---------:|---------:|
+| x86_64  |        0 |       24 |
+| x86_32  |        0 |       24 |
+| aarch64 |        0 |       24 |
+| arm     |        6 |       18 |
+| riscv32 |       21 |        3 |
+| riscv64 |       21 |        3 |
+
+Grouped by capability (each `summary.txt` has the full per-file detail):
+
+- **A universal lexer gap, on every target: `\b`/`\f` string escapes.**
+  `aes.c` (`\b`) and `sha3.c`/`siphash24.c` (`\f`) fail identically on all six
+  targets - the lexer's string-escape table
+  (`asm/lib/asm_syntax/lexer.ml`, `scan_string`) currently recognizes only
+  `\n \t \r \\ \"` and a GAS octal escape (`\NNN`, added for `classify-c`'s own
+  `aes.c` finding - see above); `\b` (backspace, `0x08`) and `\f` (form feed,
+  `0x0C`) are the two-letter gap gcc's own string-literal escaping reaches
+  that ccomp's never did. This is riscv32/riscv64's *entire* remaining
+  rejection count (21/24 → the only three files apiece), and the
+  next-smallest fixture for it: two more `Buffer.add_char` branches, not a new
+  concept.
+- **x86 (`x86_64`, `x86_32`): a bare symbolic `$symbol`/`$symbol+offset`
+  immediate operand** (`movl $.LC0, %edi`, `addq $bodies+24, %rax`, ...) -
+  dominant, on almost every rejected file on both x86 targets. `ccomp` always
+  materializes a symbol address through `lea`/RIP-relative addressing or a
+  relocation-carrying `mov`; gcc's `$symbol` form is a symbolic *immediate*,
+  a shape `x86_family_encode.ml`'s immediate-operand parser does not accept at
+  all today (only a numeric literal). Not yet isolated to a minimal fixture.
+- **ARM/AArch64: pre-indexed load/store with immediate writeback**
+  (`str fp, [sp, #-4]!` on arm, `stp x29, x30, [sp, -48]!` on aarch64) -
+  dominant on both targets. This is gcc's own frame-pointer-based prologue
+  idiom; `ccomp`'s codegen never uses register writeback, so
+  `classify-c`/`classify-regression` never exercised it. A structurally new
+  addressing-mode variant (`[Rn, #imm]!`), not yet isolated to a minimal
+  fixture.
+- **ARM only: VFP floating-point immediate literals** (`vmov.f32 s0, #2.0e+0`)
+  - a handful of files (`binarytrees.c`, `fft.c`, `fftsp.c`, `mandelbrot.c`,
+    `nbody.c`), a different reason from the writeback gap above.
+- **x86_32 only: the x87 stack-register operand** (`%st(1)`) - one file
+  (`almabench.c`), alongside the two shared gaps above.
+
+None of these five gaps are fixed here - this section is `classify-c-gcc`'s
+own first-increment measurement, the same "classify before deciding what to
+fix" discipline `classify-c`'s and `classify-regression`'s own first runs
+followed (see "Capability ladder" below, which this corpus does not
+participate in yet - it is new evidence, not yet triaged into that grouping).
+
 ## The `classify-c` manifest format
 
 `asm/fixtures/corpus/c/x86_64/manifest.txt`: a fixed six-line header, then
@@ -319,6 +413,42 @@ files grouped by reason (`reason:<count><TAB><text>`, sorted) and
 (`compile-reason:<count><TAB><text>`, sorted) - two separate groups, since a
 file's `.c` source not compiling at all is different evidence from its
 generated `.s` not parsing.
+
+## The `classify-c-gcc` manifest format
+
+`asm/fixtures/corpus/c-gcc/x86_64/manifest.txt`: the same fixed six-line
+header shape as `classify-c`'s (`suite` is the literal `c-gcc`), but with
+`gcc-version`/`gcc-args` in place of `ccomp-version`/`ccomp-args` - a
+deliberately separate header from `classify-c`'s own `header` type
+(`Corpus_classify_gcc_cmd`, not `Corpus_classify_cmd`), so the two are never
+byte-for-byte confusable even though their shapes are structurally close. Only
+two outcomes exist, `accepted`/`rejected` - there is no `compile-failed`, since
+gcc compiles every `test/c/*.c` file cleanly on every target:
+
+```
+suite:c-gcc
+target:x86_64
+gcc-version:<first line of `<toolprefix>gcc --version`>
+gcc-args:<space-joined gcc flags>
+compcert-revision:<git -C modules/CompCert rev-parse HEAD>
+shared-header:test/endian.h	sha256:<hex>
+modules/CompCert/test/c/return42.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted
+modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>
+```
+
+`asm/fixtures/corpus/c-gcc/x86_64/summary.txt`: `total`/`accepted`/`rejected`
+counts, then rejected files grouped by exact reason text - `classify-c`'s own
+two-outcome summary shape, rendered by `Corpus_classify_gcc_cmd`'s own
+`render_summary` rather than `Corpus_classify_cmd`'s.
+
+`check-c-gcc` verifies each `c-gcc/<target>/manifest.txt` against the same
+eight-step list "What `check` verifies" describes below, `suite` literally
+`"c-gcc"` at step 2 and step 4's inventory compared against
+`modules/CompCert/test/c/*.c` (the same files `classify-c` itself classifies -
+`classify-c-gcc` is a different compiler over the same corpus, not a
+different corpus). Own manifest, own destination, own errors - a
+`classify-c` regression and a `classify-c-gcc` regression are never
+conflated.
 
 ## What `check` verifies
 
@@ -511,6 +641,16 @@ scope/gap decision that later follow-up work builds on.
 
 ## Follow-ups
 
+- `classify-c-gcc`'s five findings (see "`classify-c-gcc`: a second,
+  independent-compiler corpus" above) are not yet triaged into "Capability
+  ladder"'s scope-exclusion-or-real-gap grouping, and none are fixed here -
+  this is `classify-c-gcc`'s own first-increment measurement. The universal
+  `\b`/`\f` lexer gap is the smallest and highest-signal of the five (it is
+  riscv32/riscv64's *entire* remaining rejection count, two more
+  `Buffer.add_char` branches in `scan_string`) and a reasonable next pick; the
+  x86 `$symbol` immediate, the ARM/AArch64 pre-indexed-writeback addressing
+  mode, the ARM VFP float-immediate operand, and the x86_32 `%st(N)` operand
+  are each their own, larger, not-yet-isolated fixture.
 - ARM `pop {reglist}` (LDM-class - a genuinely different encoding from
   `push`'s STM-class one, not a shared form with a direction bit): evidenced
   by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/`i64_umod`),

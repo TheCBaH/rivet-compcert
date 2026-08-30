@@ -1,0 +1,27 @@
+total:24
+accepted:0
+rejected:24
+reason:1	.corpus-work/c-gcc/aarch64/aes/output.s:4984:10: error[lex]: unknown escape \\b
+reason:1	.corpus-work/c-gcc/aarch64/almabench/output.s:1293:16: error[aarch64.operand]: cannot parse operand [sp -48]!
+reason:1	.corpus-work/c-gcc/aarch64/binarytrees/output.s:10:16: error[aarch64.operand]: cannot parse operand [sp -64]!
+reason:1	.corpus-work/c-gcc/aarch64/bisect/output.s:15:16: error[aarch64.operand]: cannot parse operand [sp -48]!
+reason:1	.corpus-work/c-gcc/aarch64/chomp/output.s:36:16: error[aarch64.operand]: cannot parse operand [sp -48]!
+reason:1	.corpus-work/c-gcc/aarch64/fannkuch/output.s:14:16: error[aarch64.operand]: cannot parse operand [sp -112]!
+reason:1	.corpus-work/c-gcc/aarch64/fft/output.s:10:16: error[aarch64.operand]: cannot parse operand [sp -256]!
+reason:1	.corpus-work/c-gcc/aarch64/fftsp/output.s:10:16: error[aarch64.operand]: cannot parse operand [sp -192]!
+reason:1	.corpus-work/c-gcc/aarch64/fftw/output.s:12:10: error[aarch64.operand]: cannot parse operand [sp 56]
+reason:1	.corpus-work/c-gcc/aarch64/fib/output.s:10:16: error[aarch64.operand]: cannot parse operand [sp -48]!
+reason:1	.corpus-work/c-gcc/aarch64/integr/output.s:11:10: error[aarch64.operand]: cannot parse operand [sp 8]
+reason:1	.corpus-work/c-gcc/aarch64/knucleotide/output.s:45:10: error[aarch64.operand]: cannot parse operand [sp 8]
+reason:1	.corpus-work/c-gcc/aarch64/lists/output.s:10:16: error[aarch64.operand]: cannot parse operand [sp -48]!
+reason:1	.corpus-work/c-gcc/aarch64/mandelbrot/output.s:15:16: error[aarch64.operand]: cannot parse operand [sp -144]!
+reason:1	.corpus-work/c-gcc/aarch64/nbody/output.s:10:16: error[aarch64.operand]: cannot parse operand [sp -128]!
+reason:1	.corpus-work/c-gcc/aarch64/nsieve/output.s:9:16: error[aarch64.operand]: cannot parse operand [sp -64]!
+reason:1	.corpus-work/c-gcc/aarch64/nsievebits/output.s:9:16: error[aarch64.operand]: cannot parse operand [sp -64]!
+reason:1	.corpus-work/c-gcc/aarch64/perlin/output.s:275:10: error[aarch64.operand]: cannot parse operand [sp 8]
+reason:1	.corpus-work/c-gcc/aarch64/qsort/output.s:10:16: error[aarch64.operand]: cannot parse operand [sp -48]!
+reason:1	.corpus-work/c-gcc/aarch64/sha1/output.s:11:16: error[aarch64.operand]: cannot parse operand [sp -80]!
+reason:1	.corpus-work/c-gcc/aarch64/sha3/output.s:1315:10: error[lex]: unknown escape \\f
+reason:1	.corpus-work/c-gcc/aarch64/siphash24/output.s:834:9: error[lex]: unknown escape \\f
+reason:1	.corpus-work/c-gcc/aarch64/spectral/output.s:11:10: error[aarch64.operand]: cannot parse operand [sp 12]
+reason:1	.corpus-work/c-gcc/aarch64/vmach/output.s:25:16: error[aarch64.operand]: cannot parse operand [sp -176]!

@@ -1,0 +1,27 @@
+total:24
+accepted:0
+rejected:24
+reason:1	.corpus-work/c-gcc/x86_64/aes/output.s:4757:10: error[lex]: unknown escape \\b
+reason:1	.corpus-work/c-gcc/x86_64/almabench/output.s:1363:7: error[x86.operand]: cannot parse operand $a
+reason:1	.corpus-work/c-gcc/x86_64/binarytrees/output.s:232:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/bisect/output.s:30:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/chomp/output.s:417:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/fannkuch/output.s:77:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/fft/output.s:786:7: error[x86.operand]: cannot parse operand $.LC10
+reason:1	.corpus-work/c-gcc/x86_64/fftsp/output.s:793:7: error[x86.operand]: cannot parse operand $.LC10
+reason:1	.corpus-work/c-gcc/x86_64/fftw/output.s:299:7: error[x86.operand]: cannot parse operand $s.0
+reason:1	.corpus-work/c-gcc/x86_64/fib/output.s:76:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/integr/output.s:89:7: error[x86.operand]: cannot parse operand $square
+reason:1	.corpus-work/c-gcc/x86_64/knucleotide/output.s:103:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/lists/output.s:216:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/mandelbrot/output.s:44:7: error[x86.operand]: cannot parse operand $.LC1
+reason:1	.corpus-work/c-gcc/x86_64/nbody/output.s:547:7: error[x86.operand]: cannot parse operand $bodies+24
+reason:1	.corpus-work/c-gcc/x86_64/nsieve/output.s:127:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/nsievebits/output.s:131:7: error[x86.operand]: cannot parse operand $.LC0
+reason:1	.corpus-work/c-gcc/x86_64/perlin/output.s:787:7: error[x86.operand]: cannot parse operand $.LC9
+reason:1	.corpus-work/c-gcc/x86_64/qsort/output.s:265:7: error[x86.operand]: cannot parse operand $cmpint
+reason:1	.corpus-work/c-gcc/x86_64/sha1/output.s:255:7: error[x86.operand]: cannot parse operand (%r14 %rax)
+reason:1	.corpus-work/c-gcc/x86_64/sha3/output.s:1316:10: error[lex]: unknown escape \\f
+reason:1	.corpus-work/c-gcc/x86_64/siphash24/output.s:537:9: error[lex]: unknown escape \\f
+reason:1	.corpus-work/c-gcc/x86_64/spectral/output.s:348:7: error[x86.operand]: cannot parse operand $.LC2
+reason:1	.corpus-work/c-gcc/x86_64/vmach/output.s:29:7: error[x86.operand]: cannot parse operand $stack+2048

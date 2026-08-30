@@ -1,0 +1,6 @@
+total:24
+accepted:21
+rejected:3
+reason:1	.corpus-work/c-gcc/riscv32/aes/output.s:5233:10: error[lex]: unknown escape \\b
+reason:1	.corpus-work/c-gcc/riscv32/sha3/output.s:2407:10: error[lex]: unknown escape \\f
+reason:1	.corpus-work/c-gcc/riscv32/siphash24/output.s:2409:9: error[lex]: unknown escape \\f
