@@ -341,12 +341,15 @@ Grouped by capability (each `summary.txt` has the full per-file detail):
   it: `Mem.t` models an explicit offset, and STM/LDM's writeback amount is
   implicit, four bytes per listed register) - a new `Operand.Reg_writeback`
   parses the bare `Rn!` base; the `{reglist}` half was already covered by the
-  existing GPR `Reglist` grammar. Parse-level only, the same scope as
-  `vpush` above: `stmia`/`ldmia`'s own mnemonics aren't even in the opcode
+  existing GPR `Reglist` grammar. Parse-level only at the time, the same scope
+  as `vpush` above: `stmia`/`ldmia`'s own mnemonics weren't even in the opcode
   table, and `dump-source-ast` never validates a mnemonic, only its
   operands (`pop {reglist}` itself, with no `!`-less base, already parsed
   before this fix, for the same reason). The `gas_frontier.t` runtime-helper
-  corpus's own already-documented Follow-up, now closed too. 1 file.
+  corpus's own already-documented Follow-up, closed too. 1 file. Since fully
+  closed: `stmia`/`ldmia`/`pop` now have real `Opcode.t` entries and an
+  increment-after LDM-class lowering/encoding, distinct from `push`'s
+  STMDB-class one - see the Follow-ups entry below.
 - **x86_32 only, fixed: the x87 stack-register operand** (`%st(1)`, one file,
   `almabench.c`) - `%st`/`%st(n)` now parse (a new `st` register-table entry
   plus a dedicated `[Register "st"; Lparen; Int n; Rparen]` parser pattern
@@ -706,15 +709,25 @@ scope/gap decision that later follow-up work builds on.
   grouping below either - closing them further (actually lowering/encoding a
   symbolic immediate, an x87 mnemonic, or real STM/LDM-class instructions) is
   unstarted.
-- ARM `stmia`/`pop {reglist}` (LDM-class - a genuinely different encoding
-  from `push`'s STM-class one, not a shared form with a direction bit):
-  evidenced by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/
-  `i64_umod`) and now also by classify-c-gcc's `aes.c` (`stmia r3!,
-  {r0, r1}`). The operand shapes (`{reglist}` and, now, the bare `Rn!`
-  writeback base) parse - enough to close `classify-c-gcc`, above - but no
-  `Opcode.t` entry or lowering exists for `stmia`/`ldmia`/`pop` themselves;
-  actually assembling one of these instructions is still not implemented.
-  Not fixed here; see "Capability ladder" above.
+- ARM `stmia`/`ldmia`/`pop {reglist}` (LDM-class - a genuinely different
+  encoding from `push`'s STM-class one, not a shared form with a direction
+  bit): evidenced by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/
+  `i64_umod`) and by classify-c-gcc's `aes.c` (`stmia r3!, {r0, r1}`). Now
+  fixed: `Opcode.Stmia`/`Opcode.Ldmia`/`Opcode.Pop` all lower into one
+  `Lowered.Ldm` (cond, load, rn, regs), a 32-bit word with P=0/U=0/S=0/W=1
+  fixed (increment-after, writeback forced - the only evidenced shape) and
+  L/Rn/reglist variable. `pop` lowers into the same form with `rn` fixed to
+  `sp`, mirroring `push`'s own relationship to `stmdb sp!`; decoding
+  collapses a load with `rn = sp` and two or more registers back to `pop`,
+  matching real `objdump`'s own alias choice (verified: `ldmia sp!, {r0}` -
+  a single register - disassembles as `ldmfd sp!, {r0}`, not `pop {r0}`,
+  since real `pop {r0}` is the unrelated `ldr r0, [sp], #4` encoding; `pop`
+  here keeps `push`'s existing two-or-more-registers scope for the same
+  reason). Byte-for-byte checked against real
+  arm-linux-gnueabihf-as/objdump. With this fixed, `gas_frontier.t`'s
+  `i64_udiv`/`i64_umod` now progress past `pop` to a later, separate
+  finding: an undefined `__compcert_i64_udivmod` reference (an
+  `image.undefined` multi-file-linking gap, not an assembler one).
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
   decoder already handle it (the SIB "no base" codec alternative uses the
   same fixup-carrying displacement codec as RIP-relative addressing), only
