@@ -273,42 +273,71 @@ this manifest format at all):
 
 Grouped by capability (each `summary.txt` has the full per-file detail):
 
-- **A universal lexer gap, on every target: `\b`/`\f` string escapes.**
-  `aes.c` (`\b`) and `sha3.c`/`siphash24.c` (`\f`) fail identically on all six
-  targets - the lexer's string-escape table
-  (`asm/lib/asm_syntax/lexer.ml`, `scan_string`) currently recognizes only
+- **A universal lexer gap, on every target: `\b`/`\f` string escapes - fixed.**
+  `aes.c` (`\b`) and `sha3.c`/`siphash24.c` (`\f`) failed identically on all
+  six targets - the lexer's string-escape table
+  (`asm/lib/asm_syntax/lexer.ml`, `scan_string`) recognized only
   `\n \t \r \\ \"` and a GAS octal escape (`\NNN`, added for `classify-c`'s own
   `aes.c` finding - see above); `\b` (backspace, `0x08`) and `\f` (form feed,
-  `0x0C`) are the two-letter gap gcc's own string-literal escaping reaches
-  that ccomp's never did. This is riscv32/riscv64's *entire* remaining
-  rejection count (21/24 → the only three files apiece), and the
-  next-smallest fixture for it: two more `Buffer.add_char` branches, not a new
-  concept.
-- **x86 (`x86_64`, `x86_32`): a bare symbolic `$symbol`/`$symbol+offset`
-  immediate operand** (`movl $.LC0, %edi`, `addq $bodies+24, %rax`, ...) -
-  dominant, on almost every rejected file on both x86 targets. `ccomp` always
-  materializes a symbol address through `lea`/RIP-relative addressing or a
-  relocation-carrying `mov`; gcc's `$symbol` form is a symbolic *immediate*,
-  a shape `x86_family_encode.ml`'s immediate-operand parser does not accept at
-  all today (only a numeric literal). Not yet isolated to a minimal fixture.
-- **ARM/AArch64: pre-indexed load/store with immediate writeback**
+  `0x0C`) were the two-letter gap gcc's own string-literal escaping reaches
+  that ccomp's never did - checked against real `x86_64-linux-gnu-as`:
+  `.ascii "a\bc\fd"` assembles to `61 08 63 0c 64`. This was riscv32/riscv64's
+  *entire* remaining rejection count (21/24 → 24/24).
+- **x86 (`x86_64`, `x86_32`) - fixed, three separate gaps.** A bare symbolic
+  `$symbol`/`$symbol+offset` immediate operand (`movl $.LC0, %edi`,
+  `addq $bodies+24, %rax`, `pushl $sym`) was dominant on both targets - `ccomp`
+  always materializes a symbol address through `lea`/RIP-relative addressing
+  or a relocation-carrying `mov`, where gcc's `$symbol` is a symbolic
+  *immediate*; parses now (`Operand.Imm_sym`), though no `lower_instruction`
+  arm accepts it yet - it falls to that match's own `No_form` catch-all rather
+  than encoding, so this is parse-level progress only, same as `classify-c`'s
+  own scope. `(%base,%index)` with the scale omitted (GAS defaults it to 1)
+  and x86_32's own `%ah`/`%ch`/`%dh`/`%bh` legacy high-byte registers (the
+  register-4-7 table had been borrowed whole from x86_64's REX-bearing one,
+  which cannot exist without a REX byte) closed the rest: x86_64 0→24/24,
+  x86_32 0→24/24.
+- **ARM/AArch64: pre-indexed load/store with immediate writeback - fixed for
+  the single-register `str`/`ldr` case, and for `stp`.**
   (`str fp, [sp, #-4]!` on arm, `stp x29, x30, [sp, -48]!` on aarch64) -
-  dominant on both targets. This is gcc's own frame-pointer-based prologue
-  idiom; `ccomp`'s codegen never uses register writeback, so
-  `classify-c`/`classify-regression` never exercised it. A structurally new
-  addressing-mode variant (`[Rn, #imm]!`), not yet isolated to a minimal
-  fixture.
-- **ARM only: VFP floating-point immediate literals** (`vmov.f32 s0, #2.0e+0`)
-  - a handful of files (`binarytrees.c`, `fft.c`, `fftsp.c`, `mandelbrot.c`,
-    `nbody.c`), a different reason from the writeback gap above.
-- **x86_32 only: the x87 stack-register operand** (`%st(1)`) - one file
-  (`almabench.c`), alongside the two shared gaps above.
+  `ccomp`'s codegen never uses register writeback, so `classify-c`/
+  `classify-regression` never exercised it. On aarch64, `Opcode.Stp` with
+  pre-index writeback was *already fully implemented* in the encoder - the
+  real blocker turned out to be a second, much bigger gap the `stp` framing
+  understated: gcc's aarch64 backend never writes the immediate's leading
+  `#` at all (5156 of 5156 bracket-immediate offsets in the corpus omit it),
+  so even a plain `ldr x0, [sp, 16]` never parsed. Making `#` optional
+  (GNU accepts it either way, confirmed against real `as`) for every affected
+  shape - memory offsets, the register-offset shift amount, the ADD/SUB
+  extended-register amount, and FP immediates (which needed their own second
+  fix: every FP literal in the corpus is scientific notation, `1.0e+0`/
+  `5.0e-1`, a shape nothing parsed at all before) - took aarch64 0→24/24. ARM's
+  own `str`/`ldr` writeback (`Lowered.Ldst_imm` gained a real `writeback`
+  field; the codec's `W` bit was a hard-coded 0) took arm 6→13/24; ARM's
+  remaining rejections are a *different* capability (below), not this one.
+- **ARM only, still open: VFP floating-point immediate literals**
+  (`vmov.f32 s0, #2.0e+0`) - several files (`binarytrees.c`, `fft.c`,
+  `fftsp.c`, `mandelbrot.c`, `nbody.c`, `bisect.c`, `integr.c`, `perlin.c`,
+  `spectral.c`).
+- **ARM only, still open: `vpush {dN, ...}`** (`almabench.c`'s
+  `vpush.64 {d8, d9}`) - a D-register reglist push, structurally unrelated to
+  the already-supported GPR `push {reglist}` (falls through to the GPR
+  Reglist grammar today, "unknown register d8").
+- **ARM only, still open: `ldm`/`pop {reglist}`'s own LDM-class writeback**
+  (a bare `Rn!` base register with no brackets, e.g. `r3!` - a genuinely
+  different grammar from `str`/`ldr`'s bracketed `[Rn, #imm]!` this section
+  just closed) - the `gas_frontier.t` runtime-helper corpus's own
+  already-documented Follow-up, now also classify-c-gcc-evidenced
+  (`aes.c`/`fftw.c`).
+- **x86_32 only, fixed: the x87 stack-register operand** (`%st(1)`, one file,
+  `almabench.c`) - `%st`/`%st(n)` now parse (a new `st` register-table entry
+  plus a dedicated `[Register "st"; Lparen; Int n; Rparen]` parser pattern
+  synthesizing `st(n)`), though no x87 mnemonic is in the M1 instruction table
+  at all yet, so this is parse-level only, the same way `$symbol` is above.
 
-None of these five gaps are fixed here - this section is `classify-c-gcc`'s
-own first-increment measurement, the same "classify before deciding what to
-fix" discipline `classify-c`'s and `classify-regression`'s own first runs
-followed (see "Capability ladder" below, which this corpus does not
-participate in yet - it is new evidence, not yet triaged into that grouping).
+Current state (real runs, all six targets): x86_64 24/24, x86_32 24/24,
+aarch64 24/24, riscv32 24/24, riscv64 24/24, arm 13/24 - arm's own remaining
+11 rejections are the three still-open findings just above (VFP float
+immediates, `vpush {dN}`, `ldm`/`pop` writeback), none of them fixed here.
 
 ## The `classify-c` manifest format
 
@@ -641,16 +670,19 @@ scope/gap decision that later follow-up work builds on.
 
 ## Follow-ups
 
-- `classify-c-gcc`'s five findings (see "`classify-c-gcc`: a second,
-  independent-compiler corpus" above) are not yet triaged into "Capability
-  ladder"'s scope-exclusion-or-real-gap grouping, and none are fixed here -
-  this is `classify-c-gcc`'s own first-increment measurement. The universal
-  `\b`/`\f` lexer gap is the smallest and highest-signal of the five (it is
-  riscv32/riscv64's *entire* remaining rejection count, two more
-  `Buffer.add_char` branches in `scan_string`) and a reasonable next pick; the
-  x86 `$symbol` immediate, the ARM/AArch64 pre-indexed-writeback addressing
-  mode, the ARM VFP float-immediate operand, and the x86_32 `%st(N)` operand
-  are each their own, larger, not-yet-isolated fixture.
+- `classify-c-gcc`'s first-increment findings (see "`classify-c-gcc`: a
+  second, independent-compiler corpus" above) are now mostly closed:
+  x86_64/x86_32/aarch64/riscv32/riscv64 all reach 24/24. ARM sits at 13/24,
+  gated by three still-open, separate capability slices - VFP floating-point
+  immediate literals, `vpush {dN, ...}` (a D-register reglist push, unrelated
+  to the already-supported GPR one), and `ldm`/`pop {reglist}`'s own
+  LDM-class writeback (a bare `Rn!` base with no brackets, structurally
+  different from the now-supported bracketed `str`/`ldr` writeback) - none
+  fixed here. None of the closed findings have been triaged into "Capability
+  ladder"'s scope-exclusion-or-real-gap grouping below either; `x86.lower`'s
+  `Operand.Imm_sym`/`x86.simplify`'s `%st(n)` are parse-level only, same as
+  `classify-c`'s own scope note - closing them further (actually lowering/
+  encoding a symbolic immediate, adding an x87 mnemonic) is unstarted.
 - ARM `pop {reglist}` (LDM-class - a genuinely different encoding from
   `push`'s STM-class one, not a shared form with a direction bit): evidenced
   by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/`i64_umod`),

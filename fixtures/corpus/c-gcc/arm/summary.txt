@@ -1,21 +1,14 @@
 total:24
-accepted:6
-rejected:18
-reason:1	.corpus-work/c-gcc/arm/aes/output.s:2651:10: error[arm.operand]: cannot parse operand [sp #-4]!
+accepted:13
+rejected:11
+reason:1	.corpus-work/c-gcc/arm/aes/output.s:4881:8: error[arm.operand]: cannot parse operand r3!
 reason:1	.corpus-work/c-gcc/arm/almabench/output.s:1358:11: error[arm.operand]: unknown register d8
 reason:1	.corpus-work/c-gcc/arm/binarytrees/output.s:257:15: error[arm.operand]: cannot parse operand #2.0e+0
-reason:1	.corpus-work/c-gcc/arm/bisect/output.s:94:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/chomp/output.s:98:10: error[arm.operand]: cannot parse operand [sp #-4]!
+reason:1	.corpus-work/c-gcc/arm/bisect/output.s:337:15: error[arm.operand]: cannot parse operand #5.0e-1
 reason:1	.corpus-work/c-gcc/arm/fft/output.s:124:15: error[arm.operand]: cannot parse operand #3.0e+0
 reason:1	.corpus-work/c-gcc/arm/fftsp/output.s:119:16: error[arm.operand]: cannot parse operand #3.0e+0
-reason:1	.corpus-work/c-gcc/arm/fftw/output.s:24:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/integr/output.s:23:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/knucleotide/output.s:425:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/lists/output.s:105:10: error[arm.operand]: cannot parse operand [sp #-4]!
+reason:1	.corpus-work/c-gcc/arm/integr/output.s:105:15: error[arm.operand]: cannot parse operand #1.0e+0
 reason:1	.corpus-work/c-gcc/arm/mandelbrot/output.s:90:15: error[arm.operand]: cannot parse operand #1.5e+0
 reason:1	.corpus-work/c-gcc/arm/nbody/output.s:247:15: error[arm.operand]: cannot parse operand #5.0e-1
-reason:1	.corpus-work/c-gcc/arm/perlin/output.s:287:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/qsort/output.s:160:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/sha1/output.s:318:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/sha3/output.s:1782:10: error[arm.operand]: cannot parse operand [sp #-4]!
-reason:1	.corpus-work/c-gcc/arm/spectral/output.s:23:10: error[arm.operand]: cannot parse operand [sp #-4]!
+reason:1	.corpus-work/c-gcc/arm/perlin/output.s:296:15: error[arm.operand]: cannot parse operand #6.0e+0
+reason:1	.corpus-work/c-gcc/arm/spectral/output.s:45:15: error[arm.operand]: cannot parse operand #1.0e+0
