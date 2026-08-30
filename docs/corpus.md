@@ -675,9 +675,85 @@ gaps:
    `f2 0f 10 05 <disp32>`, `movss .Lc, %xmm1` -> `f3 0f 10 0d <disp32>`, both
    `R_386_32`-relocated, the same base-less-disp32 ModR/M shape as `lea`. All
    three files now reach `blocked` (libc-only). `fstpl`/`fstps`/`fldl` (x87
-   double/single load-store) still recur 8 times unchanged; `shldl`
-   (double-precision shift) still recurs twice unchanged - the only two
-   real-gap reasons left in this corpus's x86_32 `assemble-c` results.
+   double/single load-store, 8 recurrences) is now **fixed** too: no x87
+   mnemonic was in `Opcode.t` at all before this, so it needed a new
+   `Lowered.Fpu_mem { op; mem }` (opcode 0xD9/0xDD plus a ModR/M-reg
+   extension, exactly the shape `Alu_r_rm`'s own `op`-carrying constructor
+   already uses - `ext = 0` for `fldl`'s load, `ext = 3` for
+   `fstpl`/`fstps`'s store-and-pop) - a bare `Mem.t` rather than the general
+   `Rm.t` every GPR/xmm form uses, since the mod=11 ModR/M shape this opcode
+   family also permits means an `%st(n)` register operand instead, which no
+   fixture selects. Every recurrence in this corpus is `disp(%esp)`.
+   Byte-checked against real i686-linux-gnu-as: `fldl 8(%esp)` assembles to
+   `dd 44 24 08`, `fstpl 24(%esp)` to `dd 5c 24 18`, `fstps 52(%esp)` to
+   `d9 5c 24 34`. Regenerating x86_32's `assemble-c` manifest with this fix
+   moved it from 13 blocked/11 rejected to 22 blocked/2 rejected: all 8
+   `fldl`/`fstpl`/`fstps` files now reach `blocked` (libc-only), and so does
+   a ninth this fix unmasked - see `xorpd` below. `shldl` (double-precision
+   shift) still recurs twice unchanged - the only real-gap reason left in
+   this corpus's x86_32 `assemble-c` results.
+
+   Regenerating also surfaced `xorpd __negd_mask, %xmmN` (ccomp's own
+   sign-flip idiom for float negation/`fabs`) as the corpus's new
+   highest-signal reason (6 recurrences) once `fldl` stopped masking it in
+   the same files - now **fixed** too, the same bare-symbol-source duality
+   as `movsd`/`movss` below, on `Xorpd` specifically (the only binop
+   mnemonic this corpus evidences it for). Byte-checked against real
+   i686-linux-gnu-as: `xorpd sym, %xmm5` assembles to `66 0f 57 2d <disp32>`
+   with an `R_386_32` relocation.
+
+   Fixing `xorpd` surfaced a real, previously-uncaught bug in the `movsd`/
+   `movss` bare-symbol-source fix below (present since it landed earlier
+   this session, not introduced by `xorpd`): `expr_of_lowered` had no case
+   for `Sse_binop_r_rm`/`Sse_mov_r_rm`/`Sse_mov_rm_r`, so a symbolic `Mem`
+   built through any of them never registered its fixup expression - the
+   placeholder disp32 byte-checks correctly against real `as` (which only
+   proves the *text* is valid GAS syntax) but this project's own image
+   binding silently left the placeholder at its all-zero value instead of
+   patching in the symbol's real address, with no diagnostic anywhere. A
+   direct test through this project's own tool (not just real `as`) caught
+   it: `movsd f, %xmm0` decoded back as `movsd 0, %xmm0` instead of the
+   resolved address every other symbolic form prints. Fixed by adding all
+   three constructors to the same `disp_expr rm` case the GPR forms already
+   share (`asm/test/targets/test_targets.ml`'s `movsd`/`movss` test now
+   shows the correct resolved address).
+
+   Two unrelated, pre-existing gaps surfaced while chasing the `fldl` fix
+   through `gas_frontier.t`'s `vararg`/`i64_dtou` runtime-helper fixtures
+   past their own `fldl` blocker to whatever came next - neither is fixed
+   here:
+   - `flds` (x87 single-precision *load*, as opposed to `fstps`'s
+     single-precision *store* above) is still unimplemented - `i64_dtou`
+     needs it, and no `test/c/` file in this corpus happens to need the
+     load direction at single precision.
+   - A real, pre-existing encoding bug, unrelated to x87: an ALU-immediate
+     literal written as the unsigned-looking hex spelling of a negative
+     value at its own width (`andl $0xfffffffc, %edx`, GAS's own idiom for
+     a 4-byte-alignment mask) fails to encode at all, because `alu_form`'s
+     `fits_s8`/`fits_s32` range check runs against the raw parsed `Bigint`
+     value (4294967292) rather than that value reduced to the
+     instruction's declared width and reinterpreted as signed (which would
+     be -4, fitting an imm8) - checked against real i686-linux-gnu-as,
+     which picks the short form (`83 e2 fc`) precisely because it performs
+     that reduction. `$-4` (the decimal spelling of the identical bit
+     pattern) already encodes correctly, isolating the bug to hex/wide-
+     literal parsing rather than the ALU-immediate form itself.
+     `imul_imm_form` and the new `push_imm_form` share the identical
+     `fits_s8`/`fits_s32`-on-raw-value pattern and so share the same bug
+     (confirmed for `imul`). Masked by a second bug in the diagnostic
+     itself: `Codec.attempt`'s `Relax` case (`asm/lib/codec/codec.ml`)
+     returns `` `No_rung `` - a real failure - when every rung simply
+     declines a value that was never a candidate for that ladder in the
+     first place (for example, any non-`jmp` instruction reaching the
+     `jmp-rel` alternative during the top-level `Alt` scan), rather than
+     `Declined`; since `Alt`'s own scan remembers only the *first* such
+     failure and a later real match still overrides it on success, this
+     stays invisible right up until a value has no encoding anywhere at
+     all, at which point the reported cause is `` `No_rung "jmp"` `` -
+     "relax jmp: no rung applies" - regardless of which alternative and
+     value actually failed, exactly what `andl $0xfffffffc, %edx` now
+     reports instead of a diagnostic naming the ALU-immediate form and the
+     out-of-range value.
 3. **ARM.** `classify-regression`'s `{r0, r1, r2, r3}` register-list operand
    (`varargs1`/`varargs2`/`varargs3`, from `push {r0, r1, r2, r3}`) is
    **fixed**: it needed a new mnemonic, a new operand syntax

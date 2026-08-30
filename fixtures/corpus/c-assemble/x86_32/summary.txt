@@ -1,15 +1,6 @@
 total:24
 accepted:0
-blocked:13
-rejected:11
-reason:1	.corpus-work/c/x86_32/almabench/output.s:711:2: error[x86.simplify]: unknown instruction fstpl
-reason:1	.corpus-work/c/x86_32/binarytrees/output.s:230:2: error[x86.simplify]: unknown instruction fstpl
-reason:1	.corpus-work/c/x86_32/bisect/output.s:125:2: error[x86.simplify]: unknown instruction fstpl
-reason:1	.corpus-work/c/x86_32/fft/output.s:111:2: error[x86.simplify]: unknown instruction fstpl
-reason:1	.corpus-work/c/x86_32/fftsp/output.s:105:2: error[x86.simplify]: unknown instruction fstps
-reason:1	.corpus-work/c/x86_32/integr/output.s:20:2: error[x86.simplify]: unknown instruction fldl
-reason:1	.corpus-work/c/x86_32/nbody/output.s:67:2: error[x86.simplify]: unknown instruction fstpl
-reason:1	.corpus-work/c/x86_32/perlin/output.s:313:2: error[x86.simplify]: unknown instruction fldl
+blocked:22
+rejected:2
 reason:1	.corpus-work/c/x86_32/sha3/output.s:550:2: error[x86.simplify]: unknown instruction shldl
 reason:1	.corpus-work/c/x86_32/siphash24/output.s:163:2: error[x86.simplify]: unknown instruction shldl
-reason:1	.corpus-work/c/x86_32/spectral/output.s:242:2: error[x86.simplify]: unknown instruction fstpl
