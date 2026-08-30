@@ -1,12 +1,9 @@
 total:108
-accepted:98
-rejected:5
+accepted:101
+rejected:2
 compile-failed:5
 reason:1	(no diagnostic; exit 124)
 reason:1	.corpus-work/regression/arm/extasm/output.s:20:12: error[parse]: unexpected token
-reason:1	.corpus-work/regression/arm/varargs1/output.s:57:7: error[arm.operand]: cannot parse operand {r0 r1 r2 r3}
-reason:1	.corpus-work/regression/arm/varargs2/output.s:299:7: error[arm.operand]: cannot parse operand {r0 r1 r2 r3}
-reason:1	.corpus-work/regression/arm/varargs3/output.s:116:7: error[arm.operand]: cannot parse operand {r0 r1 r2 r3}
 compile-reason:1	modules/CompCert/test/regression/builtins-aarch64.c:13: error: use of unknown builtin '__builtin_cls'
 compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
 compile-reason:1	modules/CompCert/test/regression/builtins-riscV.c:14: error: use of unknown builtin '__builtin_fmadd'

@@ -170,7 +170,7 @@ addition to each target's own `ccomp_args`, matching
 |---------|---------------------:|---------:|-------------------------:|----------------------:|-------------------:|
 | x86_32  |                  102 |        3 |                         3 |                     12 |                   0 |
 | x86_64  |                  102 |        2 |                         4 |                     12 |                   0 |
-| arm     |                   98 |        5 |                         5 |                     12 |                   0 |
+| arm     |                  101 |        2 |                         5 |                     12 |                   0 |
 | aarch64 |                  102 |        1 |                         5 |                     12 |                   0 |
 | riscv32 |                  101 |        2 |                         5 |                     12 |                   0 |
 | riscv64 |                  101 |        1 |                         6 |                     12 |                   0 |
@@ -187,20 +187,22 @@ succeeds on the three where a 64-bit value needs a register pair (x86_32,
 arm, riscv32), which is exactly the constraint's own purpose.
 
 The `rejected` reasons are real, new parser gaps beyond what `classify-c`'s
-24-file corpus ever exercised, grouped in each `summary.txt`. ARM's
-`{r0 r1 r2 r3}` register-list operand syntax and two GNU-extension parse
-gaps (`dollars.c`'s `$`-prefixed identifiers, `extasm.c`'s extended-asm
-operand syntax on the targets where it compiles) remain open - see
-"Capability ladder" below for the scope decision on each. Three gaps are
-already fixed and the table above reflects the re-run in every case:
-RISC-V's `%pcrel_hi`/`%pcrel_lo` rejections (both profiles, 5 files on
-riscv32, 5 on riscv64) were a parser bug, not a missing form (96→101
-accepted on each); AArch64's `uxtx #0` was a genuinely missing ADD/SUB
-(extended register) encoding, now added (101→102 accepted); x86_64's
-`%r8w`-`%r15w` (16-bit REX-extended sub-registers, also the compression
-corpus's sole rejection, `arcode.c`'s `%r10w`) needed a new 16-bit
-operand-size prefix rather than a register-table row, now added
-(regression 96→102 accepted, compression 11→12 accepted).
+24-file corpus ever exercised, grouped in each `summary.txt`. Two
+GNU-extension parse gaps (`dollars.c`'s `$`-prefixed identifiers, `extasm.c`'s
+extended-asm operand syntax on the targets where it compiles) remain open -
+see "Capability ladder" below for the scope decision on each. Every other
+previously-tracked recurring gap is now fixed, and the table above
+reflects the re-run in every case: RISC-V's `%pcrel_hi`/`%pcrel_lo`
+rejections (both profiles, 5 files on riscv32, 5 on riscv64) were a parser
+bug, not a missing form (96→101 accepted on each); AArch64's `uxtx #0` was a
+genuinely missing ADD/SUB (extended register) encoding, now added (101→102
+accepted); x86_64's `%r8w`-`%r15w` (16-bit REX-extended sub-registers, also
+the compression corpus's sole rejection, `arcode.c`'s `%r10w`) needed a new
+16-bit operand-size prefix rather than a register-table row, now added
+(regression 96→102 accepted, compression 11→12 accepted); ARM's
+`{r0, r1, r2, r3}` register-list operand needed a new mnemonic (`push`), a
+new operand syntax, and a new multi-register encoding together, now added
+(98→101 accepted).
 
 **One shared timeout, not a per-target rejection.** `test/regression/floats.c`
 compiles to roughly 110,000 lines of assembly (an exhaustive float-conversion
@@ -444,9 +446,26 @@ gaps:
    source line rather than a whole `test/c/` file, since most affected files
    also hit the unrelated x87 gap in the same run.
 3. **ARM.** `classify-regression`'s `{r0, r1, r2, r3}` register-list operand
-   (`varargs1`/`varargs2`/`varargs3`, from `push {r0, r1, r2, r3}`) is a new
-   mnemonic, a new operand syntax, and a new multi-register STMDB-class
-   encoding together - not a small parser addition. `assemble-c`'s recurring
+   (`varargs1`/`varargs2`/`varargs3`, from `push {r0, r1, r2, r3}`) is
+   **fixed**: it needed a new mnemonic, a new operand syntax
+   (`Operand.Reglist`, one bit per register number - `arm.ml`'s `regroup`
+   already rejoins a brace-grouped operand's comma-split pieces, but per its
+   own comment does not reinsert the commas, so the parsed shape is a flat
+   `Ident` run, not a comma-separated one), and a new multi-register STMDB
+   encoding together (`100100101101`, i.e. `P=1 U=0 S=0 W=1 L=0`, base
+   register fixed to SP) - not a small parser addition. Deliberately scoped
+   to two-or-more-register `push` only: `push {r4}` is a fixed diagnostic
+   rather than the different `str r4, [sp, #-4]!` encoding GNU's own
+   canonical printer prefers there, since CompCert's own codegen never emits
+   a one-register `push` (only ever the fixed four-argument-register
+   varargs-spill shape); see
+   `asm/test/targets/test_targets.ml`'s `push {reglist}` tests. Re-running
+   the wider `gas_frontier.t` runtime-helper corpus after this fix (not one
+   of the four `classify-regression`/`classify-compression` suites, but the
+   same frontier check M4 uses) surfaced a sibling, still-open gap the
+   register-list parse error had been masking: `pop {reglist}` (used by
+   `i64_udivmod`/`i64_umod`'s epilogue) is a genuinely different encoding
+   (LDM-class, not STM) and is not implemented here. `assemble-c`'s recurring
    `eor`/`rsb`/`orr`/`mvn`/`lsl`/`nop` (integer/logical/shift family) and
    `vldr`/`vdiv.f32`/`vmul.f32` (VFP double load and arithmetic) remain open,
    scoped as follow-up work.
@@ -492,6 +511,11 @@ scope/gap decision that later follow-up work builds on.
 
 ## Follow-ups
 
+- ARM `pop {reglist}` (LDM-class - a genuinely different encoding from
+  `push`'s STM-class one, not a shared form with a direction bit): evidenced
+  by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/`i64_umod`),
+  newly visible now that `push`'s fix stopped masking it with a register-list
+  parse error. Not fixed here; see "Capability ladder" above.
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
   decoder already handle it (the SIB "no base" codec alternative uses the
   same fixup-carrying displacement codec as RIP-relative addressing), only
