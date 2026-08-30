@@ -1,7 +1,7 @@
 total:24
 accepted:0
-blocked:0
-rejected:24
+blocked:13
+rejected:11
 reason:1	.corpus-work/c/x86_32/almabench/output.s:711:2: error[x86.simplify]: unknown instruction fstpl
 reason:1	.corpus-work/c/x86_32/binarytrees/output.s:230:2: error[x86.simplify]: unknown instruction fstpl
 reason:1	.corpus-work/c/x86_32/bisect/output.s:125:2: error[x86.simplify]: unknown instruction fstpl
@@ -13,5 +13,3 @@ reason:1	.corpus-work/c/x86_32/perlin/output.s:313:2: error[x86.simplify]: unkno
 reason:1	.corpus-work/c/x86_32/sha3/output.s:550:2: error[x86.simplify]: unknown instruction shldl
 reason:1	.corpus-work/c/x86_32/siphash24/output.s:163:2: error[x86.simplify]: unknown instruction shldl
 reason:1	.corpus-work/c/x86_32/spectral/output.s:242:2: error[x86.simplify]: unknown instruction fstpl
-reason:12	<synthesized by x86_32>: error[x86.lower]: no lea form takes these operands
-reason:1	<synthesized by x86_32>: error[x86.lower]: no movsd form takes these operands

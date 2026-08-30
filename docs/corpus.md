@@ -616,15 +616,38 @@ gaps:
    corpus-evidenced; see `asm/test/targets/test_targets.ml`'s "16-bit operand
    size" tests, including the one pinning that an unrelated mnemonic
    (`addw`/`xorw`) still rejects.
-2. **x86_32 `assemble-c` (pipeline-level, not parse-level).** `lea` recurs 12
-   times (the highest-signal single reason in this corpus) - an addressing
-   shape the existing `lea` forms do not cover; `fstpl`/`fstps`/`fldl` (x87
-   double/single load-store) recur 8 times; `shldl` (double-precision shift)
-   twice; `movsd` (the *GPR* move-string-doubleword mnem, not the x86_64 SSE
-   scalar-float `movsd`) once. Next-smallest fixture: isolate the exact `lea`
-   operand shape from one `no lea form takes these operands` diagnostic's
-   source line rather than a whole `test/c/` file, since most affected files
-   also hit the unrelated x87 gap in the same run.
+2. **x86_32 `assemble-c` (pipeline-level, not parse-level).** `lea`'s 12
+   recurrences (the highest-signal single reason in this corpus) are **fixed**:
+   every one was `leal sym, %reg` - a bare-symbol source operand
+   (`Operand.Sym`), the same shape `Mov` already read through `mem_of_symbol`
+   rather than a second `Lea` constructor, so `Lea` just needed the matching
+   arm. No codec change: the encoder's general base-less-disp32 `Mem` form
+   already produces the byte-identical `8d 0d <disp32>` real
+   i686-linux-gnu-as/objdump emit for `leal sym, %ecx`, with an `R_386_32`
+   relocation against `sym`. Fixing it retired all 12 `lea` rejections and let
+   those files progress further: 8 now reach `blocked` (only libc/runtime
+   symbols left undefined - the furthest state reachable without multi-file
+   linking); `aes.c`/`chomp.c`/`sha1.c`/`vmach.c` and others among them. The
+   remaining 2 of those 12 (`mandelbrot.c`, `knucleotide.c`) hit a
+   *different* gap the `lea` rejection had been masking in the same files:
+   `no movsd form takes these operands` and `no movss form takes these
+   operands` respectively - the x86_64-style SSE scalar-float move, not the
+   GPR move-string-doubleword mnemonic this list previously (and incorrectly)
+   guessed the sole pre-fix `movsd` occurrence to be; that occurrence was
+   always a third, `lea`-unrelated file (`fftw.c`) - both real floating-point
+   users, so the SSE reading is the consistent one for all three. That gap is
+   now **also fixed**: every recurrence (`fftw.c`, `knucleotide.c`,
+   `mandelbrot.c` - `movsd` twice, `movss` once) was `movsd/movss sym,
+   %xmmN`, the identical bare-symbol-source duality `lea` had just needed;
+   `Sse_mov_r_rm` already had the general `Mem` form, so this was one more
+   `Operand.Sym` arm reusing `mem_of_symbol`, no codec change. Byte-checked
+   against real i686-linux-gnu-as/objdump: `movsd .Lc, %xmm0` ->
+   `f2 0f 10 05 <disp32>`, `movss .Lc, %xmm1` -> `f3 0f 10 0d <disp32>`, both
+   `R_386_32`-relocated, the same base-less-disp32 ModR/M shape as `lea`. All
+   three files now reach `blocked` (libc-only). `fstpl`/`fstps`/`fldl` (x87
+   double/single load-store) still recur 8 times unchanged; `shldl`
+   (double-precision shift) still recurs twice unchanged - the only two
+   real-gap reasons left in this corpus's x86_32 `assemble-c` results.
 3. **ARM.** `classify-regression`'s `{r0, r1, r2, r3}` register-list operand
    (`varargs1`/`varargs2`/`varargs3`, from `push {r0, r1, r2, r3}`) is
    **fixed**: it needed a new mnemonic, a new operand syntax
