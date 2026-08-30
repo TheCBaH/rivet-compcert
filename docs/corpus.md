@@ -313,21 +313,40 @@ Grouped by capability (each `summary.txt` has the full per-file detail):
   `5.0e-1`, a shape nothing parsed at all before) - took aarch64 0→24/24. ARM's
   own `str`/`ldr` writeback (`Lowered.Ldst_imm` gained a real `writeback`
   field; the codec's `W` bit was a hard-coded 0) took arm 6→13/24; ARM's
-  remaining rejections are a *different* capability (below), not this one.
-- **ARM only, still open: VFP floating-point immediate literals**
-  (`vmov.f32 s0, #2.0e+0`) - several files (`binarytrees.c`, `fft.c`,
-  `fftsp.c`, `mandelbrot.c`, `nbody.c`, `bisect.c`, `integr.c`, `perlin.c`,
-  `spectral.c`).
-- **ARM only, still open: `vpush {dN, ...}`** (`almabench.c`'s
-  `vpush.64 {d8, d9}`) - a D-register reglist push, structurally unrelated to
-  the already-supported GPR `push {reglist}` (falls through to the GPR
-  Reglist grammar today, "unknown register d8").
-- **ARM only, still open: `ldm`/`pop {reglist}`'s own LDM-class writeback**
-  (a bare `Rn!` base register with no brackets, e.g. `r3!` - a genuinely
-  different grammar from `str`/`ldr`'s bracketed `[Rn, #imm]!` this section
-  just closed) - the `gas_frontier.t` runtime-helper corpus's own
-  already-documented Follow-up, now also classify-c-gcc-evidenced
-  (`aes.c`/`fftw.c`).
+  remaining rejections are two *different* capabilities (below), not this one.
+- **ARM only: VFP floating-point immediate literals - fixed.**
+  (`vmov.f32 s0, #2.0e+0`, several files) - the exact same scientific-notation
+  gap the aarch64 fix above named, `float_lit` never having parsed an
+  exponent (with or without `#`); `Vmov_imm_s`/`Vmov_imm_d` themselves needed
+  no change - the values were always encodable, the operand just never
+  reached them. Took arm 13→19/24.
+- **ARM only, fixed: `vpush {dN, ...}`** (`almabench.c`/`fft.c`/`fftsp.c`/
+  `perlin.c`'s `vpush.64 {d8, d9}`/`vpush.64 {d8-d9}`/`vpush.64 {d8-d10}`) -
+  a D-register reglist push, structurally unrelated to the already-supported
+  GPR `push {reglist}` (a new `Operand.Dreglist`, dispatched off the first
+  brace member: a "dN" spelling is never also a GPR name, so `Reg.find` and
+  `Dreg.find` never both succeed on the same string). The real gap here was
+  bigger than the `{d8, d9}` framing suggested: gcc's own VFP printer spells
+  the reglist as a hyphenated *range*, not the flat comma list GPR `push`
+  uses (`{d8-d9}`, `{d8-d10}`) - confirmed against real
+  `arm-linux-gnueabihf-as`/`objdump` that both spellings assemble to the
+  identical bytes (`ed2d8b04` for `{d8-d9}` and `{d8, d9}` alike), so the
+  range is expanded into the same flat register-number list a comma form
+  would produce. Parse-level only, like `$symbol`/`%st(n)` below: `vpush`
+  itself is still not in `Opcode.t`. 4 files.
+- **ARM only, fixed: `stmia`/`ldm`/`pop {reglist}`'s own LDM-class
+  writeback** (`aes.c`'s `stmia r3!, {r0, r1}` - a bare `Rn!` base register
+  with no brackets, a genuinely different grammar from `str`/`ldr`'s
+  bracketed `[Rn, #imm]!` fixed above, and with no `Operand.t` shape to hold
+  it: `Mem.t` models an explicit offset, and STM/LDM's writeback amount is
+  implicit, four bytes per listed register) - a new `Operand.Reg_writeback`
+  parses the bare `Rn!` base; the `{reglist}` half was already covered by the
+  existing GPR `Reglist` grammar. Parse-level only, the same scope as
+  `vpush` above: `stmia`/`ldmia`'s own mnemonics aren't even in the opcode
+  table, and `dump-source-ast` never validates a mnemonic, only its
+  operands (`pop {reglist}` itself, with no `!`-less base, already parsed
+  before this fix, for the same reason). The `gas_frontier.t` runtime-helper
+  corpus's own already-documented Follow-up, now closed too. 1 file.
 - **x86_32 only, fixed: the x87 stack-register operand** (`%st(1)`, one file,
   `almabench.c`) - `%st`/`%st(n)` now parse (a new `st` register-table entry
   plus a dedicated `[Register "st"; Lparen; Int n; Rparen]` parser pattern
@@ -335,9 +354,8 @@ Grouped by capability (each `summary.txt` has the full per-file detail):
   at all yet, so this is parse-level only, the same way `$symbol` is above.
 
 Current state (real runs, all six targets): x86_64 24/24, x86_32 24/24,
-aarch64 24/24, riscv32 24/24, riscv64 24/24, arm 13/24 - arm's own remaining
-11 rejections are the three still-open findings just above (VFP float
-immediates, `vpush {dN}`, `ldm`/`pop` writeback), none of them fixed here.
+aarch64 24/24, riscv32 24/24, riscv64 24/24, arm 24/24 - every target in the
+classify-c-gcc corpus is now fully closed.
 
 ## The `classify-c` manifest format
 
@@ -671,23 +689,32 @@ scope/gap decision that later follow-up work builds on.
 ## Follow-ups
 
 - `classify-c-gcc`'s first-increment findings (see "`classify-c-gcc`: a
-  second, independent-compiler corpus" above) are now mostly closed:
-  x86_64/x86_32/aarch64/riscv32/riscv64 all reach 24/24. ARM sits at 13/24,
-  gated by three still-open, separate capability slices - VFP floating-point
-  immediate literals, `vpush {dN, ...}` (a D-register reglist push, unrelated
-  to the already-supported GPR one), and `ldm`/`pop {reglist}`'s own
-  LDM-class writeback (a bare `Rn!` base with no brackets, structurally
-  different from the now-supported bracketed `str`/`ldr` writeback) - none
-  fixed here. None of the closed findings have been triaged into "Capability
-  ladder"'s scope-exclusion-or-real-gap grouping below either; `x86.lower`'s
-  `Operand.Imm_sym`/`x86.simplify`'s `%st(n)` are parse-level only, same as
-  `classify-c`'s own scope note - closing them further (actually lowering/
-  encoding a symbolic immediate, adding an x87 mnemonic) is unstarted.
-- ARM `pop {reglist}` (LDM-class - a genuinely different encoding from
-  `push`'s STM-class one, not a shared form with a direction bit): evidenced
-  by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/`i64_umod`),
-  newly visible now that `push`'s fix stopped masking it with a register-list
-  parse error. Not fixed here; see "Capability ladder" above.
+  second, independent-compiler corpus" above) are now fully closed: all six
+  targets reach 24/24, including ARM's last two gaps, `vpush {dN, ...}` (a
+  new `Operand.Dreglist`, D-register reglist push, unrelated to the already-
+  supported GPR one - and, discovered while closing it, gcc actually spells
+  the list as a hyphenated range, `{d8-d9}`, not the flat comma form
+  `{d8, d9}` GPR `push` uses) and `stmia`/`ldm`/`pop {reglist}`'s own bare
+  `Rn!` writeback base (a new `Operand.Reg_writeback`, structurally different
+  from the now-supported bracketed `str`/`ldr` writeback). Both fixes are
+  parse-level only, the same scope as `x86.lower`'s `Operand.Imm_sym`/
+  `x86.simplify`'s `%st(n)` below: neither `vpush` nor `stmia`/`ldmia` is in
+  `Opcode.t`, so `dump-source-ast`'s operand-only check is what closes, not
+  real STM/LDM lowering - see "ARM `stmia`/`pop {reglist}`" just below, which
+  is still open for exactly that reason. None of these parse-level closures
+  have been triaged into "Capability ladder"'s scope-exclusion-or-real-gap
+  grouping below either - closing them further (actually lowering/encoding a
+  symbolic immediate, an x87 mnemonic, or real STM/LDM-class instructions) is
+  unstarted.
+- ARM `stmia`/`pop {reglist}` (LDM-class - a genuinely different encoding
+  from `push`'s STM-class one, not a shared form with a direction bit):
+  evidenced by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/
+  `i64_umod`) and now also by classify-c-gcc's `aes.c` (`stmia r3!,
+  {r0, r1}`). The operand shapes (`{reglist}` and, now, the bare `Rn!`
+  writeback base) parse - enough to close `classify-c-gcc`, above - but no
+  `Opcode.t` entry or lowering exists for `stmia`/`ldmia`/`pop` themselves;
+  actually assembling one of these instructions is still not implemented.
+  Not fixed here; see "Capability ladder" above.
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
   decoder already handle it (the SIB "no base" codec alternative uses the
   same fixup-carrying displacement codec as RIP-relative addressing), only
