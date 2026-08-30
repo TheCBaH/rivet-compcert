@@ -172,8 +172,8 @@ addition to each target's own `ccomp_args`, matching
 | x86_64  |                   96 |        8 |                         4 |                     11 |                   1 |
 | arm     |                   98 |        5 |                         5 |                     12 |                   0 |
 | aarch64 |                  101 |        2 |                         5 |                     12 |                   0 |
-| riscv32 |                   96 |        7 |                         5 |                     12 |                   0 |
-| riscv64 |                   96 |        6 |                         6 |                     12 |                   0 |
+| riscv32 |                  101 |        2 |                         5 |                     12 |                   0 |
+| riscv64 |                  101 |        1 |                         6 |                     12 |                   0 |
 
 `compile-failed` is consistent and unsurprising across targets, all recorded
 in each manifest for audit rather than fixed here: `funct1.c` is CompCert's
@@ -191,10 +191,13 @@ The `rejected` reasons are real, new parser gaps beyond what `classify-c`'s
 REX-extended sub-registers on x86_64 (`%r8w`-`%r15w`, the sibling gap to
 `classify-c`'s already-fixed 8-bit `%r8b`-`%r15b`); ARM's `{r0 r1 r2 r3}`
 register-list operand syntax; AArch64's `uxtx #0` register-extend operand;
-RISC-V's `%pcrel_hi` relocation operand (both profiles); and two GNU-extension
-parse gaps (`dollars.c`'s `$`-prefixed identifiers, `extasm.c`'s extended-asm
-operand syntax on the targets where it compiles) not evidenced by `test/c/`.
-None are fixed here - see Follow-ups.
+and two GNU-extension parse gaps (`dollars.c`'s `$`-prefixed identifiers,
+`extasm.c`'s extended-asm operand syntax on the targets where it compiles)
+not evidenced by `test/c/`. See "Capability ladder" below for the scope
+decision on each. RISC-V's `%pcrel_hi`/`%pcrel_lo` rejections (both profiles,
+5 files on riscv32, 5 on riscv64) were a parser bug, not a missing form, and
+are fixed - the table above already reflects the re-run after that fix
+(riscv32 96→101 accepted, riscv64 96→101 accepted).
 
 **One shared timeout, not a per-target rejection.** `test/regression/floats.c`
 compiles to roughly 110,000 lines of assembly (an exhaustive float-conversion
@@ -372,6 +375,109 @@ without a matching summary. If that restoration itself fails, both failures
 are reported and every retained file is named in the diagnostic rather than
 silently deleted.
 
+## Capability ladder: turning the manifests into scope decisions
+
+M5's ordered work starts by grouping every recurring `assemble-c`/
+`classify-regression`/`classify-compression` rejection reason (the tables and
+`summary.txt` files above) into either a documented scope exclusion or a real
+gap with a next-smallest fixture, rather than pursuing one suite or one
+architecture to exhaustion. This section is that grouping; it supersedes the
+undifferentiated "decide whether X warrants support" bullets that used to
+stand in for it below.
+
+**Scope exclusions (not fixed, by design).** These recur but are not corpus
+gaps:
+
+- `funct1.c` `compile-failed` on every target: CompCert's own documented
+  `FAILURES` case (too few/many arguments), not this project's.
+- `builtins-<arch>.c` `compile-failed` on every target but its own
+  architecture: `ccomp` itself rejects an unknown builtin - expected, and it
+  is `ccomp`'s diagnostic, not this project's parser.
+- `extasm.c` `compile-failed` on the three 64-bit-native targets (x86_64,
+  aarch64, riscv64): the GCC extended-asm register-pair constraint (`%R0`/
+  `%Q0`) is meaningless where a 64-bit value needs no register pair - exactly
+  the constraint's own purpose, not a gap.
+- `extasm.c` `outcome:rejected` (`error[parse]: unexpected token`) on the
+  three targets where it *does* compile (x86_32, arm, riscv32): real GNU
+  extended-asm operand syntax this project does not parse. `.ai/asm_plan.md`
+  §10 stages inline-assembly support as incremental and later; this is that
+  gap's first corpus evidence, deliberately deferred until inline-asm work
+  starts rather than special-cased here.
+- `dollars.c` `outcome:rejected` (`error[parse]: unexpected token`) on x86_32/
+  x86_64: `$`-prefixed identifiers are a GNU assembler extension CompCert
+  itself never emits - `dollars.c` is a regression test *for* the extension,
+  not evidence of a CompCert-compatibility gap. Left unsupported; revisit only
+  if a real CompCert-generated fixture ever needs it.
+- `test/regression/floats.c`'s parse timeout: tracked separately (below, as
+  a follow-up performance item), not a per-target rejection to fix here.
+
+**Real gaps, grouped by capability, with the next-smallest fixture:**
+
+1. **x86 16-bit operand size (`%r8w`-`%r15w`, x86_64 `classify-regression`/
+   `compression`).** This is *not* the register-table-only fix its previous
+   description here suggested. `x86_family_encode.ml`'s `simplify_instruction`
+   rejects every 16-bit-suffixed mnemonic outright
+   (`Some 16 -> bad `Prefix66_out_of_scope`) - the 0x66 operand-size prefix
+   has never been implemented for any register, extended or not, so no
+   16-bit `mov`/`or`/... form reaches the register table at all yet. Closing
+   it means adding a generic operand-size-prefix component to the shared ALU/
+   `mov` codec path (ordering `asz, 0x66, REX, ...`, the same shape the SSE
+   mandatory-prefix alternatives in `x86_family_encode.ml` already use for a
+   fixed prefix), then adding `extended_regs 16 "w"` to `x86_64_encode.ml`'s
+   register list. Next-smallest fixture: `bitfields10.c`'s own
+   `movw %r8w, 58(%rsp)` (register-to-memory store, the one shape the corpus
+   evidences).
+2. **x86_32 `assemble-c` (pipeline-level, not parse-level).** `lea` recurs 12
+   times (the highest-signal single reason in this corpus) - an addressing
+   shape the existing `lea` forms do not cover; `fstpl`/`fstps`/`fldl` (x87
+   double/single load-store) recur 8 times; `shldl` (double-precision shift)
+   twice; `movsd` (the *GPR* move-string-doubleword mnem, not the x86_64 SSE
+   scalar-float `movsd`) once. Next-smallest fixture: isolate the exact `lea`
+   operand shape from one `no lea form takes these operands` diagnostic's
+   source line rather than a whole `test/c/` file, since most affected files
+   also hit the unrelated x87 gap in the same run.
+3. **ARM.** `classify-regression`'s `{r0, r1, r2, r3}` register-list operand
+   (`varargs1`/`varargs2`/`varargs3`, from `push {r0, r1, r2, r3}`) is a new
+   mnemonic, a new operand syntax, and a new multi-register STMDB-class
+   encoding together - not a small parser addition. `assemble-c`'s recurring
+   `eor`/`rsb`/`orr`/`mvn`/`lsl`/`nop` (integer/logical/shift family) and
+   `vldr`/`vdiv.f32`/`vmul.f32` (VFP double load and arithmetic) remain open,
+   scoped as follow-up work.
+4. **AArch64.** `classify-regression`'s `uxtx #0` (`add x0, x0, x16, uxtx #0`)
+   is the ADD/SUB *extended-register* encoding, structurally distinct from
+   the already-implemented ADD/SUB *shifted-register* form
+   (`aarch64_encode.ml`'s `Addsub_shift`, which only recognizes
+   `lsl`/`lsr`/`asr`/`ror`). The extend-keyword table this needs already
+   exists for register-offset memory addressing (`extend_option` in the same
+   file); the ALU form needs its own operand recognition and lowered variant,
+   not a shared one, because the two encodings' bit layouts differ. `%r8w`-style
+   register-table risk does not apply here since AArch64 has no operand-size
+   prefix concept. `assemble-c`'s recurring `cbz`/`cbnz` (compare-and-branch),
+   `sxtw`/`uxtw` (integer extension), `eor` (logical), `fcsel`/`scvtf`/`fmul`
+   (FP), `lsl`/`ubfiz` (shift/bitfield), and `movn` (mov negated immediate)
+   remain open, scoped as follow-up work.
+5. **RISC-V (both profiles).** `classify-regression`'s `%pcrel_hi`/
+   `%pcrel_lo` rejections (`charlit.c`, `initializers.c`, `initializers2.c`,
+   `packedstruct1.c`, `packedstruct2.c`) are **fixed**: the real cause was not
+   a missing operand form but an ambiguity bug - `riscv_family.ml`'s
+   `parse_one` tried a memory-operand `offset(base)` reading of
+   `%pcrel_hi(f1)` before its modifier reading, and `f1` is also a legal
+   floating-register spelling, so a real static symbol literally named `f1`
+   (as `charlit.c` has) took the register reading and left `%pcrel_hi` with
+   no argument to parse. A single leading `Token.Modifier` now decides the
+   reading before `Reg.find` is consulted, since a real `offset(base)` never
+   starts with one; see `asm/test/targets/test_targets.ml`'s
+   `riscv_pcrel_register_name_collision` tests. `assemble-c`'s recurring
+   `fsd`/`fld`/`fmul.d`/`fmv.d`/`fcvt.d.w` (F/D floating load-store/convert)
+   and `remu` (integer remainder), plus the isolated `no sll/ld form takes
+   these operands` lowering gaps, remain open as a shift/remainder slice,
+   with the F/D family scoped as a deliberate second, floating-point slice.
+
+None of the five real-gap groups above are fixed by this section itself
+(group 5's parser bug is the one exception, fixed in the same change that
+added this section) - the point of this pass is the grouping and the
+scope/gap decision that later follow-up work builds on.
+
 ## Follow-ups
 
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
@@ -423,23 +529,12 @@ silently deleted.
   suite's coverage turns out to matter enough to justify that.
 - Add a differential stage (GNU `as`/`objdump` cross-check) for accepted
   files, across all four classified suites.
-- Decide whether a recurring `assemble-c` rejection reason warrants new
-  instruction or lowering support, or is legitimately out of scope
-  (libc-dependent, PIC, etc., already excluded per `.ai/asm_plan.md`). The
-  "The `assemble-c` manifest format" section above's per-target table and
-  each target's committed `summary.txt` are the evidence this decision
-  should be made from - e.g. x86_32's and aarch64's entirely-rejected columns
-  are each dominated by a small, closed set of not-yet-lowered instructions
-  per target, not 24 distinct gaps.
-- Decide whether a recurring `classify-regression`/`classify-compression`
-  rejection reason warrants new instruction/lowering support: x86_64's
-  `%r8w`-`%r15w` (16-bit REX-extended sub-registers - the direct sibling of
-  the already-fixed 8-bit `%r8b`-`%r15b` gap, same register-table shape),
-  ARM's `{r0 r1 r2 r3}` register-list operand, AArch64's `uxtx #0`
-  register-extend operand, and RISC-V's `%pcrel_hi` relocation operand each
-  recur across more than one file (see the results table above and each
-  target's committed `summary.txt`) and look like real, closed gaps rather
-  than one-off corpus quirks.
+- Which recurring `assemble-c`/`classify-regression`/`classify-compression`
+  reasons warrant new instruction/lowering support, and which are legitimate
+  scope exclusions, is now decided in "Capability ladder: turning the
+  manifests into scope decisions" above - including the one gap (RISC-V
+  `%pcrel_hi`/`%pcrel_lo` on a register-name-colliding symbol) that turned out
+  to be a parser bug rather than a missing form, and is already fixed there.
 - `test/regression/floats.c` (~110K lines of generated assembly) makes this
   project's `--dump-source-ast` take longer than 5 CPU-minutes without
   returning, on every target (it is the one shared file, so the finding is
