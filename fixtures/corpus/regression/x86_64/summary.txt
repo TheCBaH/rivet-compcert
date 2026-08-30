@@ -1,15 +1,9 @@
 total:108
-accepted:96
-rejected:8
+accepted:102
+rejected:2
 compile-failed:4
 reason:1	(no diagnostic; exit 124)
-reason:1	.corpus-work/regression/x86_64/bitfields10/output.s:283:7: error[x86.operand]: unknown register %r8w
-reason:1	.corpus-work/regression/x86_64/builtins-common/output.s:179:11: error[x86.operand]: unknown register %r9w
 reason:1	.corpus-work/regression/x86_64/dollars/output.s:14:2: error[parse]: unexpected token
-reason:1	.corpus-work/regression/x86_64/instrsel/output.s:105:9: error[x86.operand]: unknown register %r10w
-reason:1	.corpus-work/regression/x86_64/packedstruct1/output.s:316:11: error[x86.operand]: unknown register %r8w
-reason:1	.corpus-work/regression/x86_64/packedstruct2/output.s:102:11: error[x86.operand]: unknown register %r8w
-reason:1	.corpus-work/regression/x86_64/sections/output.s:225:7: error[x86.operand]: unknown register %r8w
 compile-reason:1	modules/CompCert/test/regression/builtins-aarch64.c:13: error: use of unknown builtin '__builtin_cls'
 compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
 compile-reason:1	modules/CompCert/test/regression/extasm.c:63: error: '%R0' in asm text does not designate any operand

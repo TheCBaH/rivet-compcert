@@ -169,7 +169,7 @@ addition to each target's own `ccomp_args`, matching
 | target  | regression accepted | rejected | compile-failed (of 108) | compression accepted | rejected (of 12) |
 |---------|---------------------:|---------:|-------------------------:|----------------------:|-------------------:|
 | x86_32  |                  102 |        3 |                         3 |                     12 |                   0 |
-| x86_64  |                   96 |        8 |                         4 |                     11 |                   1 |
+| x86_64  |                  102 |        2 |                         4 |                     12 |                   0 |
 | arm     |                   98 |        5 |                         5 |                     12 |                   0 |
 | aarch64 |                  102 |        1 |                         5 |                     12 |                   0 |
 | riscv32 |                  101 |        2 |                         5 |                     12 |                   0 |
@@ -187,18 +187,20 @@ succeeds on the three where a 64-bit value needs a register pair (x86_32,
 arm, riscv32), which is exactly the constraint's own purpose.
 
 The `rejected` reasons are real, new parser gaps beyond what `classify-c`'s
-24-file corpus ever exercised, grouped in each `summary.txt`: 16-bit
-REX-extended sub-registers on x86_64 (`%r8w`-`%r15w`, which turned out to
-need more than the register table - see "Capability ladder" below); ARM's
-`{r0 r1 r2 r3}` register-list operand syntax; and two GNU-extension parse
+24-file corpus ever exercised, grouped in each `summary.txt`. ARM's
+`{r0 r1 r2 r3}` register-list operand syntax and two GNU-extension parse
 gaps (`dollars.c`'s `$`-prefixed identifiers, `extasm.c`'s extended-asm
-operand syntax on the targets where it compiles) not evidenced by `test/c/`.
-See "Capability ladder" below for the scope decision on each. Two gaps are
-already fixed and the table above reflects the re-run in both cases:
+operand syntax on the targets where it compiles) remain open - see
+"Capability ladder" below for the scope decision on each. Three gaps are
+already fixed and the table above reflects the re-run in every case:
 RISC-V's `%pcrel_hi`/`%pcrel_lo` rejections (both profiles, 5 files on
 riscv32, 5 on riscv64) were a parser bug, not a missing form (96→101
 accepted on each); AArch64's `uxtx #0` was a genuinely missing ADD/SUB
-(extended register) encoding, now added (101→102 accepted).
+(extended register) encoding, now added (101→102 accepted); x86_64's
+`%r8w`-`%r15w` (16-bit REX-extended sub-registers, also the compression
+corpus's sole rejection, `arcode.c`'s `%r10w`) needed a new 16-bit
+operand-size prefix rather than a register-table row, now added
+(regression 96→102 accepted, compression 11→12 accepted).
 
 **One shared timeout, not a per-target rejection.** `test/regression/floats.c`
 compiles to roughly 110,000 lines of assembly (an exhaustive float-conversion
@@ -415,19 +417,23 @@ gaps:
 **Real gaps, grouped by capability, with the next-smallest fixture:**
 
 1. **x86 16-bit operand size (`%r8w`-`%r15w`, x86_64 `classify-regression`/
-   `compression`).** This is *not* the register-table-only fix its previous
-   description here suggested. `x86_family_encode.ml`'s `simplify_instruction`
-   rejects every 16-bit-suffixed mnemonic outright
+   `compression`) - fixed.** This was *not* the register-table-only fix its
+   previous description here suggested. `x86_family_encode.ml`'s
+   `simplify_instruction` rejected every 16-bit-suffixed mnemonic outright
    (`Some 16 -> bad `Prefix66_out_of_scope`) - the 0x66 operand-size prefix
-   has never been implemented for any register, extended or not, so no
-   16-bit `mov`/`or`/... form reaches the register table at all yet. Closing
-   it means adding a generic operand-size-prefix component to the shared ALU/
-   `mov` codec path (ordering `asz, 0x66, REX, ...`, the same shape the SSE
-   mandatory-prefix alternatives in `x86_family_encode.ml` already use for a
-   fixed prefix), then adding `extended_regs 16 "w"` to `x86_64_encode.ml`'s
-   register list. Next-smallest fixture: `bitfields10.c`'s own
-   `movw %r8w, 58(%rsp)` (register-to-memory store, the one shape the corpus
-   evidences).
+   had never been implemented for any register, extended or not, so no
+   16-bit `mov`/`or`/... form ever reached the register table. Fixed by
+   adding a shared `opsz` component to the same `prefixes` record `asz`/REX
+   already live in (ordered `asz, 0x66, REX, ...`, matching real `as`'s own
+   byte order: `66 44 89 44 24 3a` for `movw %r8w, 0x3a(%rsp)`), then adding
+   `extended_regs 16 "w"` to `x86_64_encode.ml`'s register list. Scoped to
+   `mov` only via a new `~allow16` exception in `widthed` (mirroring the
+   existing `~allow8`) - every other ALU mnemonic keeps the same
+   `Prefix66_out_of_scope` diagnostic it had before, since only `mov`'s
+   register-to-memory form (`bitfields10.c`'s `movw %r8w, 58(%rsp)`) is
+   corpus-evidenced; see `asm/test/targets/test_targets.ml`'s "16-bit operand
+   size" tests, including the one pinning that an unrelated mnemonic
+   (`addw`/`xorw`) still rejects.
 2. **x86_32 `assemble-c` (pipeline-level, not parse-level).** `lea` recurs 12
    times (the highest-signal single reason in this corpus) - an addressing
    shape the existing `lea` forms do not cover; `fstpl`/`fstps`/`fldl` (x87
