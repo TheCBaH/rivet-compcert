@@ -332,8 +332,12 @@ Grouped by capability (each `summary.txt` has the full per-file detail):
   `arm-linux-gnueabihf-as`/`objdump` that both spellings assemble to the
   identical bytes (`ed2d8b04` for `{d8-d9}` and `{d8, d9}` alike), so the
   range is expanded into the same flat register-number list a comma form
-  would produce. Parse-level only, like `$symbol`/`%st(n)` below: `vpush`
-  itself is still not in `Opcode.t`. 4 files.
+  would produce. Parse-level only at the time, like `$symbol`/`%st(n)` below:
+  `vpush` itself was not yet in `Opcode.t`. 4 files. Since fully closed:
+  `vpush` now has a real `Opcode.t` entry and a VSTM-class lowering/encoding,
+  distinct from `push`'s STMDB-class one - no bitmask, only a base D
+  register and a count, so lowering requires the operand's `Dreglist` to be
+  non-empty, ascending, and contiguous - see the Follow-ups entry below.
 - **ARM only, fixed: `stmia`/`ldm`/`pop {reglist}`'s own LDM-class
   writeback** (`aes.c`'s `stmia r3!, {r0, r1}` - a bare `Rn!` base register
   with no brackets, a genuinely different grammar from `str`/`ldr`'s
@@ -722,16 +726,16 @@ scope/gap decision that later follow-up work builds on.
   the list as a hyphenated range, `{d8-d9}`, not the flat comma form
   `{d8, d9}` GPR `push` uses) and `stmia`/`ldm`/`pop {reglist}`'s own bare
   `Rn!` writeback base (a new `Operand.Reg_writeback`, structurally different
-  from the now-supported bracketed `str`/`ldr` writeback). Both fixes are
-  parse-level only, the same scope as `x86.lower`'s `Operand.Imm_sym`/
-  `x86.simplify`'s `%st(n)` below: neither `vpush` nor `stmia`/`ldmia` is in
-  `Opcode.t`, so `dump-source-ast`'s operand-only check is what closes, not
-  real STM/LDM lowering - see "ARM `stmia`/`pop {reglist}`" just below, which
-  is still open for exactly that reason. None of these parse-level closures
-  have been triaged into "Capability ladder"'s scope-exclusion-or-real-gap
-  grouping below either - closing them further (actually lowering/encoding a
-  symbolic immediate, an x87 mnemonic, or real STM/LDM-class instructions) is
-  unstarted.
+  from the now-supported bracketed `str`/`ldr` writeback). Both fixes were
+  parse-level only at the time, the same scope as `x86.lower`'s
+  `Operand.Imm_sym`/`x86.simplify`'s `%st(n)` below: `dump-source-ast`'s
+  operand-only check is what closed them, not real lowering. Both are since
+  fully closed too - see "ARM `stmia`/`pop {reglist}`" and "ARM `vpush`" just
+  below. None of the remaining parse-level-only closures (`x86.lower`'s
+  `Operand.Imm_sym`, `x86.simplify`'s `%st(n)`) have been triaged into
+  "Capability ladder"'s scope-exclusion-or-real-gap grouping below either -
+  closing them further (actually lowering/encoding a symbolic immediate or
+  an x87 mnemonic) is unstarted.
 - ARM `stmia`/`ldmia`/`pop {reglist}` (LDM-class - a genuinely different
   encoding from `push`'s STM-class one, not a shared form with a direction
   bit): evidenced by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/
@@ -751,6 +755,21 @@ scope/gap decision that later follow-up work builds on.
   `i64_udiv`/`i64_umod` now progress past `pop` to a later, separate
   finding: an undefined `__compcert_i64_udivmod` reference (an
   `image.undefined` multi-file-linking gap, not an assembler one).
+- ARM `vpush {dN, ...}` (VSTM-class - the D-register cousin of `push`'s
+  STMDB one, evidenced by classify-c-gcc's `almabench.c`/`fft.c`/`fftsp.c`/
+  `perlin.c`): now fixed. `Opcode.Vpush` lowers into `Lowered.Vpush` (cond,
+  vd, count), a base D register plus a register count rather than a
+  bitmask - VSTM-class encodings have no bitmask field, only
+  `imm8 = count * 2`. Lowering requires the operand's `Dreglist` to be
+  non-empty, ascending, and contiguous (both `{d8, d9}` and gcc's own
+  `{d8-d9}` already parsed to the identical list, so no further parser
+  change was needed). Byte-for-byte checked against real
+  arm-linux-gnueabihf-as/objdump (`-march=armv7-a -mfpu=vfpv3`): `ed2d8b04`
+  for `vpush.64 {d8, d9}` (2 registers, identical bytes for `{d8-d9}`),
+  `ed2d8b06` for `{d8-d10}` (3), `ed2d8b02` for `{d8}` (1, no separate
+  one-register alias the way GPR `push` needs), and `ed6d0b04` for
+  `{d16-d17}` (a base register at D16+, exercising the D:Vd split's high
+  half).
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
   decoder already handle it (the SIB "no base" codec alternative uses the
   same fixup-carrying displacement codec as RIP-relative addressing), only
