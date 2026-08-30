@@ -171,7 +171,7 @@ addition to each target's own `ccomp_args`, matching
 | x86_32  |                  102 |        3 |                         3 |                     12 |                   0 |
 | x86_64  |                   96 |        8 |                         4 |                     11 |                   1 |
 | arm     |                   98 |        5 |                         5 |                     12 |                   0 |
-| aarch64 |                  101 |        2 |                         5 |                     12 |                   0 |
+| aarch64 |                  102 |        1 |                         5 |                     12 |                   0 |
 | riscv32 |                  101 |        2 |                         5 |                     12 |                   0 |
 | riscv64 |                  101 |        1 |                         6 |                     12 |                   0 |
 
@@ -188,16 +188,17 @@ arm, riscv32), which is exactly the constraint's own purpose.
 
 The `rejected` reasons are real, new parser gaps beyond what `classify-c`'s
 24-file corpus ever exercised, grouped in each `summary.txt`: 16-bit
-REX-extended sub-registers on x86_64 (`%r8w`-`%r15w`, the sibling gap to
-`classify-c`'s already-fixed 8-bit `%r8b`-`%r15b`); ARM's `{r0 r1 r2 r3}`
-register-list operand syntax; AArch64's `uxtx #0` register-extend operand;
-and two GNU-extension parse gaps (`dollars.c`'s `$`-prefixed identifiers,
-`extasm.c`'s extended-asm operand syntax on the targets where it compiles)
-not evidenced by `test/c/`. See "Capability ladder" below for the scope
-decision on each. RISC-V's `%pcrel_hi`/`%pcrel_lo` rejections (both profiles,
-5 files on riscv32, 5 on riscv64) were a parser bug, not a missing form, and
-are fixed - the table above already reflects the re-run after that fix
-(riscv32 96→101 accepted, riscv64 96→101 accepted).
+REX-extended sub-registers on x86_64 (`%r8w`-`%r15w`, which turned out to
+need more than the register table - see "Capability ladder" below); ARM's
+`{r0 r1 r2 r3}` register-list operand syntax; and two GNU-extension parse
+gaps (`dollars.c`'s `$`-prefixed identifiers, `extasm.c`'s extended-asm
+operand syntax on the targets where it compiles) not evidenced by `test/c/`.
+See "Capability ladder" below for the scope decision on each. Two gaps are
+already fixed and the table above reflects the re-run in both cases:
+RISC-V's `%pcrel_hi`/`%pcrel_lo` rejections (both profiles, 5 files on
+riscv32, 5 on riscv64) were a parser bug, not a missing form (96→101
+accepted on each); AArch64's `uxtx #0` was a genuinely missing ADD/SUB
+(extended register) encoding, now added (101→102 accepted).
 
 **One shared timeout, not a per-target rejection.** `test/regression/floats.c`
 compiles to roughly 110,000 lines of assembly (an exhaustive float-conversion
@@ -444,18 +445,23 @@ gaps:
    `vldr`/`vdiv.f32`/`vmul.f32` (VFP double load and arithmetic) remain open,
    scoped as follow-up work.
 4. **AArch64.** `classify-regression`'s `uxtx #0` (`add x0, x0, x16, uxtx #0`)
-   is the ADD/SUB *extended-register* encoding, structurally distinct from
-   the already-implemented ADD/SUB *shifted-register* form
-   (`aarch64_encode.ml`'s `Addsub_shift`, which only recognizes
-   `lsl`/`lsr`/`asr`/`ror`). The extend-keyword table this needs already
-   exists for register-offset memory addressing (`extend_option` in the same
-   file); the ALU form needs its own operand recognition and lowered variant,
-   not a shared one, because the two encodings' bit layouts differ. `%r8w`-style
-   register-table risk does not apply here since AArch64 has no operand-size
-   prefix concept. `assemble-c`'s recurring `cbz`/`cbnz` (compare-and-branch),
-   `sxtw`/`uxtw` (integer extension), `eor` (logical), `fcsel`/`scvtf`/`fmul`
-   (FP), `lsl`/`ubfiz` (shift/bitfield), and `movn` (mov negated immediate)
-   remain open, scoped as follow-up work.
+   is **fixed**: it is the ADD/SUB *extended-register* encoding, structurally
+   distinct from the already-implemented ADD/SUB *shifted-register* form
+   (`aarch64_encode.ml`'s `Addsub_shift`, which only recognized
+   `lsl`/`lsr`/`asr`/`ror`) - a different fixed bit at 23:21 (`00 1` versus a
+   2-bit shift kind and a `0`), and unlike the shifted form `rd`/`rn` may be
+   SP here. The register-offset addressing extend table in the same file
+   (`extend_option`) is a *different* 3-bit encoding at different bit values
+   for the same keywords, so the new `Addsub_extend` variant and its own
+   8-entry option table (`extend_alu_of_name`) are deliberately not unified
+   with it. Checked byte-for-byte against real `aarch64-linux-gnu-as`/
+   `objdump` across all eight extend keywords and both an SP operand and a
+   32-bit-source (`uxtw`/`uxtb`) case; see
+   `asm/test/targets/test_targets.ml`'s "ADD/SUB (extended register)" test.
+   `assemble-c`'s recurring `cbz`/`cbnz` (compare-and-branch), `sxtw`/`uxtw`
+   (integer extension), `eor` (logical), `fcsel`/`scvtf`/`fmul` (FP),
+   `lsl`/`ubfiz` (shift/bitfield), and `movn` (mov negated immediate) remain
+   open, scoped as follow-up work.
 5. **RISC-V (both profiles).** `classify-regression`'s `%pcrel_hi`/
    `%pcrel_lo` rejections (`charlit.c`, `initializers.c`, `initializers2.c`,
    `packedstruct1.c`, `packedstruct2.c`) are **fixed**: the real cause was not

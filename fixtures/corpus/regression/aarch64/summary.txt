@@ -1,9 +1,8 @@
 total:108
-accepted:101
-rejected:2
+accepted:102
+rejected:1
 compile-failed:5
 reason:1	(no diagnostic; exit 124)
-reason:1	.corpus-work/regression/aarch64/int64/output.s:298:19: error[aarch64.operand]: cannot parse operand uxtx #0
 compile-reason:1	modules/CompCert/test/regression/builtins-arm.c:16: error: use of unknown builtin '__builtin_read16_reversed'
 compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
 compile-reason:1	modules/CompCert/test/regression/builtins-x86.c:24: error: use of unknown builtin '__builtin_read16_reversed'
