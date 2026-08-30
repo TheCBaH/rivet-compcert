@@ -288,10 +288,36 @@ Grouped by capability (each `summary.txt` has the full per-file detail):
   `addq $bodies+24, %rax`, `pushl $sym`) was dominant on both targets - `ccomp`
   always materializes a symbol address through `lea`/RIP-relative addressing
   or a relocation-carrying `mov`, where gcc's `$symbol` is a symbolic
-  *immediate*; parses now (`Operand.Imm_sym`), though no `lower_instruction`
-  arm accepts it yet - it falls to that match's own `No_form` catch-all rather
-  than encoding, so this is parse-level progress only, same as `classify-c`'s
-  own scope. `(%base,%index)` with the scale omitted (GAS defaults it to 1)
+  *immediate*; parses (`Operand.Imm_sym`). `mov`'s register-destination form
+  now lowers and encodes it too (`Lowered.Mov_r_imm`'s `imm` field became a
+  `Disp.t`, carrying either a constant or a symbol the same way a memory
+  displacement already could - checked against real `i686-linux-gnu-as`/
+  `x86_64-linux-gnu-as`: `movl $sym, %eax` assembles to `b8 <disp32>` with an
+  `R_386_32`/`R_X86_64_32` relocation). The ALU-immediate form (`addq
+  $sym,%rax`) is fixed too, the same way: `Lowered.Alu_rm_imm`'s `imm` field
+  is now a `Disp.t`, and its imm32 rung reuses the same fixup codec - checked
+  against real `x86_64-linux-gnu-as`: `addq $sym, %rcx` assembles to `48 81
+  c1 <disp32>` with an `R_X86_64_32S` relocation, *signed* unlike `mov`'s
+  `R_X86_64_32` (matching this form's own prior sign-extending decode).
+  Discovered while checking that: gcc's own accumulator-destination case
+  (`addq $sym, %rax`, the corpus's literal spelling) doesn't byte-match at
+  all yet, symbolic or not - real `as` picks a shorter, ModR/M-less encoding
+  (`05 id`) for a full-width immediate against the accumulator specifically,
+  which this project's ALU-immediate encoder never had (confirmed with a
+  plain, non-symbolic `addl $1000, %eax` - real `as` gives `05 e8 03 00 00`,
+  five bytes, where this encoder's only form gives the seven-byte ModR/M
+  `81 c0 e8 03 00 00`). `push`-immediate (`pushl $sym`) is now fixed too:
+  unlike `mov`/the ALU ops, `push` had no non-symbolic immediate lowering at
+  all yet, so this added a new `Lowered.Push_imm` alongside the existing
+  register-only `Lowered.Push`, with its own short/long (`0x6a ib`/`0x68
+  id`) priority ladder mirroring `Alu_rm_imm`'s - checked against real
+  `i686-linux-gnu-as`: `pushl $sym` assembles to `68 <disp32>` with an
+  `R_386_32` relocation, and `pushl $100` still picks the pre-existing
+  `6a 64` short form, confirming the new ladder didn't regress the plain
+  literal case. All three symbolic-immediate sub-gaps (`mov`, ALU, `push`)
+  are now closed; the accumulator-destination ALU encoding gap noted above
+  remains open on its own.
+  `(%base,%index)` with the scale omitted (GAS defaults it to 1)
   and x86_32's own `%ah`/`%ch`/`%dh`/`%bh` legacy high-byte registers (the
   register-4-7 table had been borrowed whole from x86_64's REX-bearing one,
   which cannot exist without a REX byte) closed the rest: x86_64 0→24/24,
@@ -731,11 +757,11 @@ scope/gap decision that later follow-up work builds on.
   `Operand.Imm_sym`/`x86.simplify`'s `%st(n)` below: `dump-source-ast`'s
   operand-only check is what closed them, not real lowering. Both are since
   fully closed too - see "ARM `stmia`/`pop {reglist}`" and "ARM `vpush`" just
-  below. None of the remaining parse-level-only closures (`x86.lower`'s
-  `Operand.Imm_sym`, `x86.simplify`'s `%st(n)`) have been triaged into
-  "Capability ladder"'s scope-exclusion-or-real-gap grouping below either -
-  closing them further (actually lowering/encoding a symbolic immediate or
-  an x87 mnemonic) is unstarted.
+  below. `x86.lower`'s `Operand.Imm_sym` is now fully closed too - see
+  "x86 `movl $sym, %reg`"/"x86 `addq $sym, %reg`"/"x86 `pushl $sym`" below -
+  but `x86.simplify`'s `%st(n)` remains a parse-level-only closure not yet
+  triaged into "Capability ladder"'s scope-exclusion-or-real-gap grouping
+  below.
 - ARM `stmia`/`ldmia`/`pop {reglist}` (LDM-class - a genuinely different
   encoding from `push`'s STM-class one, not a shared form with a direction
   bit): evidenced by `gas_frontier.t`'s runtime-helper corpus (`i64_udivmod`/
@@ -770,6 +796,56 @@ scope/gap decision that later follow-up work builds on.
   one-register alias the way GPR `push` needs), and `ed6d0b04` for
   `{d16-d17}` (a base register at D16+, exercising the D:Vd split's high
   half).
+- x86 `movl $sym, %reg` (`Operand.Imm_sym` in `mov`'s register-destination
+  form; gcc's idiom for materializing a string/array address into a
+  register): now fixed. `Lowered.Mov_r_imm`'s `imm` field became a `Disp.t`
+  (was a bare `int64`) so it can carry a symbol the same way a memory
+  displacement already could; the field codec swapped a plain little-endian
+  field for `sym_imm32`, a fixup-carrying sibling of the existing `sym_disp`
+  (decode masks rather than sign-extends, to keep the change purely additive
+  for every already-round-tripping constant value). Byte-checked against
+  real i686-linux-gnu-as/x86_64-linux-gnu-as: `movl $sym, %eax` assembles to
+  `b8 <disp32>` with an `R_386_32` relocation on x86-32 and `R_X86_64_32` on
+  x86-64 - the same absolute-address relocation kind `mov`'s `mem_of_symbol`
+  disp32 form already uses.
+- x86 `addq $sym, %reg` (`Operand.Imm_sym` in the ALU ops' immediate form;
+  gcc's idiom for address arithmetic against a symbol's own address rather
+  than through `lea`): now fixed the same way. `Lowered.Alu_rm_imm`'s `imm`
+  field became a `Disp.t` too; its imm32 rung reuses `sym_imm32`, keeping
+  this form's own prior sign-extending decode (unlike `Mov_r_imm`'s
+  unsigned one - the two callers disagreed before either carried a symbol,
+  so `sym_imm32` took a `signedness` parameter rather than picking one).
+  The imm8 rung can never carry a symbol - GAS never picks it for a
+  symbolic operand regardless of the offset's own magnitude - so it is
+  wrapped in `const_disp` purely for the tuple shape both rungs of the
+  ladder must share. Byte-checked against real `x86_64-linux-gnu-as`:
+  `addq $sym, %rcx` assembles to `48 81 c1 <disp32>` with an
+  `R_X86_64_32S` relocation - *signed*, unlike `mov`'s `R_X86_64_32`.
+  Discovered while checking that: the corpus's literal spelling,
+  `addq $sym, %rax` (the accumulator), doesn't byte-match yet at all,
+  symbolic or not - real `as` picks a shorter, ModR/M-less encoding
+  (`05 id`) for a full-width immediate against the accumulator specifically,
+  an encoder gap this project already had before this change (confirmed
+  with a plain, non-symbolic `addl $1000, %eax`: real `as` gives
+  `05 e8 03 00 00`, five bytes, where this project's only ALU-immediate
+  form gives the seven-byte ModR/M `81 c0 e8 03 00 00`) - not evidenced by
+  any corpus rejection today (nothing here fails to *lower*, it just
+  wouldn't byte-match a differential GNU-as gate yet), so left unfixed
+  until that gate exists.
+- x86 `pushl $sym` (`Operand.Imm_sym` in `push`'s immediate form): now fixed,
+  the last of the three symbolic-immediate sub-gaps. Unlike `mov`/the ALU
+  ops, `push` had no non-symbolic immediate lowering at all before this - a
+  new `Lowered.Push_imm` constructor carries a `Disp.t` immediate alongside
+  the existing register-only `Lowered.Push`, with its own `0x6a ib`/`0x68
+  id` short/long ladder (the same short-immediate-first priority and
+  `fits_s8`/`fits_s32` check as `Alu_rm_imm`'s form; a symbolic immediate
+  always forces the `id` rung, same as the ALU form above). Byte-checked
+  against real i686-linux-gnu-as: `pushl $sym` assembles to `68 <disp32>`
+  with an `R_386_32` relocation, and `pushl $100` still picks the
+  pre-existing `6a 64` short form unchanged. All three sub-gaps of
+  `Operand.Imm_sym` (`mov`, the ALU ops, `push`) are now closed; the
+  accumulator-destination ALU encoding gap noted above remains open on its
+  own.
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
   decoder already handle it (the SIB "no base" codec alternative uses the
   same fixup-carrying displacement codec as RIP-relative addressing), only
