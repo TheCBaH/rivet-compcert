@@ -20,6 +20,16 @@ let normalize = function
       | None -> Rejected (Printf.sprintf "(no diagnostic; exit %d)" code))
   | Runner_failed msg -> Runner_failed msg
 
+(* A bigger, less curated suite than test/c/ can contain a file the parser
+   handles pathologically rather than rejects outright - CompCert's
+   test/regression/floats.c generates ~110K lines of assembly, and this
+   project's --dump-source-ast does not return on it in any bounded time this
+   session tried (still running past 60s of CPU time). Wrapped in the
+   external `timeout`, the same way gnu_tools.ml's qemu_run bounds a guest
+   run, so ONE such file becomes a bounded, recorded outcome (exit 124, the
+   same reserved code expected-status.mli documents) instead of hanging the
+   whole classify run - and, in CI, the whole pipeline - forever. *)
+let classify_timeout_s = 120
 let asm_exe repo = Fpath.(Repo.path repo / "asm" / "_build" / "default" / "tool" / "asm.exe")
 
 let real_runner repo (target : Target.t) : runner =
@@ -28,9 +38,10 @@ let real_runner repo (target : Target.t) : runner =
     Tool_process.exec
       (Tool_process.spec ~cwd:(Repo.path repo) ~stdout:Tool_process.Out_null
          ~stderr:Tool_process.Err_capture ~parsed_output:true ~accepted:Process_status.Any_exit
-         ~label:"corpus-classify-parse"
-         (Fpath.to_string (asm_exe repo))
-         [ "--target"; Target.to_string target; "--dump-source-ast"; generated_s_rel ])
+         ~label:"corpus-classify-parse" "timeout"
+         (Printf.sprintf "%ds" classify_timeout_s
+         :: Fpath.to_string (asm_exe repo)
+         :: [ "--target"; Target.to_string target; "--dump-source-ast"; generated_s_rel ]))
   with
   | Ok { Tool_process.status = Process_status.Exited code; stderr; _ } ->
       Exited { code; stderr = Option.value stderr ~default:"" }
@@ -50,12 +61,14 @@ type compiled_entry = {
   ce_generated_sha256 : string;
 }
 
-type outcome = Rec_accepted | Rec_rejected of string
+type outcome = Rec_accepted | Rec_rejected of string | Rec_compile_failed of string
 
 type file_record = {
   path : string;
   source_sha256 : string;
-  generated_sha256 : string;
+  generated_sha256 : string option;
+      (** [None] only for {!Rec_compile_failed}: there is no generated [.s] to
+          hash when [ccomp] itself never produced one. *)
   outcome : outcome;
 }
 
@@ -66,7 +79,7 @@ let classify_entry runner (e : compiled_entry) =
         {
           path = e.ce_path;
           source_sha256 = e.ce_source_sha256;
-          generated_sha256 = e.ce_generated_sha256;
+          generated_sha256 = Some e.ce_generated_sha256;
           outcome = Rec_accepted;
         }
   | Rejected reason ->
@@ -74,7 +87,7 @@ let classify_entry runner (e : compiled_entry) =
         {
           path = e.ce_path;
           source_sha256 = e.ce_source_sha256;
-          generated_sha256 = e.ce_generated_sha256;
+          generated_sha256 = Some e.ce_generated_sha256;
           outcome = Rec_rejected reason;
         }
   | Runner_failed msg -> Error msg
@@ -121,48 +134,76 @@ let render_manifest (m : manifest) =
   in
   List.iter
     (fun (r : file_record) ->
-      match r.outcome with
-      | Rec_accepted ->
+      match (r.outcome, r.generated_sha256) with
+      | Rec_accepted, Some g ->
           Buffer.add_string b
             (Printf.sprintf "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:accepted\n" r.path
-               r.source_sha256 r.generated_sha256)
-      | Rec_rejected reason ->
+               r.source_sha256 g)
+      | Rec_rejected reason, Some g ->
           Buffer.add_string b
             (Printf.sprintf
                "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:rejected\treason:%s\n" r.path
-               r.source_sha256 r.generated_sha256 (Manifest.escape reason)))
+               r.source_sha256 g (Manifest.escape reason))
+      | Rec_compile_failed reason, None ->
+          Buffer.add_string b
+            (Printf.sprintf "%s\tsource-sha256:%s\toutcome:compile-failed\treason:%s\n" r.path
+               r.source_sha256 (Manifest.escape reason))
+      | (Rec_accepted | Rec_rejected _), None ->
+          invalid_arg
+            (Printf.sprintf "render_manifest: %s is accepted/rejected but has no generated-sha256"
+               r.path)
+      | Rec_compile_failed _, Some _ ->
+          invalid_arg
+            (Printf.sprintf "render_manifest: %s is compile-failed but carries a generated-sha256"
+               r.path))
     sorted;
   Buffer.contents b
+
+(* [extract] picks the reason text this bucket cares about out of one record,
+   or [None] if the record belongs to a different bucket - shared by the
+   rejected-reason and compile-failed-reason groupings below so they stay
+   identically sorted, deduplicated, and counted. *)
+let group_reasons (files : file_record list) (extract : file_record -> string option) =
+  List.filter_map extract files |> List.sort_uniq String.compare
+  |> List.map (fun reason ->
+      let count = List.length (List.filter (fun r -> extract r = Some reason) files) in
+      (reason, count))
 
 let render_summary (m : manifest) =
   let total = List.length m.files in
   let accepted =
     List.length (List.filter (fun (r : file_record) -> r.outcome = Rec_accepted) m.files)
   in
-  let reasons =
-    List.filter_map
-      (fun (r : file_record) ->
-        match r.outcome with Rec_rejected s -> Some s | Rec_accepted -> None)
-      m.files
-    |> List.sort_uniq String.compare
-    |> List.map (fun reason ->
-        let count =
-          List.length
-            (List.filter
-               (fun (r : file_record) ->
-                 match r.outcome with Rec_rejected s -> s = reason | Rec_accepted -> false)
-               m.files)
-        in
-        (reason, count))
+  let compile_failed =
+    List.length
+      (List.filter
+         (fun (r : file_record) -> match r.outcome with Rec_compile_failed _ -> true | _ -> false)
+         m.files)
+  in
+  let rejected_reasons =
+    group_reasons m.files (fun r -> match r.outcome with Rec_rejected s -> Some s | _ -> None)
+  in
+  let compile_failed_reasons =
+    group_reasons m.files (fun r ->
+        match r.outcome with Rec_compile_failed s -> Some s | _ -> None)
   in
   let b = Buffer.create 1024 in
   Buffer.add_string b (Printf.sprintf "total:%d\n" total);
   Buffer.add_string b (Printf.sprintf "accepted:%d\n" accepted);
-  Buffer.add_string b (Printf.sprintf "rejected:%d\n" (total - accepted));
+  Buffer.add_string b (Printf.sprintf "rejected:%d\n" (total - accepted - compile_failed));
+  (* compile-failed:0 is never rendered - suites that never fail to compile
+     (test/c, and every existing published manifest) keep byte-for-byte the
+     same summary.txt they always had. *)
+  if compile_failed > 0 then
+    Buffer.add_string b (Printf.sprintf "compile-failed:%d\n" compile_failed);
   List.iter
     (fun (reason, count) ->
       Buffer.add_string b (Printf.sprintf "reason:%d\t%s\n" count (Manifest.escape reason)))
-    reasons;
+    rejected_reasons;
+  List.iter
+    (fun (reason, count) ->
+      Buffer.add_string b (Printf.sprintf "compile-reason:%d\t%s\n" count (Manifest.escape reason)))
+    compile_failed_reasons;
   Buffer.contents b
 
 (* {2 Parsing} *)
@@ -203,7 +244,7 @@ let parse_file_record ~line_no line =
       let* generated_sha256 =
         parse_hash_field ~line_no ~field:"generated-sha256" ~prefix:"generated-sha256:" generated
       in
-      Ok { path; source_sha256; generated_sha256; outcome = Rec_accepted }
+      Ok { path; source_sha256; generated_sha256 = Some generated_sha256; outcome = Rec_accepted }
   | [ path; source; generated; "outcome:rejected"; reason ] -> (
       let* () = Identifier.relative_path path |> Result.map ignore in
       let* source_sha256 =
@@ -218,7 +259,25 @@ let parse_file_record ~line_no line =
             (Printf.sprintf "manifest line %d: expected field \"reason\"" line_no)
       | Some r ->
           let* reason = Manifest.unescape r in
-          Ok { path; source_sha256; generated_sha256; outcome = Rec_rejected reason })
+          Ok
+            {
+              path;
+              source_sha256;
+              generated_sha256 = Some generated_sha256;
+              outcome = Rec_rejected reason;
+            })
+  | [ path; source; "outcome:compile-failed"; reason ] -> (
+      let* () = Identifier.relative_path path |> Result.map ignore in
+      let* source_sha256 =
+        parse_hash_field ~line_no ~field:"source-sha256" ~prefix:"source-sha256:" source
+      in
+      match strip_prefix ~prefix:"reason:" reason with
+      | None ->
+          err Tool_error.Parse
+            (Printf.sprintf "manifest line %d: expected field \"reason\"" line_no)
+      | Some r ->
+          let* reason = Manifest.unescape r in
+          Ok { path; source_sha256; generated_sha256 = None; outcome = Rec_compile_failed reason })
   | _ ->
       err Tool_error.Parse
         (Printf.sprintf "manifest line %d: malformed file record %S" line_no line)
@@ -375,6 +434,128 @@ let compile_entry repo ~compiler ~args ~corpus_work_root ~(target : Target.t) fi
       ce_generated_sha256 = generated_sha256;
     }
 
+(* {1 Other CompCert test suites}
+
+   [suite_spec] generalizes the [test/c/] path above to CompCert's other
+   static, committed-source test suites (currently [regression] and
+   [compression] - [abi]'s sources are generator-produced, some with an
+   explicit random seed, and so do not fit this "hash a committed .c file"
+   corpus model at all; see asm/docs/corpus.md's Follow-ups). It is
+   deliberately NOT used by [discover_c_files]/[compile_entry]/[classify_c]
+   above, which {!Corpus_assemble_cmd} also calls directly and which stay
+   exactly as they were before this suite generalized - only new suites go
+   through this path. *)
+
+type suite_spec = {
+  suite_tag : string;  (** The manifest's [suite:] value, e.g. ["regression"]. *)
+  test_subdir : string;
+      (** The directory name under [modules/CompCert/test/], e.g. ["regression"]. *)
+  extra_ccomp_args : string list;
+      (** Appended after the target's own [ccomp_args] - e.g. [test/regression]'s
+          own Makefile passes [-fall] to accept the struct-passing and
+          unstructured-switch constructs several of its files use; this
+          project's own parser is not involved in that decision, ccomp is. *)
+  dest : Repo.t -> Target.t -> Fpath.t;
+}
+
+let discover_suite_files repo (spec : suite_spec) =
+  let dir = Fpath.(Repo.path repo / "modules" / "CompCert" / "test" / spec.test_subdir) in
+  match Sys.readdir (Fpath.to_string dir) with
+  | exception Sys_error m -> err ~path:dir Tool_error.Traverse m
+  | entries ->
+      Ok
+        (entries |> Array.to_list
+        |> List.filter (fun f -> Filename.check_suffix f ".c")
+        |> List.sort String.compare)
+
+(* Unlike [compile_entry] above (used only by [test/c/], where every file is
+   known to compile), a bigger, less curated suite can contain a file that
+   never compiles at all for this target - CompCert's own
+   [test/regression/Makefile] documents one such case (funct1.c, its own
+   FAILURES list) and several files are legitimately for a different
+   architecture (builtins-arm.c, builtins-aarch64.c, ...). That is real
+   evidence for the "decide whether a recurring reason warrants support"
+   follow-up (asm/docs/corpus.md), not a tooling failure, so it becomes an
+   [outcome:compile-failed] record rather than aborting the whole run the way
+   a [ccomp] spawn failure still does. *)
+type prepared = Ready of compiled_entry | Precompiled of file_record
+
+let compile_or_record repo ~compiler ~args ~corpus_work_root ~(spec : suite_spec)
+    ~(target : Target.t) file =
+  let target_s = Target.to_string target in
+  let stem = Filename.remove_extension (Filename.basename file) in
+  let* dir =
+    Tool_workspace.child_of_recreatable corpus_work_root [ spec.suite_tag; target_s; stem ]
+  in
+  let* () = Tool_workspace.ensure dir in
+  let out_rel = ".corpus-work/" ^ spec.suite_tag ^ "/" ^ target_s ^ "/" ^ stem ^ "/output.s" in
+  let source_rel = "modules/CompCert/test/" ^ spec.test_subdir ^ "/" ^ file in
+  let* source_sha256 = Tool_fs.sha256 Fpath.(Repo.path repo // v source_rel) in
+  match
+    Tool_process.exec
+      (Tool_process.spec ~cwd:(Repo.path repo) ~stdout:Tool_process.Out_null
+         ~stderr:Tool_process.Err_capture ~parsed_output:true ~accepted:Process_status.Any_exit
+         ~label:"corpus-classify-compile" (Fpath.to_string compiler)
+         (("-S" :: args) @ [ "-o"; out_rel; source_rel ]))
+  with
+  | Ok { Tool_process.status = Process_status.Exited 0; _ } ->
+      let* generated_sha256 = Tool_fs.sha256 Fpath.(Repo.path repo // v out_rel) in
+      Ok
+        (Ready
+           {
+             ce_path = source_rel;
+             ce_source_sha256 = source_sha256;
+             ce_generated_s_rel = out_rel;
+             ce_generated_sha256 = generated_sha256;
+           })
+  | Ok { Tool_process.status = Process_status.Exited code; stderr; _ } ->
+      let reason =
+        match first_nonempty_line (Option.value stderr ~default:"") with
+        | Some l -> l
+        | None -> Printf.sprintf "(no diagnostic; exit %d)" code
+      in
+      Ok
+        (Precompiled
+           {
+             path = source_rel;
+             source_sha256;
+             generated_sha256 = None;
+             outcome = Rec_compile_failed reason;
+           })
+  | Ok { Tool_process.status = Process_status.Signaled _ | Process_status.Timed_out; _ } ->
+      (* Unreachable for the same reason real_runner's is: accepted:Any_exit
+         accepts every Exited _ and nothing else. *)
+      err Tool_error.Exec (Printf.sprintf "ccomp exited abnormally compiling %s" source_rel)
+  | Error e -> Error e
+
+let prepare_all repo ~compiler ~args ~corpus_work_root ~spec ~target files =
+  let* ps =
+    List.fold_left
+      (fun acc f ->
+        let* ps = acc in
+        let* p = compile_or_record repo ~compiler ~args ~corpus_work_root ~spec ~target f in
+        Ok (p :: ps))
+      (Ok []) files
+  in
+  Ok (List.rev ps)
+
+let classify_prepared runner prepared =
+  let* rs =
+    List.fold_left
+      (fun acc p ->
+        let* rs = acc in
+        match p with
+        | Precompiled r -> Ok (r :: rs)
+        | Ready e -> (
+            match classify_entry runner e with
+            | Ok r -> Ok (r :: rs)
+            | Error msg ->
+                err Tool_error.Exec
+                  (Printf.sprintf "parser invocation failed for %s: %s" e.ce_path msg)))
+      (Ok []) prepared
+  in
+  Ok (List.rev rs)
+
 (* {1 Publication} *)
 
 let stage_one final text =
@@ -399,9 +580,9 @@ let default_restore : restore_step =
       Ok ()
     with Sys_error m -> err ~path:manifest_path Tool_error.Write_file m
 
-let publish_with repo ~(target : Target.t) (m : manifest) ~commit_manifest ~commit_summary ~restore
-    =
-  let dest_dir = Repo.corpus_c repo target in
+let publish_with repo ~(target : Target.t) ?dest_dir (m : manifest) ~commit_manifest ~commit_summary
+    ~restore =
+  let dest_dir = match dest_dir with Some d -> d | None -> Repo.corpus_c repo target in
   (* After all compilation/classification has already succeeded, and
      idempotent on every later run - this is a brand-new corpus and
      Tool_fs.write never creates a missing parent directory. *)
@@ -433,6 +614,10 @@ let publish_with repo ~(target : Target.t) (m : manifest) ~commit_manifest ~comm
 let publish repo ~target (m : manifest) =
   publish_with repo ~target m ~commit_manifest:default_commit ~commit_summary:default_commit
     ~restore:default_restore
+
+let publish_suite (spec : suite_spec) repo ~target (m : manifest) =
+  publish_with repo ~target ~dest_dir:(spec.dest repo target) m ~commit_manifest:default_commit
+    ~commit_summary:default_commit ~restore:default_restore
 
 (* {1 classify-c} *)
 
@@ -494,6 +679,84 @@ let classify_c repo (target : Target.t) =
       ~target
   in
   match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
+
+(* {1 classify-regression, classify-compression} *)
+
+let regression_spec : suite_spec =
+  {
+    suite_tag = "regression";
+    test_subdir = "regression";
+    extra_ccomp_args = [ "-fall" ];
+    dest = Repo.corpus_regression;
+  }
+
+let compression_spec : suite_spec =
+  {
+    suite_tag = "compression";
+    test_subdir = "compression";
+    extra_ccomp_args = [];
+    dest = Repo.corpus_compression;
+  }
+
+let classify_suite_core repo ~git ~runner ~compiler ~(spec : suite_spec) ~(target : Target.t) =
+  let* () = check_clean_checkout git in
+  let* files = discover_suite_files repo spec in
+  if files = [] then
+    err Tool_error.Validate
+      (Printf.sprintf "modules/CompCert/test/%s contains no .c files" spec.test_subdir)
+  else
+    let* corpus_work_root = Tool_workspace.corpus_work repo in
+    let* () = Tool_workspace.recreate_root corpus_work_root in
+    let args = (Target.config target).Target.ccomp_args @ spec.extra_ccomp_args in
+    let* prepared = prepare_all repo ~compiler ~args ~corpus_work_root ~spec ~target files in
+    let* records = classify_prepared runner prepared in
+    let* ccomp_version = Ccomp.version compiler in
+    let* compcert_revision = git.head () in
+    let shared_header_path = "test/endian.h" in
+    let* shared_header_sha256 =
+      Tool_fs.sha256 Fpath.(Repo.path repo / "modules" / "CompCert" / "test" / "endian.h")
+    in
+    let header =
+      {
+        suite = spec.suite_tag;
+        target = Target.to_string target;
+        ccomp_version;
+        ccomp_args = String.concat " " args;
+        compcert_revision;
+        shared_header_path;
+        shared_header_sha256;
+      }
+    in
+    let manifest = { header; files = records } in
+    let* () = publish_suite spec repo ~target manifest in
+    let accepted =
+      List.length (List.filter (fun (r : file_record) -> r.outcome = Rec_accepted) records)
+    in
+    let compile_failed =
+      List.length
+        (List.filter
+           (fun (r : file_record) ->
+             match r.outcome with Rec_compile_failed _ -> true | _ -> false)
+           records)
+    in
+    Ok
+      (Printf.sprintf "corpus classify-%s-%s: %d accepted, %d rejected, %d compile-failed (of %d)"
+         spec.suite_tag (Target.to_string target) accepted
+         (List.length records - accepted - compile_failed)
+         compile_failed (List.length records))
+
+let classify_suite (spec : suite_spec) repo (target : Target.t) =
+  let step =
+    let* work_root = fixture_work_root repo in
+    let* () = Ccomp.require_all [ target ] ~work_root in
+    let compiler = Ccomp.path target ~work_root in
+    classify_suite_core repo ~git:(real_git_probe repo) ~runner:(real_runner repo target) ~compiler
+      ~spec ~target
+  in
+  match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
+
+let classify_regression repo (target : Target.t) = classify_suite regression_spec repo target
+let classify_compression repo (target : Target.t) = classify_suite compression_spec repo target
 
 (* {1 corpus check} *)
 
@@ -607,3 +870,129 @@ let check repo =
               "no corpus/c manifest published yet for any target - run a 'corpus \
                classify-c-<target>' first"))
   | targets -> Command.accumulate targets ~f:(fun target -> check_with repo ~git target)
+
+(* {1 check-regression, check-compression}
+
+   {!check_with}'s same eight-step verification (asm/docs/corpus.md), against
+   a [suite_spec] instead of the hard-coded [test/c/] literals. *)
+
+let check_suite_with repo ~git (spec : suite_spec) (target : Target.t) =
+  let target_s = Target.to_string target in
+  let dest_dir = spec.dest repo target in
+  let manifest_path = Fpath.(dest_dir / "manifest.txt") in
+  let summary_path = Fpath.(dest_dir / "summary.txt") in
+  let step =
+    if not (Sys.file_exists (Fpath.to_string manifest_path)) then
+      err ~path:manifest_path Tool_error.Read_file
+        (Printf.sprintf "no manifest at %s - run 'make asm-corpus-classify-%s-%s' first"
+           (Fpath.to_string manifest_path) spec.suite_tag target_s)
+    else
+      let* manifest_text = Tool_fs.read manifest_path in
+      let* m = parse_manifest manifest_text in
+      let* () =
+        if String.equal m.header.suite spec.suite_tag then Ok ()
+        else
+          err Tool_error.Validate
+            (Printf.sprintf "manifest suite is %S, expected %S" m.header.suite spec.suite_tag)
+      in
+      let* () =
+        if String.equal m.header.target target_s then Ok ()
+        else
+          err Tool_error.Validate
+            (Printf.sprintf "manifest target is %S, expected %S" m.header.target target_s)
+      in
+      let* () =
+        if String.equal m.header.shared_header_path "test/endian.h" then Ok ()
+        else
+          err Tool_error.Validate
+            (Printf.sprintf "manifest shared-header is %S, expected \"test/endian.h\""
+               m.header.shared_header_path)
+      in
+      let* () =
+        if String.equal (render_manifest m) manifest_text then Ok ()
+        else
+          err ~path:manifest_path Tool_error.Validate
+            "manifest.txt is not in canonical form (reordered, reformatted, or hand-edited)"
+      in
+      let* present = discover_suite_files repo spec in
+      let expected_paths =
+        List.sort String.compare
+          (List.map (fun f -> "modules/CompCert/test/" ^ spec.test_subdir ^ "/" ^ f) present)
+      in
+      let manifest_paths =
+        List.sort String.compare (List.map (fun (r : file_record) -> r.path) m.files)
+      in
+      let* () =
+        if expected_paths = manifest_paths then Ok ()
+        else
+          err Tool_error.Validate
+            (Printf.sprintf
+               "manifest.txt does not list exactly the files under modules/CompCert/test/%s"
+               spec.test_subdir)
+      in
+      let* () = check_clean_checkout git in
+      let* () = check_revision_matches git ~expected:m.header.compcert_revision in
+      let* () =
+        List.fold_left
+          (fun acc (r : file_record) ->
+            let* () = acc in
+            let src = Fpath.(Repo.path repo // v r.path) in
+            let* h = Tool_fs.sha256 src in
+            if String.equal h r.source_sha256 then Ok ()
+            else
+              err ~path:src Tool_error.Hash (Printf.sprintf "source-sha256 mismatch for %s" r.path))
+          (Ok ()) m.files
+      in
+      let* header_sha256 =
+        Tool_fs.sha256 Fpath.(Repo.path repo / "modules" / "CompCert" / "test" / "endian.h")
+      in
+      let* () =
+        if String.equal header_sha256 m.header.shared_header_sha256 then Ok ()
+        else err Tool_error.Hash "shared-header sha256 mismatch for test/endian.h"
+      in
+      let* summary_text = Tool_fs.read summary_path in
+      let* () =
+        if String.equal (render_summary m) summary_text then Ok ()
+        else
+          err ~path:summary_path Tool_error.Validate
+            "summary.txt does not match the manifest (stale or hand-edited)"
+      in
+      let accepted =
+        List.length (List.filter (fun (r : file_record) -> r.outcome = Rec_accepted) m.files)
+      in
+      let compile_failed =
+        List.length
+          (List.filter
+             (fun (r : file_record) ->
+               match r.outcome with Rec_compile_failed _ -> true | _ -> false)
+             m.files)
+      in
+      Ok
+        (Printf.sprintf
+           "corpus check-%s-%s: %d files match (%d accepted, %d rejected, %d compile-failed)"
+           spec.suite_tag target_s (List.length m.files) accepted
+           (List.length m.files - accepted - compile_failed)
+           compile_failed)
+  in
+  match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
+
+let published_targets_for (spec : suite_spec) repo =
+  List.filter
+    (fun target -> Sys.file_exists (Fpath.to_string Fpath.(spec.dest repo target / "manifest.txt")))
+    Target.all
+
+let check_suite (spec : suite_spec) repo =
+  let git = real_git_probe repo in
+  match published_targets_for spec repo with
+  | [] ->
+      Command.of_error
+        (Err.Error.make ~pos:__POS__ ~pp_error:Tool_error.pp
+           (Tool_error.v Tool_error.Read_file
+              (Printf.sprintf
+                 "no corpus/%s manifest published yet for any target - run a 'corpus \
+                  classify-%s-<target>' first"
+                 spec.suite_tag spec.suite_tag)))
+  | targets -> Command.accumulate targets ~f:(fun target -> check_suite_with repo ~git spec target)
+
+let check_regression repo = check_suite regression_spec repo
+let check_compression repo = check_suite compression_spec repo

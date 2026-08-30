@@ -42,12 +42,14 @@ type compiled_entry = {
   ce_generated_sha256 : string;
 }
 
-type outcome = Rec_accepted | Rec_rejected of string
+type outcome = Rec_accepted | Rec_rejected of string | Rec_compile_failed of string
 
 type file_record = {
   path : string;
   source_sha256 : string;
-  generated_sha256 : string;
+  generated_sha256 : string option;
+      (** [None] only for [Rec_compile_failed]: there is no generated [.s] to
+          hash when [ccomp] itself never produced one. *)
   outcome : outcome;
 }
 
@@ -99,6 +101,87 @@ type git_probe = {
 
 val real_git_probe : Repo.t -> git_probe
 
+(** {1 Discovering and compiling the corpus}
+
+    Shared with {!Corpus_assemble_cmd}, which classifies the same
+    [test/c/*.c] files through a later pipeline stage and must compile them
+    the identical way - same discovery order, same [ccomp -S] invocation - so
+    the two stages can never silently diverge on what "the corpus" is. *)
+
+val discover_c_files : Repo.t -> (string list, Tool_error.t) Err.t
+(** Every [*.c] file directly under [modules/CompCert/test/c], sorted. *)
+
+val compile_entry :
+  Repo.t ->
+  compiler:Fpath.t ->
+  args:string list ->
+  corpus_work_root:Tool_workspace.recreatable_root ->
+  target:Target.t ->
+  string ->
+  (compiled_entry, Tool_error.t) Err.t
+(** Compiles one [test/c/<file>] with [ccomp -S] into
+    [.corpus-work/c/<target>/<stem>/output.s] and hashes both the source and
+    the generated assembly. *)
+
+(** {1 Other CompCert test suites}
+
+    Generalizes {!discover_c_files}/{!compile_entry} above to CompCert's other
+    static, committed-source test suites ([regression], [compression] - not
+    [abi], whose sources are generator-produced, some with an explicit random
+    seed, so it does not fit this "hash a committed .c file" model; see
+    asm/docs/corpus.md's Follow-ups). {!discover_c_files} and {!compile_entry}
+    themselves are untouched by this generalization: {!Corpus_assemble_cmd}
+    depends on their exact current behavior for [test/c/]. *)
+
+type suite_spec = {
+  suite_tag : string;  (** The manifest's [suite:] value, e.g. ["regression"]. *)
+  test_subdir : string;
+      (** The directory name under [modules/CompCert/test/], e.g. ["regression"]. *)
+  extra_ccomp_args : string list;  (** Appended after the target's own [ccomp_args]. *)
+  dest : Repo.t -> Target.t -> Fpath.t;
+}
+
+val regression_spec : suite_spec
+val compression_spec : suite_spec
+
+val discover_suite_files : Repo.t -> suite_spec -> (string list, Tool_error.t) Err.t
+(** Every [*.c] file directly under [modules/CompCert/test/<spec.test_subdir>],
+    sorted. *)
+
+(** [compile_or_record]'s result: a file that compiled becomes {!Ready}, ready
+    for {!classify_all}-style classification; a file that failed to compile at
+    all becomes an already-final {!Precompiled} record
+    ([outcome:compile-failed]) - unlike {!compile_entry}, this never aborts
+    the whole run for one file CompCert itself cannot compile
+    (asm/docs/corpus.md's Follow-ups: a bigger, less curated suite than
+    [test/c/] can contain files known not to compile for a given target, e.g.
+    a different architecture's builtins). *)
+type prepared = Ready of compiled_entry | Precompiled of file_record
+
+val compile_or_record :
+  Repo.t ->
+  compiler:Fpath.t ->
+  args:string list ->
+  corpus_work_root:Tool_workspace.recreatable_root ->
+  spec:suite_spec ->
+  target:Target.t ->
+  string ->
+  (prepared, Tool_error.t) Err.t
+
+val prepare_all :
+  Repo.t ->
+  compiler:Fpath.t ->
+  args:string list ->
+  corpus_work_root:Tool_workspace.recreatable_root ->
+  spec:suite_spec ->
+  target:Target.t ->
+  string list ->
+  (prepared list, Tool_error.t) Err.t
+
+val classify_prepared : runner -> prepared list -> (file_record list, Tool_error.t) Err.t
+(** Like {!classify_all}, but passes an already-{!Precompiled} record through
+    unchanged instead of invoking [runner] on it. *)
+
 val check_clean_checkout : git_probe -> (unit, Tool_error.t) Err.t
 (** Fails, naming the dirty paths, unless [status_porcelain] is empty. Both
     {!classify_c} and {!check} call this before trusting [HEAD] at all - a
@@ -130,6 +213,7 @@ val default_commit : commit_step
 val publish_with :
   Repo.t ->
   target:Target.t ->
+  ?dest_dir:Fpath.t ->
   manifest ->
   commit_manifest:commit_step ->
   commit_summary:commit_step ->
@@ -138,7 +222,14 @@ val publish_with :
 (** {!publish}'s body, parameterized over its three fallible steps, so a test
     can fail each independently: committing the manifest, committing the
     summary, and restoring or removing the manifest when the summary commit
-    fails. *)
+    fails. [dest_dir] defaults to [Repo.corpus_c repo target] - {!publish}'s
+    own destination; {!publish_suite} overrides it with the [suite_spec]'s
+    own. *)
+
+val publish_suite :
+  suite_spec -> Repo.t -> target:Target.t -> manifest -> (unit, Tool_error.t) Err.t
+(** {!publish}, publishing to [spec.dest repo target] instead of
+    {!Repo.corpus_c}. *)
 
 (** {1 CLI entry points} *)
 
@@ -180,3 +271,33 @@ val check : Repo.t -> Command.t
     hidden by an earlier target's failure). Fails outright if no target has
     been published yet. See [asm/docs/corpus.md] for exactly what is
     re-verified against the live tree versus recorded only for audit. *)
+
+(** {1 classify-regression, classify-compression}
+
+    {!classify_c}'s same shape, over {!regression_spec}/{!compression_spec}
+    instead of the hard-coded [test/c/] literals. *)
+
+val classify_suite_core :
+  Repo.t ->
+  git:git_probe ->
+  runner:runner ->
+  compiler:Fpath.t ->
+  spec:suite_spec ->
+  target:Target.t ->
+  (string, Tool_error.t) Err.t
+
+val classify_suite : suite_spec -> Repo.t -> Target.t -> Command.t
+
+val classify_regression : Repo.t -> Target.t -> Command.t
+(** [classify_suite regression_spec]: CompCert's [test/regression/] suite. *)
+
+val classify_compression : Repo.t -> Target.t -> Command.t
+(** [classify_suite compression_spec]: CompCert's [test/compression/] suite. *)
+
+(** {1 check-regression, check-compression} *)
+
+val check_suite_with : Repo.t -> git:git_probe -> suite_spec -> Target.t -> Command.t
+val published_targets_for : suite_spec -> Repo.t -> Target.t list
+val check_suite : suite_spec -> Repo.t -> Command.t
+val check_regression : Repo.t -> Command.t
+val check_compression : Repo.t -> Command.t

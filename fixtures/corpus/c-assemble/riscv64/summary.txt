@@ -1,0 +1,18 @@
+total:24
+accepted:0
+blocked:10
+rejected:14
+reason:1	.corpus-work/c/riscv64/almabench/output.s:707:2: error[riscv64.simplify]: unknown instruction fsd
+reason:1	.corpus-work/c/riscv64/binarytrees/output.s:214:2: error[riscv64.simplify]: unknown instruction fld
+reason:1	.corpus-work/c/riscv64/bisect/output.s:106:2: error[riscv64.simplify]: unknown instruction fsd
+reason:1	.corpus-work/c/riscv64/fft/output.s:41:2: error[riscv64.simplify]: unknown instruction fsd
+reason:1	.corpus-work/c/riscv64/fftsp/output.s:35:2: error[riscv64.simplify]: unknown instruction fsd
+reason:1	.corpus-work/c/riscv64/fftw/output.s:21:2: error[riscv64.simplify]: unknown instruction fsd
+reason:1	.corpus-work/c/riscv64/integr/output.s:20:2: error[riscv64.simplify]: unknown instruction fmul.d
+reason:1	.corpus-work/c/riscv64/knucleotide/output.s:292:2: error[riscv64.simplify]: unknown instruction remu
+reason:1	.corpus-work/c/riscv64/mandelbrot/output.s:25:2: error[riscv64.simplify]: unknown instruction fsd
+reason:1	.corpus-work/c/riscv64/nbody/output.s:27:2: error[riscv64.simplify]: unknown instruction fsd
+reason:1	.corpus-work/c/riscv64/perlin/output.s:286:2: error[riscv64.simplify]: unknown instruction fmv.d
+reason:1	.corpus-work/c/riscv64/spectral/output.s:27:2: error[riscv64.simplify]: unknown instruction fcvt.d.w
+reason:1	<synthesized by riscv64>: error[riscv64.lower]: no ld form takes these operands
+reason:1	<synthesized by riscv64>: error[riscv64.lower]: no sll form takes these operands

@@ -1,0 +1,16 @@
+total:108
+accepted:96
+rejected:7
+compile-failed:5
+reason:1	(no diagnostic; exit 124)
+reason:1	.corpus-work/regression/riscv32/charlit/output.s:434:15: error[riscv32.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv32/extasm/output.s:16:12: error[parse]: unexpected token
+reason:1	.corpus-work/regression/riscv32/initializers/output.s:643:15: error[riscv32.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv32/initializers2/output.s:294:15: error[riscv32.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv32/packedstruct1/output.s:239:15: error[riscv32.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv32/packedstruct2/output.s:55:15: error[riscv32.operand]: cannot parse operand %pcrel_hi
+compile-reason:1	modules/CompCert/test/regression/builtins-aarch64.c:13: error: use of unknown builtin '__builtin_cls'
+compile-reason:1	modules/CompCert/test/regression/builtins-arm.c:16: error: use of unknown builtin '__builtin_read16_reversed'
+compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
+compile-reason:1	modules/CompCert/test/regression/builtins-x86.c:24: error: use of unknown builtin '__builtin_read16_reversed'
+compile-reason:1	modules/CompCert/test/regression/funct1.c:3: error: too many arguments to function call, expected 0, have 1

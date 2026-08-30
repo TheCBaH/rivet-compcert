@@ -5,11 +5,18 @@ fixture corpus beyond the 10 hand-picked cases under
 `asm/fixtures/compcert-3.17/` by running CompCert's own test suites through
 this project's parser and recording, per file, whether it was accepted.
 
-The first (and currently only) increment covers `modules/CompCert/test/c/`
-(24 files), parse-level classification only - not a GNU `as` differential,
-not execution. Other CompCert test suites (`regression`, `abi`,
-`compression`) and later pipeline stages are follow-ups; see the bottom of
-this document.
+The first increment covers `modules/CompCert/test/c/` (24 files), parse-level
+classification only - not a GNU `as` differential, not execution
+(`classify-c`, below). The second increment runs the same 24 files through
+the full pipeline instead of stopping at parsing (`assemble-c`, below). The
+third increment classifies CompCert's two other static, committed-source test
+suites the same parse-level way `classify-c` does: `test/regression/` (108
+files) and `test/compression/` (12 files) - `classify-regression`/
+`classify-compression`, below. `test/abi/`'s sources are generator-produced
+(some with an explicit random seed) rather than committed, so it does not fit
+this "hash a committed `.c` file" model and is deliberately not covered; see
+Follow-ups. A GNU `as` differential and execution over the wider corpus are
+also follow-ups; see the bottom of this document.
 
 ## Commands
 
@@ -26,16 +33,47 @@ this document.
   CompCert build, no `asm.exe`. Discovers every target with an already-
   published manifest and verifies each one's committed manifest and summary
   against the live tree; see "What `check` verifies" below.
+- `compcert-tools corpus assemble-c-<target>` - `classify-c-<target>`'s
+  pipeline-level sibling, same one-explicit-subcommand-per-target discipline
+  (`assemble-c-x86_32`, ..., `assemble-c-riscv64`). Requires the same cross
+  compiler and clean checkout as `classify-c-<target>`, and compiles the same
+  `test/c/*.c` files the identical way. But instead of stopping at
+  `--dump-source-ast`, it runs each generated `.s` through `asm`'s default,
+  full `parse -> simplify -> lower -> encode -> plan_image` path and
+  publishes `asm/fixtures/corpus/c-assemble/<target>/{manifest.txt,summary.txt}`
+  - a separate destination from `classify-c`'s, so the two are never
+  conflated. See "The assemble-c manifest format" below for how it tells an
+  expected libc/cross-file `image.undefined` block apart from a real gap.
+- `compcert-tools corpus check-assemble` - `check`'s cheap-path sibling for
+  `assemble-c`'s manifests.
+- `compcert-tools corpus classify-regression-<target>` /
+  `classify-compression-<target>` - `classify-c-<target>`'s own siblings over
+  `test/regression/` and `test/compression/`, same one-explicit-subcommand-
+  per-target discipline, same cross-compiler and clean-checkout requirement.
+  Unlike `classify-c`, a file in these bigger, less curated suites can fail to
+  *compile* at all for a given target (a different architecture's builtins, a
+  documented CompCert `FAILURES` case, ...) - that becomes a third outcome,
+  `outcome:compile-failed`, rather than aborting the run; see "The
+  classify-regression/classify-compression manifest format" below. Published
+  under `asm/fixtures/corpus/regression/<target>/` and
+  `asm/fixtures/corpus/compression/<target>/`.
+- `compcert-tools corpus check-regression` / `check-compression` - `check`'s
+  cheap-path siblings for those two suites' manifests.
 
-Makefile targets: `make asm-corpus-classify-c-<target>` (one per target, a
-static pattern rule over the same six targets as the fixture goals) and
-`make asm-corpus-check-c`; the latter is part of `asm-ci`. All six targets are
-now classified and their `manifest.txt`/`summary.txt` committed under
-`asm/fixtures/corpus/c/<target>/`, from real `classify-c-<target>` runs
-against CompCert 3.17 (`modules/CompCert` HEAD at the revision recorded in
-each manifest): x86_64, arm, aarch64, riscv32, and riscv64 each accept
-**24 of 24 files**; x86_32 accepts 21 of 24 (see Follow-ups for the three
-remaining rejections). The x86_64 corpus's prior 17 rejections were three
+Makefile targets: `make asm-corpus-classify-c-<target>` / `make
+asm-corpus-assemble-c-<target>` / `make asm-corpus-classify-regression-<target>`
+/ `make asm-corpus-classify-compression-<target>` (one per target each, static
+pattern rules over the same six targets as the fixture goals) and `make
+asm-corpus-check-c` / `make asm-corpus-check-assemble-c` / `make
+asm-corpus-check-regression` / `make asm-corpus-check-compression`; all four
+`check` targets are part of `asm-ci`. All six targets are classified and their
+`manifest.txt`/`summary.txt` committed under `asm/fixtures/corpus/c/<target>/`,
+from real `classify-c-<target>` runs against CompCert 3.17 (`modules/CompCert`
+HEAD at the revision recorded in each manifest): x86_64, x86_32, arm,
+aarch64, riscv32, and riscv64 each accept **24 of 24 files** (x86_32's
+former three rejections - `disp(%base)` with a symbolic displacement and no
+index/scale - are fixed; see Follow-ups). The x86_64 corpus's prior 17
+rejections were three
 gaps, all now fixed: a general octal string-escape
 (`\NNN`, 1-3 digits) in the lexer; `%r8b`-`%r15b` (8-bit REX-extended
 sub-registers, a register-table addition); and `%xmm0`-`%xmm15` plus the
@@ -81,17 +119,96 @@ suite over the hand-picked fixture corpus) stayed green throughout with no
 fixture drift, so this is additive coverage rather than a change to any
 previously-verified encoding.
 
-What still blocks a *complete* image (not a `classify-c` concern, and not
-fixed here) is symbol resolution: every one of the 24 files references at
-least one libc function (`malloc`, `atoi`, `printf`, `cos`, `memcmp`, ...)
-or a symbol defined in a CompCert test-suite file this corpus does not also
-compile (`i`, `p`, `data`, `arch_big_endian`), and `plan_image` correctly
-reports each as `image.undefined` - libc linking is `.ai/asm_plan.md` §2.2's
-explicit non-goal, and multi-file linking of the *rest* of the suite (not
-just `test/c/`) is unstarted. There is no committed manifest/summary for
-this "assemble" stage (unlike `classify-c`'s) - see Follow-ups.
+What still blocks a *complete* image (not a `classify-c` concern) is symbol
+resolution: every one of the 24 files references at least one libc function
+(`malloc`, `atoi`, `printf`, `cos`, `memcmp`, ...) or a symbol defined in a
+CompCert test-suite file this corpus does not also compile (`i`, `p`, `data`,
+`arch_big_endian`), and `plan_image` correctly reports each as
+`image.undefined` - libc linking is `.ai/asm_plan.md` §2.2's explicit
+non-goal, and multi-file linking of the *rest* of the suite (not just
+`test/c/`) is unstarted. `corpus assemble-c-<target>` is the reproducible,
+committed-manifest form of this check (`asm.exe`'s default path, no
+`--dump` flag): it distinguishes a file whose diagnostics are *only*
+`image.undefined` (`outcome:blocked` - the expected, already-understood
+libc/cross-file gap above) from a file with at least one diagnostic of some
+other code (`outcome:rejected` - a real parser, lowering, encoding, or
+image-planning bug `classify-c`'s parse-only check cannot see). Run for real
+against all six targets (CompCert 3.17, `modules/CompCert` HEAD at the
+revision each manifest records):
 
-## The manifest format
+| target  | accepted | blocked | rejected |
+|---------|---------:|--------:|---------:|
+| x86_64  |        0 |      24 |        0 |
+| arm     |        0 |       3 |       21 |
+| riscv32 |        0 |      10 |       14 |
+| riscv64 |        0 |      10 |       14 |
+| x86_32  |        0 |       0 |       24 |
+| aarch64 |        0 |       0 |       24 |
+
+x86_64 is fully blocked-only, matching "actually assembling this corpus"
+above - every rejection that check found before this manifest existed has
+already been fixed. The other five targets were never run past
+`--dump-source-ast` before now, and their `rejected` counts are new,
+real findings, not regressions: `x86_32`/`aarch64` reject on every file
+(each target's own set of not-yet-lowered instructions, e.g. `fstpl`/`fldl`
+on x86_32 and `eor`/`cbz`/`scvtf` on aarch64 - see each `summary.txt` for the
+full per-target reason list); `arm`/`riscv32`/`riscv64` are a mix. None of
+these are `classify-c` regressions - `classify-c`'s own parse-only manifests
+are untouched - and none are fixed here: deciding whether a recurring reason
+warrants new instruction/lowering support is deliberately a separate,
+evidence-driven step from building the check that can see the evidence; see
+Follow-ups.
+
+**Classifying `test/regression/` and `test/compression/` (2026-08-28).** Run
+for real against all six targets (CompCert 3.17, `modules/CompCert` HEAD at
+the revision each manifest records; `classify-regression` passes `-fall` in
+addition to each target's own `ccomp_args`, matching
+`test/regression/Makefile`'s own `CCOMPFLAGS` - `test/c/` and
+`test/compression/` need no such addition):
+
+| target  | regression accepted | rejected | compile-failed (of 108) | compression accepted | rejected (of 12) |
+|---------|---------------------:|---------:|-------------------------:|----------------------:|-------------------:|
+| x86_32  |                  102 |        3 |                         3 |                     12 |                   0 |
+| x86_64  |                   96 |        8 |                         4 |                     11 |                   1 |
+| arm     |                   98 |        5 |                         5 |                     12 |                   0 |
+| aarch64 |                  101 |        2 |                         5 |                     12 |                   0 |
+| riscv32 |                   96 |        7 |                         5 |                     12 |                   0 |
+| riscv64 |                   96 |        6 |                         6 |                     12 |                   0 |
+
+`compile-failed` is consistent and unsurprising across targets, all recorded
+in each manifest for audit rather than fixed here: `funct1.c` is CompCert's
+own documented `FAILURES` case (too few/many arguments - a real, upstream
+test-suite bug, not this project's); each `builtins-<arch>.c` fails to
+compile on every target other than its own architecture (`use of unknown
+builtin`, expected - CompCert's own compiler, not this project's parser);
+`extasm.c` (GCC extended-asm register-pair constraints, `%R0`/`%Q0`) fails to
+compile on the three 64-bit-native targets (x86_64, aarch64, riscv64) and
+succeeds on the three where a 64-bit value needs a register pair (x86_32,
+arm, riscv32), which is exactly the constraint's own purpose.
+
+The `rejected` reasons are real, new parser gaps beyond what `classify-c`'s
+24-file corpus ever exercised, grouped in each `summary.txt`: 16-bit
+REX-extended sub-registers on x86_64 (`%r8w`-`%r15w`, the sibling gap to
+`classify-c`'s already-fixed 8-bit `%r8b`-`%r15b`); ARM's `{r0 r1 r2 r3}`
+register-list operand syntax; AArch64's `uxtx #0` register-extend operand;
+RISC-V's `%pcrel_hi` relocation operand (both profiles); and two GNU-extension
+parse gaps (`dollars.c`'s `$`-prefixed identifiers, `extasm.c`'s extended-asm
+operand syntax on the targets where it compiles) not evidenced by `test/c/`.
+None are fixed here - see Follow-ups.
+
+**One shared timeout, not a per-target rejection.** `test/regression/floats.c`
+compiles to roughly 110,000 lines of assembly (an exhaustive float-conversion
+table), and this project's own `--dump-source-ast` does not return on it in
+any bounded time this session tried (over 5 CPU-minutes, still running).
+Every manifest above records it as `outcome:rejected reason:(no diagnostic;
+exit 124)` - `classify-regression`'s parser invocation is now wrapped in the
+external `timeout` (120s, the same convention `gnu_tools.ml`'s `qemu_run`
+uses for a guest run), so this is a bounded, recorded finding rather than a
+hung `classify-regression` run - and, since it is in `asm-ci`, a hung CI
+pipeline. The underlying performance pathology itself is unfixed; see
+Follow-ups.
+
+## The `classify-c` manifest format
 
 `asm/fixtures/corpus/c/x86_64/manifest.txt`: a fixed six-line header, then
 one line per corpus file, sorted by path.
@@ -119,6 +236,81 @@ rendered by one canonical function each (`render_manifest`, `render_summary`)
 - `classify-c` and `check` never format them differently.
 
 The raw generated `.s` files are **not** committed, only their hashes.
+
+## The `assemble-c` manifest format
+
+`asm/fixtures/corpus/c-assemble/x86_64/manifest.txt`: the same fixed
+six-line header as `classify-c`'s (`suite` is the literal `c-assemble`
+rather than `c`), then one line per corpus file, sorted by path, with a
+third possible `outcome` alongside `accepted`/`rejected`:
+
+```
+suite:c-assemble
+target:x86_64
+ccomp-version:<first line of `ccomp -version`>
+ccomp-args:<space-joined x86_64 ccomp flags>
+compcert-revision:<git -C modules/CompCert rev-parse HEAD>
+shared-header:test/endian.h	sha256:<hex>
+modules/CompCert/test/c/return42.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted
+modules/CompCert/test/c/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:blocked	undefined:4	reasons:<sorted, deduplicated, "; "-joined diagnostic messages>
+modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first non-image.undefined diagnostic line>
+```
+
+`outcome:blocked` records `undefined:<n>`, the number of `image.undefined`
+diagnostics `asm.exe` reported for that file, and `reasons:`, their sorted,
+deduplicated messages (not the raw diagnostic lines, which repeat the
+generated file's own path) joined with `"; "` and escaped the same way as
+every other free-text manifest field. `outcome:rejected`'s `reason` is the
+first diagnostic *line* whose code is not `image.undefined` - the real gap,
+even when the same file also has `image.undefined` diagnostics alongside it.
+A file with no recognizable `<origin>: error[<code>]: <message>` diagnostic
+line at all (a crash, or a diagnostic-free nonzero exit) falls back to the
+first non-empty stderr line, or a fixed placeholder for empty stderr -
+mirroring `classify-c`'s own fallback.
+
+`asm/fixtures/corpus/c-assemble/x86_64/summary.txt`: `total`/`accepted`/
+`blocked`/`rejected` counts, then *rejected* files grouped by exact reason
+text the same way `classify-c`'s summary groups its rejections - `blocked`
+files are not grouped by reason in the summary, since their per-file
+evidence already lives in `manifest.txt` and grouping by which libc
+functions a file happens to call would mostly just re-sort the corpus.
+
+## The `classify-regression`/`classify-compression` manifest format
+
+`asm/fixtures/corpus/regression/x86_64/manifest.txt`: the same fixed six-line
+header as `classify-c`'s (`suite` is the literal `regression` or
+`compression`), then one line per corpus file, sorted by path, with a third
+possible `outcome` alongside `accepted`/`rejected` - `compile-failed`, for a
+file that never produced a `.s` at all:
+
+```
+suite:regression
+target:x86_64
+ccomp-version:<first line of `ccomp -version`>
+ccomp-args:<space-joined x86_64 ccomp flags, including -fall>
+compcert-revision:<git -C modules/CompCert rev-parse HEAD>
+shared-header:test/endian.h	sha256:<hex>
+modules/CompCert/test/regression/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted
+modules/CompCert/test/regression/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>
+modules/CompCert/test/regression/funct1.c	source-sha256:<hex>	outcome:compile-failed	reason:<first ccomp diagnostic line>
+```
+
+`outcome:compile-failed` has no `generated-sha256` field - there is no
+generated `.s` to hash when `ccomp` itself never produced one - and its
+`reason` is the same first-non-empty-stderr-line (or fixed placeholder for
+empty stderr) fallback `classify-c`'s own `Rejected` reason uses, applied to
+`ccomp`'s stderr instead of `asm.exe`'s.
+
+`asm/fixtures/corpus/regression/x86_64/summary.txt`: `total`/`accepted`/
+`rejected` counts, a `compile-failed` count (omitted, along with its reason
+group, when it is zero - which is every already-published `classify-c`/
+`classify-compression` manifest, so their `summary.txt` stays byte-for-byte
+what `classify-c`'s two-outcome format always produced), then *rejected*
+files grouped by reason (`reason:<count><TAB><text>`, sorted) and
+*compile-failed* files grouped by reason the identical way
+(`compile-reason:<count><TAB><text>`, sorted) - two separate groups, since a
+file's `.c` source not compiling at all is different evidence from its
+generated `.s` not parsing.
 
 ## What `check` verifies
 
@@ -150,32 +342,38 @@ In order, failing on the first problem:
 `ccomp-args`, and every `generated-sha256` - reproducing these needs `ccomp`
 itself, which is `classify-c`'s job, not `check`'s.
 
+`check-assemble` verifies each `c-assemble/<target>/manifest.txt` the
+identical way, against the identical eight-step list, with two differences:
+`suite` must literally be `"c-assemble"` rather than `"c"` at step 2, and
+step 8 additionally re-derives the `blocked`/`accepted`/`rejected` totals
+`render_summary` computes rather than just `accepted`/`rejected`. It is a
+wholly separate command from `check` (own manifest, own destination
+directory, own errors) so an `assemble-c` regression is never conflated with
+a `classify-c` one, and vice versa.
+
+`check-regression`/`check-compression` verify `regression/<target>/` and
+`compression/<target>/` the same eight-step way, `suite` literally
+`"regression"`/`"compression"` at step 2 and step 4's inventory compared
+against `modules/CompCert/test/regression/*.c`/`test/compression/*.c`
+instead of `test/c/*.c` - each its own command, own manifests, own errors,
+never conflated with `classify-c`'s or each other's.
+
 ## Publication is recoverable
 
-`classify-c` computes both files' full content before touching the
-destination, then installs them so the destination is always either the last
-known-good pair or the new pair - including on the very first run (no prior
-manifest at all) and including when the second (`summary.txt`) install fails
-right after the first succeeded, in which case the prior `manifest.txt` is
-restored (or, on a first run, the just-installed one is removed) rather than
-left dangling without a matching summary. If that restoration itself fails,
-both failures are reported and every retained file is named in the
-diagnostic rather than silently deleted.
+`classify-c`, `assemble-c`, `classify-regression`, and `classify-compression`
+each compute both of their own files' full
+content before touching their own destination, then install them so the
+destination is always either the last known-good pair or the new pair -
+including on the very first run (no prior manifest at all) and including
+when the second (`summary.txt`) install fails right after the first
+succeeded, in which case the prior `manifest.txt` is restored (or, on a
+first run, the just-installed one is removed) rather than left dangling
+without a matching summary. If that restoration itself fails, both failures
+are reported and every retained file is named in the diagnostic rather than
+silently deleted.
 
 ## Follow-ups
 
-- **A committed "assemble" manifest, mirroring `classify-c`'s.** The
-  pipeline-level check described above ("Actually assembling this corpus")
-  was run and verified this session but has no `corpus assemble-c`
-  subcommand, no checked-in manifest/summary, and no `check`-style
-  re-verification - unlike `classify-c`, it is not yet CI-enforced or
-  regenerable by a single documented command. Needs its own runner (the
-  default `asm.exe` invocation reaches `plan_image`, which is as far as a
-  single-TU compile can honestly go without a linker for the rest of the
-  program) and a manifest format that can distinguish "blocked on an
-  undefined external symbol" (expected, given `.ai/asm_plan.md` §2.2) from
-  a real encoding gap, rather than collapsing both into one `rejected`
-  bucket the way `classify-c`'s does.
 - A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
   decoder already handle it (the SIB "no base" codec alternative uses the
   same fixup-carrying displacement codec as RIP-relative addressing), only
@@ -201,16 +399,59 @@ diagnostic rather than silently deleted.
   gaps found, riscv32 24/24 with no gaps found (once the published
   `riscv32-linux-gnu` toolchain gave it a real `ilp32d`-ABI cross compiler -
   it no longer shares RV64's GNU-tool prefix or its libc gap; see
-  `asm/docs/riscv-inventory.md`). x86_32 8→21/24 (xmm0-7 register table;
-  symbolic base-less SIB; `jmp *sym(,%reg,scale)`); 3 files still rejected on
-  a related, not-yet-fixed gap (`disp(%base)` with a symbolic displacement, no
-  index/scale, e.g. `a(%eax)`); see `.ai/asm_plan.md` §12's next-steps list
-  for the fix criteria (focused parser/codec test plus GNU-`as` differential
-  evidence before regenerating the manifest).
-- Add `classify-regression`, `classify-abi`, `classify-compression`
-  subcommands for CompCert's other three test suites.
+  `asm/docs/riscv-inventory.md`). x86_32 8→24/24: xmm0-7 register table;
+  symbolic base-less SIB; `jmp *sym(,%reg,scale)`; and, closing its last
+  three, a symbolic (as opposed to literal) `disp(%base)` operand, fixed in
+  both the parser (a new case for a symbolic displacement) and the encoder
+  (the `base-disp32` ModRM alternative no longer declines a symbolic
+  displacement), checked against `i686-linux-gnu-as` before being promoted
+  into a permanent expect test.
+- `classify-regression` and `classify-compression` (see above) are now run
+  for real against all six targets. `classify-abi` is deliberately not
+  attempted: `test/abi/`'s only static, committed `.c` file is `layout.c`/
+  `staticlayout.c`, and both `#include "layout.h"`, a header `test/abi/Makefile`
+  generates at build time by compiling and running `genlayout.ml` (itself
+  target-ABI-dependent) - every other `.c` file in the suite
+  (`fixed_def.c`/`fixed_use.c`, `vararg_def.c`/`vararg_use.c`,
+  `struct_def.c`/`struct_use.c`) is generated the same way by `generator.ml`,
+  which for `fixed`/`vararg` additionally takes an explicit random seed
+  (`-rnd 500`). None of that fits the "hash a committed `.c` file, expect a
+  stable manifest" model `classify-c`/`classify-regression`/
+  `classify-compression` share - supporting it would mean building and
+  running two more OCaml generator programs per target as a new pipeline
+  stage, not one more `suite_spec`. Left for a future increment if the ABI
+  suite's coverage turns out to matter enough to justify that.
 - Add a differential stage (GNU `as`/`objdump` cross-check) for accepted
-  files.
-- Decide whether recurring rejection reasons warrant new instruction or
-  directive support, or are legitimately out of scope (libc-dependent, PIC,
-  etc., already excluded per `.ai/asm_plan.md`).
+  files, across all four classified suites.
+- Decide whether a recurring `assemble-c` rejection reason warrants new
+  instruction or lowering support, or is legitimately out of scope
+  (libc-dependent, PIC, etc., already excluded per `.ai/asm_plan.md`). The
+  "The `assemble-c` manifest format" section above's per-target table and
+  each target's committed `summary.txt` are the evidence this decision
+  should be made from - e.g. x86_32's and aarch64's entirely-rejected columns
+  are each dominated by a small, closed set of not-yet-lowered instructions
+  per target, not 24 distinct gaps.
+- Decide whether a recurring `classify-regression`/`classify-compression`
+  rejection reason warrants new instruction/lowering support: x86_64's
+  `%r8w`-`%r15w` (16-bit REX-extended sub-registers - the direct sibling of
+  the already-fixed 8-bit `%r8b`-`%r15b` gap, same register-table shape),
+  ARM's `{r0 r1 r2 r3}` register-list operand, AArch64's `uxtx #0`
+  register-extend operand, and RISC-V's `%pcrel_hi` relocation operand each
+  recur across more than one file (see the results table above and each
+  target's committed `summary.txt`) and look like real, closed gaps rather
+  than one-off corpus quirks.
+- `test/regression/floats.c` (~110K lines of generated assembly) makes this
+  project's `--dump-source-ast` take longer than 5 CPU-minutes without
+  returning, on every target (it is the one shared file, so the finding is
+  target-independent). `classify-regression` now bounds this with an external
+  120s `timeout` rather than hanging, but the underlying performance
+  pathology - almost certainly at least quadratic in input size somewhere in
+  the lexer, parser, or AST construction, given a well-formed 110K-line file
+  never finishing in 5 minutes - is itself unfixed and unprofiled.
+- This session's riscv32 `ccomp`/`as` builds and runs fine, but
+  `riscv32-linux-gnu-gcc` (the full cross-`gcc`, as opposed to
+  `riscv32-linux-gnu-as`/binutils alone, which CompCert's own preprocessing
+  step needs even for `-S`) was only reachable once
+  `/usr/local/riscv32-linux-gnu-toolchain/bin` was added to `PATH` - already
+  in the Dockerfile's own `ENV PATH`, but not present in this interactive
+  session's shell for reasons this session did not chase down further.

@@ -1,0 +1,16 @@
+total:108
+accepted:96
+rejected:6
+compile-failed:6
+reason:1	(no diagnostic; exit 124)
+reason:1	.corpus-work/regression/riscv64/charlit/output.s:434:15: error[riscv64.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv64/initializers/output.s:648:15: error[riscv64.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv64/initializers2/output.s:294:15: error[riscv64.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv64/packedstruct1/output.s:236:15: error[riscv64.operand]: cannot parse operand %pcrel_hi
+reason:1	.corpus-work/regression/riscv64/packedstruct2/output.s:55:15: error[riscv64.operand]: cannot parse operand %pcrel_hi
+compile-reason:1	modules/CompCert/test/regression/builtins-aarch64.c:13: error: use of unknown builtin '__builtin_cls'
+compile-reason:1	modules/CompCert/test/regression/builtins-arm.c:16: error: use of unknown builtin '__builtin_read16_reversed'
+compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
+compile-reason:1	modules/CompCert/test/regression/builtins-x86.c:24: error: use of unknown builtin '__builtin_read16_reversed'
+compile-reason:1	modules/CompCert/test/regression/extasm.c:63: error: '%R0' in asm text does not designate any operand
+compile-reason:1	modules/CompCert/test/regression/funct1.c:3: error: too many arguments to function call, expected 0, have 1

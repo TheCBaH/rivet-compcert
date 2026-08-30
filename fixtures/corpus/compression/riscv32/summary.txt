@@ -1,0 +1,3 @@
+total:12
+accepted:12
+rejected:0
