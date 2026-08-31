@@ -1,16 +1,4 @@
 total:24
 accepted:0
-blocked:12
-rejected:12
-reason:1	.corpus-work/c/riscv32/almabench/output.s:707:2: error[riscv32.simplify]: unknown instruction fsd
-reason:1	.corpus-work/c/riscv32/binarytrees/output.s:214:2: error[riscv32.simplify]: unknown instruction fld
-reason:1	.corpus-work/c/riscv32/bisect/output.s:106:2: error[riscv32.simplify]: unknown instruction fsd
-reason:1	.corpus-work/c/riscv32/fft/output.s:41:2: error[riscv32.simplify]: unknown instruction fsd
-reason:1	.corpus-work/c/riscv32/fftsp/output.s:35:2: error[riscv32.simplify]: unknown instruction fsd
-reason:1	.corpus-work/c/riscv32/fftw/output.s:21:2: error[riscv32.simplify]: unknown instruction fsd
-reason:1	.corpus-work/c/riscv32/integr/output.s:20:2: error[riscv32.simplify]: unknown instruction fmul.d
-reason:1	.corpus-work/c/riscv32/knucleotide/output.s:642:2: error[riscv32.simplify]: unknown instruction flw
-reason:1	.corpus-work/c/riscv32/mandelbrot/output.s:25:2: error[riscv32.simplify]: unknown instruction fsd
-reason:1	.corpus-work/c/riscv32/nbody/output.s:27:2: error[riscv32.simplify]: unknown instruction fsd
-reason:1	.corpus-work/c/riscv32/perlin/output.s:286:2: error[riscv32.simplify]: unknown instruction fmv.d
-reason:1	.corpus-work/c/riscv32/spectral/output.s:26:2: error[riscv32.simplify]: unknown instruction fcvt.d.w
+blocked:24
+rejected:0

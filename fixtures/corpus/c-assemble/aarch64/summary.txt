@@ -1,16 +1,4 @@
 total:24
 accepted:0
-blocked:12
-rejected:12
-reason:1	.corpus-work/c/aarch64/almabench/output.s:723:2: error[aarch64.simplify]: unknown instruction fcsel
-reason:1	.corpus-work/c/aarch64/binarytrees/output.s:207:2: error[aarch64.simplify]: unknown instruction ucvtf
-reason:1	.corpus-work/c/aarch64/bisect/output.s:118:2: error[aarch64.simplify]: unknown instruction fsub
-reason:1	.corpus-work/c/aarch64/fft/output.s:82:2: error[aarch64.simplify]: unknown instruction scvtf
-reason:1	.corpus-work/c/aarch64/fftsp/output.s:76:2: error[aarch64.simplify]: unknown instruction scvtf
-reason:1	.corpus-work/c/aarch64/fftw/output.s:48:2: error[aarch64.simplify]: unknown instruction fmul
-reason:1	.corpus-work/c/aarch64/integr/output.s:17:2: error[aarch64.simplify]: unknown instruction fmul
-reason:1	.corpus-work/c/aarch64/knucleotide/output.s:627:2: error[aarch64.simplify]: unknown instruction scvtf
-reason:1	.corpus-work/c/aarch64/mandelbrot/output.s:44:2: error[aarch64.simplify]: unknown instruction scvtf
-reason:1	.corpus-work/c/aarch64/nbody/output.s:47:2: error[aarch64.simplify]: unknown instruction fsub
-reason:1	.corpus-work/c/aarch64/perlin/output.s:282:2: error[aarch64.simplify]: unknown instruction fcsel
-reason:1	.corpus-work/c/aarch64/spectral/output.s:37:2: error[aarch64.simplify]: unknown instruction scvtf
+blocked:24
+rejected:0
