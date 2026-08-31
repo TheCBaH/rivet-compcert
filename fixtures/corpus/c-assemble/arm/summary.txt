@@ -1,19 +1,4 @@
 total:24
 accepted:0
-blocked:3
-rejected:21
-reason:1	.corpus-work/c/arm/aes/output.s:2727:2: error[arm.simplify]: unknown instruction eor
-reason:1	.corpus-work/c/arm/binarytrees/output.s:245:2: error[arm.simplify]: unknown instruction rsb
-reason:1	.corpus-work/c/arm/chomp/output.s:697:2: error[arm.simplify]: unknown instruction rsb
-reason:1	.corpus-work/c/arm/fft/output.s:189:2: error[arm.simplify]: unknown instruction rsb
-reason:1	.corpus-work/c/arm/fftsp/output.s:94:2: error[arm.simplify]: unknown instruction vdiv.f32
-reason:1	.corpus-work/c/arm/knucleotide/output.s:670:2: error[arm.simplify]: unknown instruction vmul.f32
-reason:1	.corpus-work/c/arm/mandelbrot/output.s:97:2: error[arm.simplify]: unknown instruction orr
-reason:1	.corpus-work/c/arm/nsieve/output.s:44:2: error[arm.simplify]: unknown instruction lsl
-reason:1	.corpus-work/c/arm/nsievebits/output.s:31:2: error[arm.simplify]: unknown instruction lsl
-reason:1	.corpus-work/c/arm/qsort/output.s:115:2: error[arm.simplify]: unknown instruction mvn
-reason:1	.corpus-work/c/arm/sha1/output.s:105:2: error[arm.simplify]: unknown instruction eor
-reason:1	.corpus-work/c/arm/sha3/output.s:166:2: error[arm.simplify]: unknown instruction eor
-reason:1	.corpus-work/c/arm/siphash24/output.s:47:2: error[arm.simplify]: unknown instruction orr
-reason:1	.corpus-work/c/arm/vmach/output.s:61:2: error[arm.simplify]: unknown instruction nop
-reason:7	<synthesized by arm>: error[arm.lower]: no vldr form takes these operands
+blocked:24
+rejected:0

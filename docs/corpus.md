@@ -823,10 +823,115 @@ gaps:
    same frontier check M4 uses) surfaced a sibling, still-open gap the
    register-list parse error had been masking: `pop {reglist}` (used by
    `i64_udivmod`/`i64_umod`'s epilogue) is a genuinely different encoding
-   (LDM-class, not STM) and is not implemented here. `assemble-c`'s recurring
-   `eor`/`rsb`/`orr`/`mvn`/`lsl`/`nop` (integer/logical/shift family) and
-   `vldr`/`vdiv.f32`/`vmul.f32` (VFP double load and arithmetic) remain open,
-   scoped as follow-up work.
+   (LDM-class, not STM) and is not implemented here (since fully closed - see
+   the ARM `stmia`/`ldmia`/`pop` and `vpush` Follow-ups entries).
+   `assemble-c`'s recurring integer/logical/shift family - `eor`/`rsb`/`orr`/
+   `mvn`/`lsl`/`nop`, and the further `bic`/`adc`/`adds` and `eor`/`orr`/
+   `bic`'s own three-operand immediate form regenerating unmasked along the
+   way - is now **fixed**: every one of `eor`(dp=1)/`rsb`(dp=3)/`orr`(dp=12)/
+   `bic`(dp=14)/`mvn`(dp=15)/`adc`(dp=5) is the identical `Dp_imm`/`Dp_reg`
+   shape `add`/`sub`/`and`/`mov`/`cmp`(dp=0/2/4/10/13) already lower - one
+   more `to_dp`/`of_dp` table entry each, no new codec alt - except `mvn`,
+   which reuses `mov`'s own two-operand (no `rn`) shape rather than the
+   three-operand one. `adds` (evidenced only as `add`'s own flag-setting
+   three-register form, `siphash24.c`'s 64-bit-add lower half, its upper half
+   the plain `adc` above) needed its own opcode and dedicated lowering/
+   printing case instead of joining that generic table: a `dp` value alone
+   cannot distinguish `add` from `adds`, only the pre-existing `s` field can,
+   and the generic lowering always produces `s = false`. `lsl`/`lsr`/`asr`/
+   `ror rd, rm, rs` (register-shift-amount form, evidenced only as `lsl`) are
+   GNU's own mnemonics for `mov` with a register-specified shift amount - a
+   different word shape from the already-supported immediate-shift-amount
+   one (bit 4 is the immediate/register discriminator, and `Rs` sits where
+   the 5-bit immediate amount otherwise would), so this added a dedicated
+   `Lowered.Shift_reg` and codec alt rather than widening `Dp_reg`. `nop` is
+   the dedicated ARMv7 hint-NOP word (`e320f000`, the same bytes `nop_bytes`
+   already pads a section with), now reachable from a source-level `nop`
+   mnemonic too, added as its own codec alt at a negative priority so it is
+   tried before `dp-imm` swallows its overlapping fixed bits (the same
+   overlap `movw`/`movt` already document). Every form byte-checked against
+   real `arm-linux-gnueabihf-as`/`objdump`; see
+   `asm/test/targets/test_targets.ml`'s dedicated tests. Regenerating
+   `assemble-c`'s arm manifest through this whole chain (each fix unmasking
+   the next, the same iterative pattern as x86_32's `lea`/`fldl`/`shldl`
+   chain above) moved arm from 3 blocked/21 rejected to 13 blocked/11
+   rejected: every remaining rejection reason (`vdiv.f32`/`vmul.f32`/`vldr`,
+   9 recurrences) is now VFP floating-point, the deliberate second slice
+   Ordered Work item 3 defers - the integer/logical/shift slice is fully
+   closed for this corpus.
+
+   The floating-point slice's first ARM cut, `vadd`/`vsub`/`vmul`/`vdiv.f32`
+   (register-register-register, `fftsp.c`/`knucleotide.c`), is now **fixed**:
+   the double-precision family already had a complete codec end to end
+   (`Lowered.V3_d`/`Lowered.V3_s` were both defined and both encoded/decoded
+   correctly, since M1), so only the single-precision *entry points* were
+   missing - a `.f32` row in the mnemonic table, and a three-`Sreg` lowering
+   case alongside the existing three-`Dreg` one. Byte-checked against real
+   `arm-linux-gnueabihf-as`/`objdump` (`-mfpu=vfpv3`): `vmul.f32 s24, s26,
+   s6` -> `ee2dca03`, `vdiv.f32 s24, s26, s6` -> `ee8dca03`, `vadd.f32 s0,
+   s1, s2` -> `ee300a81`, `vsub.f32 s0, s1, s2` -> `ee300ac1` - all four
+   bit-for-bit identical to the pre-existing `.f64` encoder with S registers
+   in place of D ones, confirming the codec itself needed no change.
+
+   Caught before it reached any fixture, a real, independent bug: the one
+   shared `Opcode.V3 of V3.op` constructor could not tell its own two widths
+   apart (only the *operands* it was paired with could), so `Opcode.name` -
+   which prints any not-yet-lowered `Instruction.t` for
+   `--dump-disasm=canonical`/diagnostics - hard-coded the `.f64` spelling
+   regardless of which width a given instance actually carried. Decoding a
+   real `.f32` instruction and printing it canonically therefore emitted
+   `vmul.f64 s24, s26, s6` - S registers under an `.f64` mnemonic, text real
+   `as` rejects outright (`invalid instruction shape`) even though this
+   project's own re-lowering happened to still accept it (operand shape, not
+   the mnemonic suffix, is what actually selects `V3_d` vs. `V3_s`) - quietly
+   defeating `--dump-disasm=canonical`'s own "exactly re-parseable" contract
+   for exactly the width this change was adding. Fixed by splitting
+   `Opcode.V3` into `Opcode.V3d`/`Opcode.V3s`, the same pattern every other
+   ARM width pair in this file already uses (`Vneg_d`/`Vneg_s`,
+   `Vcmp_d`/`Vcmp_s`, ...): confirmed by feeding `--dump-disasm=canonical`'s
+   own output back through real `arm-linux-gnueabihf-as` (it failed before
+   this fix, and now assembles byte-identically to the original).
+
+   Regenerating arm's `assemble-c` manifest at that point left the 13
+   blocked/11 rejected totals unchanged - both `fftsp.c` and `knucleotide.c`
+   also contain `vldr sN, .Lxxx` (a PC-relative literal-pool load), which was
+   already masking the same file's `.f32` rejection and now blocked it
+   directly - but it collapsed the reason count: `vdiv.f32`/`vmul.f32` were
+   gone, leaving `vldr` (`reason:11`, was `reason:9` plus these two files'
+   own reasons) as arm's *only* remaining `assemble-c` rejection reason.
+
+   That capability - `vldr sN/dN, .Lxxx` with an implicit PC base and no
+   explicit register operand, structurally distinct from the already-complete
+   `Vmem_d`/`Vmem_s` (base register plus a resolved-at-lowering-time constant
+   offset, never a symbolic one) - is now **fixed**: a new `Lowered.Vldr_lit_d`/
+   `Vldr_lit_s` carries a symbolic target (`Asm_core.Lowered_ast.branch`, the
+   same type `b`/`bl`/`movw`/`movt` already use), and a new `Pcrel_vldr8`
+   fixup kind computes `target - (place + 8)` the same way `Pcrel_b26`
+   already does. Scoped to load only (`vstr` never reaches the new lowering
+   case: real hardware defines the store encoding's `Rn = 1111` as
+   UNPREDICTABLE, and GAS only accepts it with a deprecation warning, no
+   fixture spells it) and forward-only (`U` is fixed to 1 in the codec, not a
+   field the fixup carries - every corpus occurrence is a trailing
+   same-function literal pool, and a backward target is now a dedicated
+   diagnostic, `vldr literal-pool target must follow the instruction`, rather
+   than a silent wraparound). The new codec alt necessarily overlaps
+   `Vmem_d`/`Vmem_s`'s own fixed bits (their `Rn`/`U`/`L` are wildcards, so an
+   `Rn=1111`/`U=1`/`L=1` instance already fits both) and is given the lower
+   priority so they win on decode: real `objdump` disassembles this exact
+   word as `vldr sN, [pc, #imm]`, never a bare label, and this project's own
+   canonical disassembly now matches that choice bit-for-bit (confirmed by
+   feeding a decoded instance back through `--dump-disasm=canonical` and
+   real `arm-linux-gnueabihf-as`) rather than round-tripping through a
+   spelling nothing re-parses back to the identical word. Byte-checked
+   against real `arm-linux-gnueabihf-as`/`objdump`: `vldr s0, .L1` (16 bytes
+   ahead) -> `ed9f0a04`, `vldr d1, .L2` (4 bytes ahead) -> `ed9f1b01`, both
+   resolving to the identical distances real `as` computes. Regenerating
+   arm's `assemble-c` manifest with this fix reaches **24 blocked/0
+   rejected**: every file in this corpus now clears parsing through image
+   binding on ARM too, matching x86_32/x86_64's already-fully-closed state,
+   with only external-symbol linking (M6+ scope) left. `asm-fixture-oracle-arm`
+   (the hand-picked byte/QEMU corpus) stayed green throughout, confirming no
+   drift in any previously-verified encoding.
 4. **AArch64.** `classify-regression`'s `uxtx #0` (`add x0, x0, x16, uxtx #0`)
    is **fixed**: it is the ADD/SUB *extended-register* encoding, structurally
    distinct from the already-implemented ADD/SUB *shifted-register* form
