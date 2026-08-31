@@ -1,6 +1,4 @@
 total:24
 accepted:0
-blocked:22
-rejected:2
-reason:1	.corpus-work/c/x86_32/sha3/output.s:550:2: error[x86.simplify]: unknown instruction shldl
-reason:1	.corpus-work/c/x86_32/siphash24/output.s:163:2: error[x86.simplify]: unknown instruction shldl
+blocked:24
+rejected:0
