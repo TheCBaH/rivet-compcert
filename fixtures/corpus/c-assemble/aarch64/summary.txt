@@ -1,28 +1,16 @@
 total:24
 accepted:0
-blocked:0
-rejected:24
-reason:1	.corpus-work/c/aarch64/aes/output.s:2718:2: error[aarch64.simplify]: unknown instruction eor
+blocked:12
+rejected:12
 reason:1	.corpus-work/c/aarch64/almabench/output.s:723:2: error[aarch64.simplify]: unknown instruction fcsel
-reason:1	.corpus-work/c/aarch64/binarytrees/output.s:63:2: error[aarch64.simplify]: unknown instruction cbz
-reason:1	.corpus-work/c/aarch64/bisect/output.s:42:2: error[aarch64.simplify]: unknown instruction cbnz
-reason:1	.corpus-work/c/aarch64/chomp/output.s:62:2: error[aarch64.simplify]: unknown instruction sxtw
-reason:1	.corpus-work/c/aarch64/fannkuch/output.s:54:2: error[aarch64.simplify]: unknown instruction sxtw
+reason:1	.corpus-work/c/aarch64/binarytrees/output.s:207:2: error[aarch64.simplify]: unknown instruction ucvtf
+reason:1	.corpus-work/c/aarch64/bisect/output.s:118:2: error[aarch64.simplify]: unknown instruction fsub
 reason:1	.corpus-work/c/aarch64/fft/output.s:82:2: error[aarch64.simplify]: unknown instruction scvtf
 reason:1	.corpus-work/c/aarch64/fftsp/output.s:76:2: error[aarch64.simplify]: unknown instruction scvtf
 reason:1	.corpus-work/c/aarch64/fftw/output.s:48:2: error[aarch64.simplify]: unknown instruction fmul
 reason:1	.corpus-work/c/aarch64/integr/output.s:17:2: error[aarch64.simplify]: unknown instruction fmul
-reason:1	.corpus-work/c/aarch64/knucleotide/output.s:124:2: error[aarch64.simplify]: unknown instruction cbnz
-reason:1	.corpus-work/c/aarch64/lists/output.s:63:2: error[aarch64.simplify]: unknown instruction cbz
+reason:1	.corpus-work/c/aarch64/knucleotide/output.s:627:2: error[aarch64.simplify]: unknown instruction scvtf
 reason:1	.corpus-work/c/aarch64/mandelbrot/output.s:44:2: error[aarch64.simplify]: unknown instruction scvtf
-reason:1	.corpus-work/c/aarch64/nbody/output.s:36:2: error[aarch64.simplify]: unknown instruction sxtw
-reason:1	.corpus-work/c/aarch64/nsieve/output.s:37:2: error[aarch64.simplify]: unknown instruction lsl
-reason:1	.corpus-work/c/aarch64/nsievebits/output.s:22:2: error[aarch64.simplify]: unknown instruction lsl
-reason:1	.corpus-work/c/aarch64/perlin/output.s:280:2: error[aarch64.simplify]: unknown instruction ubfiz
-reason:1	.corpus-work/c/aarch64/qsort/output.s:106:2: error[aarch64.simplify]: unknown instruction movn
-reason:1	.corpus-work/c/aarch64/sha1/output.s:39:2: error[aarch64.simplify]: unknown instruction cbnz
-reason:1	.corpus-work/c/aarch64/sha3/output.s:148:2: error[aarch64.simplify]: unknown instruction eor
-reason:1	.corpus-work/c/aarch64/siphash24/output.s:26:2: error[aarch64.simplify]: unknown instruction uxtw
+reason:1	.corpus-work/c/aarch64/nbody/output.s:47:2: error[aarch64.simplify]: unknown instruction fsub
+reason:1	.corpus-work/c/aarch64/perlin/output.s:282:2: error[aarch64.simplify]: unknown instruction fcsel
 reason:1	.corpus-work/c/aarch64/spectral/output.s:37:2: error[aarch64.simplify]: unknown instruction scvtf
-reason:1	.corpus-work/c/aarch64/vmach/output.s:48:2: error[aarch64.simplify]: unknown instruction ubfiz
-reason:1	<synthesized by aarch64>: error[aarch64.lower]: mov between two general registers lowers to orr, which is not in M1 scope

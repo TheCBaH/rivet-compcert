@@ -946,10 +946,63 @@ gaps:
    `objdump` across all eight extend keywords and both an SP operand and a
    32-bit-source (`uxtw`/`uxtb`) case; see
    `asm/test/targets/test_targets.ml`'s "ADD/SUB (extended register)" test.
-   `assemble-c`'s recurring `cbz`/`cbnz` (compare-and-branch), `sxtw`/`uxtw`
-   (integer extension), `eor` (logical), `fcsel`/`scvtf`/`fmul` (FP),
-   `lsl`/`ubfiz` (shift/bitfield), and `movn` (mov negated immediate) remain
-   open, scoped as follow-up work.
+   `assemble-c`'s recurring integer/control-flow family - `cbz`/`cbnz`
+   (compare-and-branch), `sxtw`/`uxtw` (integer extension), `eor`/`and`/`orr`/
+   `bic` (logical, shifted-register form), `lsl`/`ubfx`/`ubfiz` (shift/
+   bitfield), and `movn` (`movz`'s complement sibling) - is now **fixed**,
+   along with `udiv`/`msub`/`cset`/`movk` regenerating unmasked along the
+   way. `cbz`/`cbnz` needed a new `Lowered.Cbz` and codec alt: a different
+   19-bit-immediate word shape from `b.<cc>` (Rt sits where `b.<cc>`'s
+   condition code does), but the same `Pcrel_b19` fixup kind, since both
+   relocate a 19-bit word-count field. `sxtw xd, wn` is a fixed
+   `SBFM xd, xn, #0, #31` - `uxtw xd, wn` needs no sibling encoding at all,
+   since real hardware's own "writing a W register zeroes the upper 32 bits
+   of its X view" rule means it assembles to the identical bits as
+   `mov wd, wn`, already covered below. `eor`/`and`/`orr`/`bic` (shifted
+   register) share one new `Lowered.Logical_shift` and codec alt with
+   `Logical_imm`'s own `opc` field, `bic`'s `N` = 1 the only other bit that
+   varies - and `orr`'s own case directly closes a second synthesized
+   finding, "`mov` between two general registers lowers to `orr`, which is
+   not in M1 scope": real hardware's own expansion is `orr rd, xzr, rm`, now
+   implemented instead of rejected. `lsl rd, rn, rm` (LSLV, register-shift
+   amount) is a different word shape from the unimplemented immediate-shift
+   form, sharing the `Udiv`-established "data-processing (2 source)" 10-bit
+   prefix with a different 6-bit opcode field. `ubfx`/`ubfiz rd, rn, lsb,
+   width` are the two evidenced aliases of one general `Lowered.Ubfm` word
+   (the same `immr`/`imms` shape `Logical_imm`'s bitmask codec already
+   derives values from); both operands are evidenced only in the one GNU
+   AArch64 immediate spelling written *without* a leading `#` (every other
+   immediate this target parses has one), so lowering accepts either
+   `Operand.Imm` or the bare-integer `Operand.Sym (Expr.Const _)` shape.
+   Printing always picks whichever alias re-reads as the same `immr`/`imms`
+   pair (`ubfx` when `imms >= immr`, `ubfiz` otherwise) rather than
+   replicating real hardware's wider `uxtb`/`uxth`/`lsr` alias
+   preference at particular values, since nothing in this codebase compares
+   decoded text against real objdump's text - only encoded bytes are
+   compared against real `as` (`test/xref/test_xref.ml`). `udiv`/`msub`
+   share `Udiv`/`Madd`'s own already-established shapes (`msub` is `Madd`'s
+   `o0 = 1` sibling, `udiv` a sibling data-processing-(2-source) opcode).
+   `cset rd, cc` is `csinc rd, zr, zr, invert(cc)`, sharing `Csel`'s own top
+   bits with a different `op2`; `movk` is the third MOVZ/MOVN/MOVK family
+   member, `opc = 3`. `movn` shares `Movz`'s exact shape with `opc = 0`.
+   Every form byte-checked against real `aarch64-linux-gnu-as`/`objdump`; see
+   `asm/test/targets/test_targets.ml`'s dedicated tests. Regenerating
+   unmasked one further, unrelated bug: a 32-bit bitmask immediate spelled at
+   its own width's negative extreme (gcc's own `#-16777216` for a byte mask,
+   `aes.c`) never matched any entry in the bitmask domain, because
+   `decode_bitmask`'s own 32-bit case always reconstructs a value already
+   reduced to its low 32 bits (never a negative `int64`), and nothing reduced
+   the literal itself the same way before the search - the identical shape
+   ARM's own `to_width_signed` fix above already named for a different
+   encoder. Now fixed the same way, reducing the literal to its 32-bit
+   unsigned form before both the search and the value stored. `adr`
+   (address-of-label) is now **fixed** too, along with `br` (branch to
+   register) - see "AArch64 `adr`/`br`" in Follow-ups below. Regenerating
+   `assemble-c`'s aarch64 manifest through this whole chain (each fix
+   unmasking the next) moved aarch64 from 0 blocked/24 rejected to 12
+   blocked/12 rejected: every remaining rejection reason (`fcsel`/`ucvtf`/
+   `fsub`/`scvtf`/`fmul`, all FP) is scoped as follow-up work - the FP family
+   a deliberate second slice, matching Ordered Work item 3.
 5. **RISC-V (both profiles).** `classify-regression`'s `%pcrel_hi`/
    `%pcrel_lo` rejections (`charlit.c`, `initializers.c`, `initializers2.c`,
    `packedstruct1.c`, `packedstruct2.c`) are **fixed**: the real cause was not
@@ -961,16 +1014,20 @@ gaps:
    no argument to parse. A single leading `Token.Modifier` now decides the
    reading before `Reg.find` is consulted, since a real `offset(base)` never
    starts with one; see `asm/test/targets/test_targets.ml`'s
-   `riscv_pcrel_register_name_collision` tests. `assemble-c`'s recurring
-   `fsd`/`fld`/`fmul.d`/`fmv.d`/`fcvt.d.w` (F/D floating load-store/convert)
-   and `remu` (integer remainder), plus the isolated `no sll/ld form takes
-   these operands` lowering gaps, remain open as a shift/remainder slice,
-   with the F/D family scoped as a deliberate second, floating-point slice.
+   `riscv_pcrel_register_name_collision` tests. `assemble-c`'s isolated
+   `no sll/ld form takes these operands` lowering gaps and `remu` (integer
+   remainder) are now **fixed** too - see "RISC-V `sll`/`srl`/`sra`(w)
+   immediate alias, `remu`, and `ld rd, symbol`" below. The remaining
+   `fsd`/`fld`/`fmul.d`/`fmv.d`/`fcvt.d.w`/`flw` (F/D floating load-store/
+   convert/move) reasons are scoped as a deliberate second, floating-point
+   slice, matching Ordered Work item 3.
 
-None of the five real-gap groups above are fixed by this section itself
-(group 5's parser bug is the one exception, fixed in the same change that
-added this section) - the point of this pass is the grouping and the
-scope/gap decision that later follow-up work builds on.
+None of the five real-gap groups above were fixed by this section itself when
+it was first written (group 5's parser bug was the one exception, fixed in
+the same change that added this section) - the point of this pass was the
+grouping and the scope/gap decision that later follow-up work builds on. Every
+group has since had further work land against it; see each group's own text
+above for what is fixed and what remains.
 
 ## Follow-ups
 
@@ -1146,3 +1203,74 @@ scope/gap decision that later follow-up work builds on.
   `/usr/local/riscv32-linux-gnu-toolchain/bin` was added to `PATH` - already
   in the Dockerfile's own `ENV PATH`, but not present in this interactive
   session's shell for reasons this session did not chase down further.
+- RISC-V `sll`/`srl`/`sra`(w) immediate alias, `remu`, and `ld rd, symbol`:
+  now fixed, closing `assemble-c`'s isolated riscv32/riscv64 lowering gaps
+  named in Capability ladder group 5 above. GAS overloads `sll`/`srl`/
+  `sra`(w) with a third register operand as the register-shift-amount
+  R-type form (already supported) and with a third *immediate* operand as
+  an alias for `slli`/`srli`/`srai`(w) (checked against real
+  `riscv64-linux-gnu-as`: `sll x5, x11, 2` decodes back as `slli t0, a1,
+  0x2`) - a new `shift_i_alias` dispatch inside the existing R-type lowering
+  case (`riscv_family_encode.ml`), not a new opcode; only `sll` with an
+  immediate is corpus-evidenced (`vmach.c`/`siphash24.c`), but the fix
+  covers `srl`/`sra`/`sllw`/`srlw`/`sraw` too since the dispatch is shared.
+  `remu` (`knucleotide.c`'s unsigned-modulo idiom) is one more R-type table
+  entry sharing `mul`'s own shape (`opcode=0x33, funct3=7, funct7=0x01`);
+  `div`/`divu`/`rem` are deliberately left unadded until a fixture needs
+  them. riscv64's `ld rd, symbol` (`siphash24.c`'s 64-bit literal-pool load
+  - no riscv32 equivalent, since a 32-bit register never needs one) is
+  GAS's own pseudo-instruction, expanding to `auipc rd, %pcrel_hi(symbol);
+  ld rd, %pcrel_lo(...)(rd)` - the same anchored hi/lo pairing `la`/`call`
+  already share, so `Lowered.Pair`'s `addi:bool` field became a
+  `pair_kind = Addi | Jalr | Load of int`, and one new `Opcode.Ld`-with-
+  bare-symbol lowering case was added (scoped to `Ld` alone, the only load
+  pseudo this corpus evidences - a broader GAS load-pseudo family exists for
+  `lb`/`lh`/`lw`/`lbu`/`lhu`/`lwu` too, left unadded the same way `div`/
+  `divu`/`rem` are). Every form byte-checked against real
+  `riscv64-linux-gnu-as`/`objdump`, including the `ld`/`auipc` pair's
+  placeholder bytes and a real link resolving them to `auipc t6,0x0`/
+  `ld t6,16(t6)`. Regenerating riscv32's/riscv64's `assemble-c` manifests
+  moved each from 10 blocked/14 rejected to 12 blocked/12 rejected: every
+  remaining reason on both is now `fsd`/`fld`/`fmul.d`/`fmv.d`/`fcvt.d.w`/
+  `flw` (RV32D/RV64D floating point, the deliberate second slice).
+
+  Along the way, `gas_frontier.t` (the gas-based frontier oracle described in
+  "Testing" above) was extended to riscv32/riscv64: the underlying
+  `gas-xref` corpus already carries a `fixture-asm_test_entry` frontier case
+  for both profiles (`gas_xref_cmd.ml`'s own comment explains why Helper/
+  Runtime stay excluded - no `asm/helpers/riscv32.s`/`riscv64.s` exists, and
+  CompCert's runtime tree names its RISC-V leg `riscV`, not `riscv32`/
+  `riscv64`), but the cram test's positive-control and aggregate-count loops
+  had never been widened to display it. Now they are: the aggregate
+  "assembles" count moved from 10 to 12 (the two new fixture positives), and
+  every existing x86/ARM/AArch64 row is unchanged. Wiring `asm/helpers/
+  riscv.c` through its own cross-gcc generator (or writing a hand-assembled
+  `asm/helpers/riscv32.s`/`riscv64.s`) so RISC-V also gets Helper/Runtime
+  rows is a separate, larger follow-up, not done here.
+- AArch64 `adr`/`br`: now fixed, closing `assemble-c`'s last named non-FP
+  aarch64 gap (Capability ladder item 4 above). `vmach.c`/`siphash24.c`'s
+  switch-statement jump-table dispatch is `adr x16, .Ltable; add x16, x16,
+  wN, uxtw #2; br x16` - the `add`/`uxtw` extended-register form was already
+  implemented (Capability ladder item 4's own `uxtx #0` fix), so `adr` and
+  `br` were the only two missing pieces. `adr` is bit-for-bit the same word
+  shape as the already-implemented `adrp` (`Lowered.Adrp`'s own immhi/immlo
+  split across bits 30:29/23:5, with a distinct 5-bit `0b10000` field at
+  28:24) - only bit 31 (`op`) differs, 1 for `adrp` and 0 for `adr` - so its
+  codec alt is a near-verbatim copy of `adrp`'s, with a new `Pcrel_adr21`
+  fixup kind whose `evaluate_fixup` is plain `target - place` (no page
+  masking or `>>12`, unlike `Adrp_page`, since `adr` materializes a precise
+  byte address rather than a 4KiB page base). `br` is bit-for-bit the same
+  "unconditional branch (register)" word `ret` already uses
+  (`1101011_0_opc_11111_000000_Rn_00000`), with `opc = 000` rather than
+  `010`, so it reused `ret`'s exact codec shape with only the 3 middle bits
+  of the fixed 22-bit constant changed - no new field, no new fixup kind (an
+  indirect jump has nothing symbolic to relocate; the register holding the
+  target was itself produced by the preceding `adr`/`add` pair). Every form
+  byte-checked against real `aarch64-linux-gnu-as`/`objdump`: `br x16` ->
+  `d61f0200`; a resolved `adr x16, .L101` twelve bytes ahead -> `10000070`,
+  matching this project's own fixup formula (`immlo = 12 & 3 = 0`, `immhi =
+  (12 >> 2) & 0x7FFFF = 3`) exactly. Regenerating aarch64's `assemble-c`
+  manifest moved it from 10 blocked/14 rejected to 12 blocked/12 rejected:
+  every remaining reason is now `fcsel`/`ucvtf`/`fsub`/`scvtf`/`fmul` (FP,
+  the deliberate second slice) - aarch64's non-FP integer/control-flow slice
+  is now fully closed for this corpus.
