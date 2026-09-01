@@ -1274,3 +1274,88 @@ above for what is fixed and what remains.
   every remaining reason is now `fcsel`/`ucvtf`/`fsub`/`scvtf`/`fmul` (FP,
   the deliberate second slice) - aarch64's non-FP integer/control-flow slice
   is now fully closed for this corpus.
+- `gas_frontier.t`'s CompCert-runtime-helper corpus (x86_32's/ARM's own
+  `__compcert_i64_*` int64-software-arithmetic and float-conversion helpers,
+  distinct from the `test/c/`-derived `assemble-c`/`classify-c` corpora above)
+  has eight more findings closed, moving its own "assembles" count from 13 to
+  18 with no regression anywhere else in the frontier table. x86_32's `fildll`
+  (x87 64-bit integer load, `i64_stod.S`/`i64_stof.S`/`i64_utod.S`/
+  `i64_utof.S`'s own int64-to-float conversion) is a fifth member of
+  `Fldl`/`Fstpl`/`Fstps`/`Flds`'s shared opcode-plus-ModR/M-extension
+  `Lowered.Fpu_mem` family, `0xDF /5`, memory-operand-only (every recurrence
+  is `disp(%esp)`). `fadds` (x87 single-precision add, the same two files'
+  own `st(0) += mem` step) is a sixth member, `0xD8 /0`, sharing `Flds`'s own
+  bare-symbol-source `mem_of_symbol` duality rather than `Fldl`/`Fstpl`/
+  `Fstps`'s memory-operand-only scope (both corpus occurrences are `fadds
+  LC1`). Byte-checked against real `i686-linux-gnu-as`/`objdump`: `fildll
+  4(%esp)` -> `df 6c 24 04`; `fadds LC1` -> `d8 05 <disp32>` with an
+  `R_386_32` relocation. Fixing `fildll` closes `i64_stod`/`i64_stof`
+  outright; `i64_utod`/`i64_utof` progress from `fildll` to `fadds` and then
+  to a new, separate gap (`.p2align`'s power-of-two-exponent form, an
+  existing, deliberate M2-scope exclusion with its own diagnostic - not
+  addressed here).
+
+  ARM's own five: `cmn rn, #imm` (compare negative, `dp = 11`) is `cmp`'s
+  exact sibling test instruction, sharing `is_compare`'s forced-`Rd`-zero/
+  `S`-set shape - one more `to_dp`/`of_dp`/`is_compare` table entry, no
+  dedicated lowering case. `subs`/`orrs` (`i64_sdiv.S`/`i64_smod.S`'s
+  absolute-value idiom; `i64_udivmod.S`'s zero test) are `adds`'s own
+  pattern - a `dp` value alone cannot tell a flag-setting form from its plain
+  sibling, only `s` can, so each needed its own opcode and dedicated
+  lowering/printing case - applied to `sub`(`dp=2`)/`orr`(`dp=12`), register-
+  register-register only, the one shape evidenced. `rsbs` (`i64_sar.S`'s own
+  "32 - amount" idiom) is the identical pattern on the *immediate* form
+  instead (evidenced only that way). `sbc` (`i64_dtos.S`/`i64_sdiv.S`/
+  `i64_smod.S`'s own subtract-with-borrow, the 64-bit-subtract upper half
+  `subs` covers the lower half of) is `adc`'s exact mirror (`dp = 6`), one
+  more entry in the same generic register-form table `adc` already joins -
+  no dedicated case needed, since no fixture evidences an S-suffixed
+  `sbcs`. Byte-checked against real `arm-linux-gnueabihf-as`/`objdump`: `cmn
+  r2, #52` -> `e3720034`, `subs r0, r0, r4` -> `e0500004`, `rsbs r3, r2, #32`
+  -> `e2723020`, `orrs r6, r2, r3` -> `e1926003`, `sbc r1, r1, r4` ->
+  `e0c11004`. Fixing these closes `i64_dtos`/`i64_dtou`/`i64_sar` outright;
+  `i64_sdiv`/`i64_smod` progress to the already-understood, out-of-scope
+  `image.undefined __compcert_i64_udivmod` multi-file-linking gap (M6+
+  scope, not an assembler one - the same gap `stmia`/`ldmia`/`pop` closing
+  once already exposed for `i64_udiv`/`i64_umod`, above); `i64_udivmod`
+  progresses from `orrs` to a new, separate gap (`it`, Thumb's if-then block
+  mnemonic, apparently accepted by real `as` even in `.arm` state - not
+  addressed here).
+
+  A sixth ARM addition, found by scanning `i64_dtou.S`/`i64_sar.S` rather
+  than chasing a masked diagnostic: `lsl`/`lsr`/`asr`/`ror rd, rm, #imm`
+  (immediate shift amount) - GNU's own mnemonics for `mov rd, rm, <shift>
+  #imm`, the immediate-amount sibling of the already-implemented register-
+  amount `Shift_reg` form. Lowers into the identical `Lowered.Dp_reg`/`mov`
+  shape the two-operand-plus-`Shifted`-operand spelling already builds, so
+  no new codec alt or Opcode.t entry was needed, only a new lowering arm on
+  the pre-existing `Opcode.Shift kind` mnemonic. Real objdump's own
+  canonical text prefers `lsl`/`asr` here over `mov ..., <shift> #imm`
+  (confirmed against real `as`/`objdump`: `lsl r0, r1, #2` -> `e1a00101`,
+  disassembling back as `lsl r0, r1, #2`), but this project's own canonical
+  dump still prints via the pre-existing `mov` fallback - a spelling choice
+  `test/xref/test_xref.ml`'s byte-only oracle does not distinguish, the same
+  precedent `ubfx`/`ubfiz`'s own alias-preference note (Capability ladder
+  item 4, above) already established. This closes `i64_dtou`/`i64_sar`'s
+  own `no lsl/asr form takes these operands` findings (folded into the
+  `subs`/`rsbs` byte-check paragraph above, since both files needed both
+  fixes to reach `assembles`).
+
+  Every fix above regenerated a fresh `gas-xref regen` (bit-identical to the
+  committed corpus - no new frontier fixtures were added, only existing ones
+  progressed further) and left `asm-fixture-oracle-arm`/`-x86_32` green
+  throughout, confirming no drift in any previously-verified encoding.
+  Remaining `gas_frontier.t` findings, not addressed here: ARM `umull`
+  (multiply long, a genuinely different word shape - `i64_smulh.S`/
+  `i64_umulh.S`), ARM `vmla.f64` (VFP fused multiply-accumulate -
+  `i64_dtos.S`/`i64_dtou.S`/`i64_stod.S`/`i64_stof.S`/`i64_utod.S`/
+  `i64_utof.S`), ARM `it` (Thumb if-then, `i64_udivmod.S`), ARM `lsrs`
+  (the S-suffixed sibling of the new immediate-shift form above -
+  `i64_utof.S`, not yet reached since `fadds`/`.p2align` block it first),
+  x86_64 `pxor`/`ucomisd` (SSE2 zero-register idiom and scalar-double
+  compare - `i64_utod.S`/`i64_utof.S`/`i64_dtou.S`), x86_32 `fnstsw`/
+  `fnstcw` (x87 status/control-word store - `i64_dtou.S`/`i64_dtos.S`),
+  x86_32 `cmov` with a memory operand (`i64_smulh.S`, M2 currently scopes
+  `cmov` to two register operands), and x86_32's `.p2align` power-of-two-
+  exponent form found above (a pre-existing, deliberate M2-scope exclusion,
+  not a new finding).
