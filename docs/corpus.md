@@ -1555,3 +1555,48 @@ above for what is fixed and what remains.
   `i64_udivmod.S`), and `.p2align`'s power-of-two-exponent form on both
   x86_32 and x86_64 (a pre-existing, deliberate M2-scope exclusion, not a
   finding).
+
+- ARM `it` (Thumb if-then, `i64_udivmod.S`'s own bare `it eq`) is now
+  fixed too, closing `i64_udivmod` (arm) fully - the last real
+  `gas_frontier.t` finding. `it` reuses the existing `Opcode.Ite` no-op
+  handling verbatim: GAS accepts every IT-block letter combination in A32
+  source and emits nothing for any of them (already implemented for
+  `ite`, per the `cond_select` fixture above; confirmed against real
+  `arm-linux-gnueabihf-as` that `it eq` likewise assembles to zero bytes)
+  - one more mnemonic string mapping to the same constructor.
+
+  Fixing `it` unmasked two more real gaps in the same file, both fixed in
+  the same pass: `rrx`/`rrxs` (GAS's dedicated two-operand mnemonic for
+  rotate-right-with-extend - `mov rd, rm, ror #0` under a different
+  spelling, since a ROR immediate shift of 0 means RRX rather than "no
+  shift" the way an LSL 0 would; kept as its own `Opcode.Rrx`/`Rrxs`
+  rather than reusing `Shift 3`/`Shifts 3` with an implicit zero, since
+  bare `ror rd, rm` with no immediate at all is not evidenced and this
+  keeps `Shift`'s own three-operand-only scope untouched - byte-checked:
+  `rrx r2, r2` -> `e1a02062`), and `subs rd, rn, #imm` (`Subs`'s own
+  immediate form, `Adds`'s exact counterpart on the subtract side - the
+  loop-counter decrement idiom `subs r8, r8, #1`; `Subs` was
+  register-register-register only until now - byte-checked: `subs r8,
+  r8, #1` -> `e2588001`).
+
+  Fixing `Subs`'s immediate form surfaced a third, independent latent
+  round-trip bug in the same decode path this session has now hit three
+  times for different opcodes (`Mov`/`Shifts`, then `Adc`/`Sbc`, now
+  `Sub`): the `Dp_imm` decode reconstruction had a `when s` guard
+  reconstructing `Add -> Adds` and `Rsb -> Rsbs`, but not `Sub -> Subs`,
+  so decoding a `subs rd, rn, #imm` word would have silently dropped the
+  `s` flag and reconstructed as plain `sub`, which does not reassemble to
+  the original bytes through real `as`. Fixed by adding the missing
+  guard, following the exact same pattern as its two siblings.
+
+  Every word of `runtime-i64_udivmod.S` (arm) was checked byte-for-byte
+  against a fresh `arm-linux-gnueabihf-as`/`objdump` run of the whole
+  file, not just the newly-touched instructions: full agreement, 28
+  32-bit words, zero differences. `gas_frontier.t`'s own "assembles"
+  count moved from 28 to 29 - the last real finding in this corpus is
+  closed. `asm-fixture-oracle-arm` and a fresh `gas-xref regen`
+  (bit-identical, no new frontier fixtures) both stayed green throughout.
+
+  The only thing left in `gas_frontier.t` is the pre-existing, deliberate
+  `.p2align` power-of-two-exponent M2-scope exclusion on x86_32/x86_64 -
+  not a gap.
