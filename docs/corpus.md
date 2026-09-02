@@ -1359,3 +1359,82 @@ above for what is fixed and what remains.
   `cmov` to two register operands), and x86_32's `.p2align` power-of-two-
   exponent form found above (a pre-existing, deliberate M2-scope exclusion,
   not a new finding).
+- Two more ARM `gas_frontier.t` findings from the list above are now closed.
+  `vmla.f64` (VFP fused multiply-accumulate, `i64_stod.S`/`i64_stof.S`/
+  `i64_utod.S`/`i64_utof.S`) turned out not to be "a different word shape" as
+  once assumed while it sat unaddressed: byte-checked against real
+  `arm-linux-gnueabihf-as`/`objdump`, `vmla`/`vmls`/`vnmla`/`vnmls`/`vnmul`
+  all decode to bit-for-bit the same three-D-register word `vadd`/`vsub`/
+  `vmul`/`vdiv` already use, at four more (b23, b21, b20, b6) selector
+  values the existing `V3.selector` table had room for - `vmla.f64` is
+  `(0,0,0,0)` (`vmla.f64 d0, d1, d2` -> `ee010b02`). One more `V3.op`
+  constructor and two table entries; `Lowered.V3_d`/`V3_s` needed no change
+  at all. Only `vmla.f64` is evidenced in this corpus; the sibling selector
+  values are not added. `lsrs` (the S-suffixed sibling of the immediate-
+  shift-amount form, `i64_utof.S`) is a new `Opcode.Shifts` alongside the
+  pre-existing `Opcode.Shift`, since a `dp`/`sh_kind` pair alone cannot tell
+  `lsr #imm` from `lsrs #imm` apart - only `s` can, the same relationship
+  `Adds` already has to `Add`. Byte-checked: `lsrs r2, r3, #7` ->
+  `e1b023a3`. Fixing `vmla.f64` unmasked one more, real gap in the same four
+  files: `adds rd, rn, #imm` (`i64_stof.S`'s own round-to-nearest carry-
+  increment idiom), since `Adds` was register-register-register only until
+  now - one more immediate-form lowering/decoding case, `Rsbs`'s own exact
+  precedent on the other side of the family. Byte-checked: `adds r2, r2,
+  #1` -> `e2922001`. All four files (`i64_stod`/`i64_stof`/`i64_utod`/
+  `i64_utof`) now assemble.
+
+  Fixing `vmla.f64` also surfaced a real, independent, pre-existing bug,
+  unrelated to VFP: every one of these four files opens its function with
+  `.global name; name:` immediately followed by a bare `name:` at the
+  identical address (GAS's ordinary "two labels, one address" idiom - real
+  `as` accepts a symbol being redefined to its own existing value, only a
+  *different* value is an error, confirmed against real
+  `arm-linux-gnueabihf-as`), but this project's own link-wide duplicate-
+  definition check counted any second `Global` definition of a name as a
+  conflict regardless of whether its (section, offset) actually matched the
+  first. Fixed by comparing the *set* of distinct (section, offset) pairs
+  a name's `Global` definitions carry, not their count - a real conflict
+  still needs two, but two identical ones no longer are. `gas_frontier.t`'s
+  own "assembles" count moved from 18 to 22 as a result of this whole chain.
+  `asm-fixture-oracle-arm` and a fresh `gas-xref regen` (bit-identical, no
+  new frontier fixtures) both stayed green throughout - additive coverage,
+  no drift.
+
+- ARM `umull` (multiply long, `i64_smulh.S`/`i64_umulh.S`'s own 64-bit
+  cross-multiply idiom) is now fixed too, and turned out to genuinely be "a
+  different word shape" this time, unlike `vmla.f64` above: `umull RdLo,
+  RdHi, Rn, Rm` has two destination registers rather than one, and its
+  fixed prefix (bits 27:23 = `00001`) does not overlap `mul`/`mla`'s own
+  (bits 27:21 all zero). New `Opcode.Umull`/`Lowered.Umull` and a new codec
+  alt, modelled closely on `mul`/`mla`'s own shape (a real `s` field that
+  nothing lowers to `true`, matching their own precedent, since `umulls`
+  is not evidenced either). Only plain unsigned non-accumulating `umull`
+  is evidenced; the `smull`/`umlal`/`smlal` siblings share the identical
+  word at other `u`/`a` selector-bit values (confirmed against real `as`)
+  but are not implemented - those two bits are fixed codec constants, not
+  runtime fields. Byte-checked against real `arm-linux-gnueabihf-as`/
+  `objdump`: `umull r4, r6, r0, r2` -> `e0864290`.
+
+  Fixing it unmasked three more real gaps in the same two files, all fixed
+  in the same pass: `adcs`/`sbcs` (`Adc`'s/`Sbc`'s own flag-setting
+  register-register-register forms - `Adds`'s exact pattern, applied once
+  more to each side of the add/subtract-with-carry pair; byte-checked:
+  `adcs r7, r7, r5` -> `e0b77005`, `sbcs r6, r6, r1` -> `e0d66001`), and
+  `adc rd, rn, #imm` (`Adc`'s own immediate form - `adc rd, rn, #0`,
+  propagating a carry with no other addend, the 128-bit-product
+  carry-chain idiom both files share; `Adc` was register-only before this,
+  joining the same generic immediate-lowering arm `Add`/`Sub`/`And`/...
+  already share; byte-checked: `adc r7, r5, #0` -> `e2a57000`). Both files
+  now assemble. `gas_frontier.t`'s own "assembles" count moved from 22 to
+  24 - every fixture in this frontier corpus now assembles on every
+  profile it was recorded against. `asm-fixture-oracle-arm` and a fresh
+  `gas-xref regen` (bit-identical) stayed green throughout.
+
+  Remaining `gas_frontier.t` findings, still not addressed: ARM `it`
+  (Thumb if-then, `i64_udivmod.S`), x86_64 `pxor`/`ucomisd` (SSE2
+  zero-register idiom and scalar-double compare - `i64_utod.S`/
+  `i64_utof.S`/`i64_dtou.S`), x86_32 `fnstsw`/`fnstcw` (x87
+  status/control-word store - `i64_dtou.S`/`i64_dtos.S`), x86_32 `cmov`
+  with a memory operand (`i64_smulh.S`, M2 currently scopes `cmov` to two
+  register operands), and x86_32's `.p2align` power-of-two-exponent form (a
+  pre-existing, deliberate M2-scope exclusion, not a new finding).
