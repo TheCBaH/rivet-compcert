@@ -1438,3 +1438,120 @@ above for what is fixed and what remains.
   with a memory operand (`i64_smulh.S`, M2 currently scopes `cmov` to two
   register operands), and x86_32's `.p2align` power-of-two-exponent form (a
   pre-existing, deliberate M2-scope exclusion, not a new finding).
+
+- x86_64 `pxor`/`ucomisd` (`i64_utod.S`/`i64_utof.S`/`i64_dtou.S`) are now
+  fixed too, and turned out to be shared-shape extensions, not new word
+  shapes: `Comisd`/`Xorpd`/`Movapd` already share one fixed
+  mandatory-`0x66`-prefix SSE binop word (`sse_binop_66_codec`, keyed by an
+  `iso_table` from `Opcode.t` to its opcode byte), so `Ucomisd` (`0x2E`) and
+  `Pxor` (`0xEF`) are two more `Opcode.t` constructors plus two more table
+  entries, reusing the existing codec alt and both lowering match arms
+  (reg-reg and mem-reg) verbatim. Byte-checked against real
+  `x86_64-linux-gnu-as`/`objdump`: `pxor %xmm0, %xmm0` -> `66 0f ef c0`,
+  `pxor %xmm1, %xmm2` -> `66 0f ef d1`, `ucomisd %xmm3, %xmm4` ->
+  `66 0f 2e e3`.
+
+  Fixing those unmasked two more real gaps in the same files, both fixed in
+  the same pass: `cvttsd2siq` (the explicit-64-bit-width mnemonic spelling
+  of `cvttsd2si` - `cvtsi2ssq`'s own precedent for a `q`-suffixed alias
+  onto the same `Opcode.Cvttsd2si` at width 64; byte-checked:
+  `cvttsd2siq %xmm0, %rax` -> `f2 48 0f 2c c0`), and the bare
+  (implicit-count-1) surface spelling of the group-2 shift/rotate family
+  (`shrq %rax`, GAS's own shorter alternative to the pre-existing explicit
+  `$1, dst` form - both lower to the identical `Lowered.Shift1_rm` and are
+  byte-identical; byte-checked: `shrq %rax` -> `48 d1 e8`, `shrl %ecx` ->
+  `d1 e9`, `sarl %edx` -> `d1 fa`). `i64_utod`/`i64_utof` (x86_64) now
+  fully assemble; `i64_dtou` (x86_64) now terminates at the deliberate
+  `.p2align` M2-scope exclusion, matching x86_32's own precedent for that
+  same file. `gas_frontier.t`'s own "assembles" count moved from 24 to 26.
+  `asm-fixture-oracle-x86_64`/`-x86_32` (the latter checked too since
+  `x86_family_encode.ml` is shared code, though only x86_64 fixtures
+  evidence these forms) and a fresh `gas-xref regen` (bit-identical, no
+  new frontier fixtures) both stayed green throughout.
+
+  Remaining `gas_frontier.t` findings, still not addressed: ARM `it`
+  (Thumb if-then, `i64_udivmod.S`), x86_32 `fnstsw`/`fnstcw` (x87
+  status/control-word store - `i64_dtou.S`/`i64_dtos.S`), x86_32 `cmov`
+  with a memory operand (`i64_smulh.S`, M2 currently scopes `cmov` to two
+  register operands), and `.p2align`'s power-of-two-exponent form on both
+  x86_32 and x86_64 (a pre-existing, deliberate M2-scope exclusion, not a
+  new finding).
+
+- x86_32 `fnstcw`/`fldcw`/`fistpll`/`fnstsw`/`sahf`/`fsubs` (`i64_dtos.S`/
+  `i64_dtou.S`) are now fixed too: `fnstcw`/`fldcw`/`fistpll` are three
+  more disjoint opcode/extension pairs sharing `Fpu_mem`'s existing
+  opcode-plus-ModR/M-extension shape (`fpu_mem_form`); `fsubs` is `fadds`'s
+  exact sibling, including its bare-symbol-source duality. `fnstsw %ax`
+  and `sahf` are fixed two-/one-byte words with no ModR/M at all -
+  `fucomp`'s exact "no operand" shape, one more opcode pair each;
+  `fnstsw`'s `%ax` is checked (rejecting any other register) and then
+  discarded in `simplify_instruction`, the same way the group-2
+  count-in-%cl form already discards its own fixed `%cl` check. Byte-
+  checked against real `i686-linux-gnu-as`/`objdump`: `fnstcw (%esp)` ->
+  `d9 3c 24`, `fldcw 2(%esp)` -> `d9 6c 24 02`, `fistpll 8(%esp)` ->
+  `df 7c 24 08`, `fnstsw %ax` -> `df e0`, `sahf` -> `9e`, `fsubs LC1` ->
+  `d8 25 <disp32>`. `i64_dtos` (x86_32) now fully assembles; `i64_dtou`
+  (x86_32) now advances to the same deliberate `.p2align` M2-scope
+  exclusion x86_64 already stops at.
+
+  Fixing those unmasked a real, independent, pre-existing encoding bug in
+  the same file: `movb $12, %ah` (i64_dtos.S's own rounding-mode-byte
+  idiom, unreachable before `fnstcw` unblocked the line after it) came out
+  as `mov $0xc, %esp` - the single `Lowered.Mov_r_imm` codec alt always
+  used the 32/64-bit short-form opcode (`0xB8`+reg) and a 4-byte immediate
+  regardless of `width`, so an 8-bit destination's register number (`%ah`
+  = 4) was read back against the 32-bit register table (`%esp` = 4)
+  instead. Fixed with a dedicated `width = 8` codec alt (`0xB0`+reg, a
+  1-byte immediate); byte-checked: `movb $12, %ah` -> `b4 0c`, `movb $200,
+  %bh` -> `b7 c8`.
+
+  Auditing that alt's decode direction while fixing it surfaced a second,
+  broader pre-existing bug in the same codec, present in both the original
+  width-16/32/64 alt and the new width-8 one before the fix: the register
+  lives in the opcode's own low 3 bits, not a ModR/M reg field, so it is
+  REX.B, not REX.R, that extends it to r8-r15 - decode used neither,
+  always reconstructing register 0. The encoded bytes were always correct
+  (confirmed against real `x86_64-linux-gnu-as`: `movl $5, %r8d` -> `41 b8
+  05 00 00 00`), but canonical disassembly mislabelled the destination as
+  `%eax`, which does not round-trip back to the original bytes through
+  real `as`. Fixed for both alts together. Neither of these two bugs is
+  evidenced by a corpus fixture (found via targeted probing while
+  implementing the `fnstcw` gap, not by `gas_frontier.t` itself), but both
+  are real and were fixed in the same pass rather than left in place.
+
+  `gas_frontier.t`'s own "assembles" count moved from 26 to 27.
+  `asm-fixture-oracle-x86_32`/`-x86_64` and a fresh `gas-xref regen`
+  (bit-identical, no new frontier fixtures) both stayed green throughout.
+
+  Remaining `gas_frontier.t` findings, still not addressed: ARM `it`
+  (Thumb if-then, `i64_udivmod.S`), x86_32 `cmov` with a memory operand
+  (`i64_smulh.S`, M2 currently scopes `cmov` to two register operands),
+  and `.p2align`'s power-of-two-exponent form on both x86_32 and x86_64 (a
+  pre-existing, deliberate M2-scope exclusion, not a new finding).
+
+- x86_32 `cmov` with a memory operand (`i64_smulh.S`'s own `cmovl
+  20(%esp), %eax`) is now fixed too, closing `i64_smulh` (x86_32) fully.
+  `Lowered.Cmov_r_rm`'s `rm` field was already a general `Rm.t`, and its
+  codec already threaded memory operands through the ordinary `rm_codec`
+  machinery every other `Rm.t`-carrying form uses - nothing in the codec
+  itself needed to change. The gap was purely at the mnemonic-dispatch
+  boundary: the operand *width* was read off whichever operand came
+  first, which is right when both operands are registers but wrong for a
+  memory source, since a memory operand carries no width of its own the
+  way a register does - so `cmovl mem, reg` fell into the "not two
+  register operands" M2-scope rejection before ever reaching
+  `simplify_instruction`. Fixed by reading the width off the
+  always-a-register destination (the second operand) instead, and adding
+  one more `simplify_instruction` case mirroring the existing
+  register-register one with `Rm.Mem` in place of `Rm.Reg`. Byte-checked
+  against real `i686-linux-gnu-as`/`objdump`: `cmovl 20(%esp), %eax` ->
+  `0f 4c 44 24 14`, `cmovl 24(%esp), %edx` -> `0f 4c 54 24 18`.
+
+  `gas_frontier.t`'s own "assembles" count moved from 27 to 28.
+  `asm-fixture-oracle-x86_32` and a fresh `gas-xref regen` (bit-identical,
+  no new frontier fixtures) both stayed green throughout.
+
+  Only two `gas_frontier.t` findings remain: ARM `it` (Thumb if-then,
+  `i64_udivmod.S`), and `.p2align`'s power-of-two-exponent form on both
+  x86_32 and x86_64 (a pre-existing, deliberate M2-scope exclusion, not a
+  finding).
