@@ -300,13 +300,14 @@ Grouped by capability (each `summary.txt` has the full per-file detail):
   c1 <disp32>` with an `R_X86_64_32S` relocation, *signed* unlike `mov`'s
   `R_X86_64_32` (matching this form's own prior sign-extending decode).
   Discovered while checking that: gcc's own accumulator-destination case
-  (`addq $sym, %rax`, the corpus's literal spelling) doesn't byte-match at
-  all yet, symbolic or not - real `as` picks a shorter, ModR/M-less encoding
+  (`addq $sym, %rax`, the corpus's literal spelling) didn't byte-match at
+  all then, symbolic or not - real `as` picks a shorter, ModR/M-less encoding
   (`05 id`) for a full-width immediate against the accumulator specifically,
   which this project's ALU-immediate encoder never had (confirmed with a
   plain, non-symbolic `addl $1000, %eax` - real `as` gives `05 e8 03 00 00`,
-  five bytes, where this encoder's only form gives the seven-byte ModR/M
-  `81 c0 e8 03 00 00`). `push`-immediate (`pushl $sym`) is now fixed too:
+  five bytes, where this encoder's only form gave the seven-byte ModR/M
+  `81 c0 e8 03 00 00`) - **now fixed**, see "x86 ALU-immediate accumulator
+  form" in Follow-ups below. `push`-immediate (`pushl $sym`) is now fixed too:
   unlike `mov`/the ALU ops, `push` had no non-symbolic immediate lowering at
   all yet, so this added a new `Lowered.Push_imm` alongside the existing
   register-only `Lowered.Push`, with its own short/long (`0x6a ib`/`0x68
@@ -316,7 +317,7 @@ Grouped by capability (each `summary.txt` has the full per-file detail):
   `6a 64` short form, confirming the new ladder didn't regress the plain
   literal case. All three symbolic-immediate sub-gaps (`mov`, ALU, `push`)
   are now closed; the accumulator-destination ALU encoding gap noted above
-  remains open on its own.
+  is now closed too - see Follow-ups.
   `(%base,%index)` with the scale omitted (GAS defaults it to 1)
   and x86_32's own `%ah`/`%ch`/`%dh`/`%bh` legacy high-byte registers (the
   register-4-7 table had been borrowed whole from x86_64's REX-bearing one,
@@ -1131,25 +1132,67 @@ above for what is fixed and what remains.
   with an `R_386_32` relocation, and `pushl $100` still picks the
   pre-existing `6a 64` short form unchanged. All three sub-gaps of
   `Operand.Imm_sym` (`mov`, the ALU ops, `push`) are now closed; the
-  accumulator-destination ALU encoding gap noted above remains open on its
-  own.
-- A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`): the encoder/
-  decoder already handle it (the SIB "no base" codec alternative uses the
-  same fixup-carrying displacement codec as RIP-relative addressing), only
-  the parser needs a fourth case for an `Ident`-led token shape. Currently
-  masked in `asm/fixtures/gas-xref/frontier/x86_32/helper-helper/input.s` by
-  an unrelated earlier lexer error.
+  accumulator-destination ALU encoding gap noted above is now closed too -
+  see "x86 ALU-immediate accumulator form" below.
+- A symbolic base-less-SIB displacement (`seg_start(,%ecx,4)`) is now
+  **fixed**: the encoder/decoder already handled it (the SIB "no base" codec
+  alternative uses the same fixup-carrying displacement codec as
+  RIP-relative addressing) - only the parser needed a fourth case for an
+  `Ident`-led token shape (`split_nobase_sib`, `x86_family.ml`), plus a
+  parenthesized-expression sibling (`(tbl + 4)(,%ecx,8)`) for the same
+  reason. Checked against real `i686-linux-gnu-as` before being promoted
+  into `asm/test/targets/test_targets.ml`'s "a base-less SIB operand with a
+  symbolic displacement" test. `asm/fixtures/gas-xref/frontier/x86_32/
+  helper-helper/input.s` - the Execution ABI v1 helper, which spells this
+  exact pattern as `seg_start(,%ecx,4)`/`seg_end(,%ecx,4)` - is this form's
+  own permanent differential regression test: it is real, GAS-authored
+  source, not a generated snippet, so it does not need
+  `snippet_ast.ml`'s `X86_shared` corpus (the closed nine-case
+  ABI-conformance record the next bullet still applies to) - it is checked
+  automatically by `asm-gas-xref-check` (part of `asm-test`/`asm-ci`)
+  against its own committed `gas.txt`, which now reads `ok`. The "masked by
+  an unrelated earlier lexer error" state this bullet used to describe is
+  gone; whatever earlier lexer error masked it was itself fixed by
+  unrelated work since, not tracked separately here.
 - A negative-displacement three-register SIB form (`-1(%rbp,%rcx,2)`,
   base+index+scale all present): no existing parser pattern covers it. Not
   evidenced by any corpus rejection; fix if and when a fixture needs it.
-- A permanent GNU-`as`/`objdump` differential regression test for the new
-  base-less-SIB form: verified once by hand against the real, installed
-  cross binutils (byte-for-byte match), but not wired into a permanent
-  fixture - `asm/test/snippets/snippet_ast.ml`'s `X86_shared` corpus, which
-  feeds both `gas-xref`'s generated corpus and the QEMU exec-ABI harness, is
-  a closed nine-case ABI-conformance record (`return42`, `trap`, `spin`,
-  ...), not an open list of operand-coverage snippets, so a new differential
-  case needs its own small fixture design rather than an entry there.
+- **x86 ALU-immediate accumulator form** (`addl $imm, %eax`/`addq $imm,
+  %rax`/...): now **fixed**. Real `as` always prefers a shorter,
+  ModR/M-less encoding (`05 id`/`0d id`/... - opcode byte `ext<<3 | 5`, one
+  per ALU op) over the general ModR/M form whenever the destination is
+  exactly the accumulator (`%al`/`%ax`/`%eax`/`%rax`) and the immediate does
+  not fit the imm8 rung; this encoder had no accumulator-specific
+  alternative at all before this fix (`x86_family_encode.ml`'s
+  `alu_acc_form`, a new priority-`-1` alt tried before the imm8 rung, whose
+  own `fits8` guard defers to imm8's shorter form when the value fits one).
+  Symbolic immediates (`addq $sym, %rax`, the corpus's own literal spelling)
+  reuse the general form's existing `sym_imm32`/`Disp.t` machinery unchanged
+  - only opcode selection changed, not how the immediate payload is carried.
+  Byte-checked against real `i686-linux-gnu-as`/`x86_64-linux-gnu-as` across
+  all seven evidenced ALU ops (`add`/`or`/`adc`/`and`/`sub`/`xor`/`cmp` -
+  `sbb` is not lowered in ALU-immediate form at all, on either the ModR/M or
+  accumulator path, since no fixture evidences it): `addl $1000, %eax` ->
+  `05 e8 03 00 00`, `addq $1000, %rax` -> `48 05 e8 03 00 00`, and
+  `addl $5, %eax` still picks the shorter ModR/M imm8 form (`83 c0 05`)
+  unchanged, confirming the priority order didn't regress the plain-fits-imm8
+  case. Promoted into `asm/test/targets/test_targets.ml`'s two dedicated
+  accumulator-form tests, immediately after the existing `addq $sym, %reg`
+  test whose own comment used to name this as the reason its own fixtures
+  deliberately avoided `%rax`.
+- A permanent GNU-`as`/`objdump` differential regression test for the
+  base-less-SIB and accumulator-ALU-immediate forms above: both are covered
+  by hand-verified, promoted `test_targets.ml` expect tests (the base-less
+  SIB form additionally by the automated `helper-helper` gas-xref fixture -
+  see above); `asm/test/snippets/snippet_ast.ml`'s `X86_shared` corpus,
+  which feeds both `gas-xref`'s generated corpus and the QEMU exec-ABI
+  harness, is a closed nine-case ABI-conformance record (`return42`, `trap`,
+  `spin`, ...), not an open list of operand-coverage snippets, so a new
+  differential case there would need its own small fixture design - not
+  done for either form, matching this project's existing precedent of using
+  a promoted expect test as the byte-level record for an encoder-only fix
+  (as opposed to new mnemonic/instruction coverage, which is what
+  `gas_frontier.t`'s frontier corpus exists to measure).
 - All six `classify-c-<target>` subcommands (see Commands above) have now been
   run for real against `modules/CompCert/test/c/`, the same iterative way the
   x86_64 gaps above were closed: arm 0→24/24 (register-offset addressing; a
