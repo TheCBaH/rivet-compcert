@@ -37,6 +37,29 @@ val real_runner : Repo.t -> Target.t -> runner
 (** Invokes the real, already-built [asm.exe] with [--target <t>] and no
     [--dump] flag, i.e. its default full-pipeline path to [plan_image]. *)
 
+(** {1 Real GNU as/objdump differential} *)
+
+type gas_record =
+  | Gas_ok of { objdump_sha256 : string }
+  | Gas_error of string
+      (** Whether real GNU [as] for the target also accepts the identical generated
+    [.s] file - a question independent of this project's own [outcome] below,
+    per Ordered Work item 5 ("Add a broader-corpus differential gate"). Every
+    file in this corpus still blocks on [image.undefined], so there is no
+    linked image on either side yet to compare byte-for-byte; only a hash of
+    real [objdump]'s disassembly is kept, so a drift on regen is visible as a
+    changed hash without committing the text itself. *)
+
+type gas_prober = generated_s_rel:string -> (gas_record, Tool_error.t) Err.t
+(** Fakeable like {!runner}: every test in this module besides the one
+    integration test at the bottom is hermetic, and this seam is what keeps
+    the gas differential hermetic-testable too. An [Error] means the probe's
+    own machinery broke; real [as] rejecting the input is [Ok (Gas_error _)]. *)
+
+val real_gas_prober : Repo.t -> Gnu_tools.t -> gas_prober
+(** Assembles [generated_s_rel] with the real, installed cross [as] for
+    [tools]'s target and, on success, hashes real [objdump]'s disassembly. *)
+
 (** {1 Classifying compiled entries} *)
 
 type outcome =
@@ -49,13 +72,17 @@ type file_record = {
   source_sha256 : string;
   generated_sha256 : string;
   outcome : outcome;
+  gas : gas_record;
 }
 
 val classify_all :
-  runner -> Corpus_classify_cmd.compiled_entry list -> (file_record list, Tool_error.t) Err.t
+  runner ->
+  gas_prober ->
+  Corpus_classify_cmd.compiled_entry list ->
+  (file_record list, Tool_error.t) Err.t
 (** Same traversal discipline as {!Corpus_classify_cmd.classify_all}: a single
-    [Runner_failed] outcome aborts the whole run rather than becoming one more
-    finding. *)
+    [Runner_failed] outcome (from the assembler runner) or gas-prober [Error]
+    aborts the whole run rather than becoming one more finding. *)
 
 (** {1 The manifest and summary formats} *)
 
@@ -118,12 +145,14 @@ val assemble_c_core :
   Repo.t ->
   git:Corpus_classify_cmd.git_probe ->
   runner:runner ->
+  gas_prober:gas_prober ->
   compiler:Fpath.t ->
   target:Target.t ->
   (string, Tool_error.t) Err.t
 (** {!assemble_c}'s body, parameterized over the CompCert checkout probe, the
-    assembler runner, the compiler path and the target - the same seam
-    {!Corpus_classify_cmd.classify_c_core} exposes, for the same reason. *)
+    assembler runner, the gas prober, the compiler path and the target - the
+    same seam {!Corpus_classify_cmd.classify_c_core} exposes, for the same
+    reason. *)
 
 val assemble_c : Repo.t -> Target.t -> Command.t
 (** The heavy path for one target: requires that target's cross compiler

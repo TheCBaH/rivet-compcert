@@ -83,6 +83,47 @@ let real_runner repo (target : Target.t) : runner =
       Runner_failed "assembler exited abnormally"
   | Error e -> Runner_failed (Format.asprintf "%a" (Err.Error.pp Tool_error.pp) e)
 
+(* {1 Real GNU as/objdump differential}
+
+   Separate from `outcome` below (this project's own parse -> simplify ->
+   lower -> encode -> plan_image result): whether real GNU `as` for the
+   target also accepts the identical generated `.s` file, and a hash of what
+   real `objdump` disassembles it to. This is evidence about a different
+   question - "does the reference assembler accept/produce the same thing" -
+   not a resolved-image byte comparison: every file in this corpus still
+   blocks on `image.undefined` (libc/cross-file symbols), so there is no
+   linked image on either side yet to compare byte-for-byte. Only a hash is
+   kept (not the disassembly text) to keep the manifest a manifest rather
+   than a second gas-xref-sized artifact tree; a mismatch is visible as a
+   changed hash on regen, same as `generated-sha256` above. *)
+
+type gas_record = Gas_ok of { objdump_sha256 : string } | Gas_error of string
+
+(* Fakeable like [runner] above, for the same reason: every other test in this
+   module is hermetic (no subprocess, no cross toolchain), and this seam keeps
+   it that way. [real_gas_prober] is the only caller that ever touches
+   [Gnu_tools]. An [Error] here means the probe's OWN machinery broke (a
+   scratch-directory or objdump-invocation failure); real GNU [as] rejecting
+   the input is data, not an error, and becomes [Ok (Gas_error _)]. *)
+type gas_prober = generated_s_rel:string -> (gas_record, Tool_error.t) Err.t
+
+let real_gas_prober repo tools : gas_prober =
+ fun ~generated_s_rel ->
+  Tool_workspace.with_scratch ~label:"corpus-assemble-gas" (fun work ->
+      let src = Fpath.(Repo.path repo // v generated_s_rel) in
+      let obj = Fpath.(work / "obj.o") in
+      let* outcome = Gnu_tools.try_assemble tools ~src ~obj ~include_dir:None in
+      match outcome with
+      | Gnu_tools.Rejected body -> Ok (Gas_error body)
+      | Gnu_tools.Assembled ->
+          let* disasm =
+            Gnu_tools.objdump_disasm tools obj ~scrub:work ~drop_banner:true ~riscv_numeric:false
+          in
+          let dump = Fpath.(work / "objdump.txt") in
+          let* () = Tool_fs.write dump disasm in
+          let* objdump_sha256 = Tool_fs.sha256 dump in
+          Ok (Gas_ok { objdump_sha256 }))
+
 (* {1 Classifying compiled entries} *)
 
 type outcome =
@@ -95,31 +136,40 @@ type file_record = {
   source_sha256 : string;
   generated_sha256 : string;
   outcome : outcome;
+  gas : gas_record;
 }
 
-let classify_entry runner (e : CC.compiled_entry) =
+let classify_entry runner gas_prober (e : CC.compiled_entry) =
   let path = e.CC.ce_path in
   let source_sha256 = e.CC.ce_source_sha256 in
   let generated_sha256 = e.CC.ce_generated_sha256 in
   match normalize (runner ~generated_s_rel:e.CC.ce_generated_s_rel) with
-  | Assembled -> Ok { path; source_sha256; generated_sha256; outcome = Rec_accepted }
-  | Blocked { undefined_count; reasons } ->
-      Ok
-        {
-          path;
-          source_sha256;
-          generated_sha256;
-          outcome = Rec_blocked { undefined_count; reasons };
-        }
-  | Rejected reason -> Ok { path; source_sha256; generated_sha256; outcome = Rec_rejected reason }
   | Runner_failed msg -> Error msg
+  | (Assembled | Blocked _ | Rejected _) as normalized -> (
+      match gas_prober ~generated_s_rel:e.CC.ce_generated_s_rel with
+      | Error gas_err -> Error (Format.asprintf "%a" (Err.Error.pp Tool_error.pp) gas_err)
+      | Ok gas -> (
+          match normalized with
+          | Assembled -> Ok { path; source_sha256; generated_sha256; outcome = Rec_accepted; gas }
+          | Blocked { undefined_count; reasons } ->
+              Ok
+                {
+                  path;
+                  source_sha256;
+                  generated_sha256;
+                  outcome = Rec_blocked { undefined_count; reasons };
+                  gas;
+                }
+          | Rejected reason ->
+              Ok { path; source_sha256; generated_sha256; outcome = Rec_rejected reason; gas }
+          | Runner_failed _ -> assert false))
 
-let classify_all runner entries =
+let classify_all runner gas_prober entries =
   let* records =
     List.fold_left
       (fun acc e ->
         let* rs = acc in
-        match classify_entry runner e with
+        match classify_entry runner gas_prober e with
         | Ok r -> Ok (r :: rs)
         | Error msg ->
             err Tool_error.Exec
@@ -155,23 +205,29 @@ let render_manifest (m : manifest) =
   let sorted =
     List.sort (fun (a : file_record) (b : file_record) -> String.compare a.path b.path) m.files
   in
+  let render_gas = function
+    | Gas_ok { objdump_sha256 } -> Printf.sprintf "gas:ok:%s" objdump_sha256
+    | Gas_error msg -> Printf.sprintf "gas:error:%s" (Manifest.escape msg)
+  in
   List.iter
     (fun (r : file_record) ->
+      let gas_field = render_gas r.gas in
       match r.outcome with
       | Rec_accepted ->
           Buffer.add_string b
-            (Printf.sprintf "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:accepted\n" r.path
-               r.source_sha256 r.generated_sha256)
+            (Printf.sprintf "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:accepted\t%s\n"
+               r.path r.source_sha256 r.generated_sha256 gas_field)
       | Rec_blocked { undefined_count; reasons } ->
           Buffer.add_string b
             (Printf.sprintf
-               "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:blocked\tundefined:%d\treasons:%s\n"
-               r.path r.source_sha256 r.generated_sha256 undefined_count (Manifest.escape reasons))
+               "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:blocked\tundefined:%d\treasons:%s\t%s\n"
+               r.path r.source_sha256 r.generated_sha256 undefined_count (Manifest.escape reasons)
+               gas_field)
       | Rec_rejected reason ->
           Buffer.add_string b
             (Printf.sprintf
-               "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:rejected\treason:%s\n" r.path
-               r.source_sha256 r.generated_sha256 (Manifest.escape reason)))
+               "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:rejected\treason:%s\t%s\n" r.path
+               r.source_sha256 r.generated_sha256 (Manifest.escape reason) gas_field))
     sorted;
   Buffer.contents b
 
@@ -201,6 +257,23 @@ let render_summary (m : manifest) =
         in
         (reason, c))
   in
+  let gas_ok = count (fun (r : file_record) -> match r.gas with Gas_ok _ -> true | _ -> false) in
+  let gas_error = total - gas_ok in
+  let gas_reasons =
+    List.filter_map
+      (fun (r : file_record) -> match r.gas with Gas_error s -> Some s | Gas_ok _ -> None)
+      m.files
+    |> List.sort_uniq String.compare
+    |> List.map (fun reason ->
+        let c =
+          List.length
+            (List.filter
+               (fun (r : file_record) ->
+                 match r.gas with Gas_error s -> String.equal s reason | Gas_ok _ -> false)
+               m.files)
+        in
+        (reason, c))
+  in
   let b = Buffer.create 1024 in
   Buffer.add_string b (Printf.sprintf "total:%d\n" total);
   Buffer.add_string b (Printf.sprintf "accepted:%d\n" accepted);
@@ -210,6 +283,12 @@ let render_summary (m : manifest) =
     (fun (reason, count) ->
       Buffer.add_string b (Printf.sprintf "reason:%d\t%s\n" count (Manifest.escape reason)))
     reasons;
+  Buffer.add_string b (Printf.sprintf "gas-ok:%d\n" gas_ok);
+  Buffer.add_string b (Printf.sprintf "gas-error:%d\n" gas_error);
+  List.iter
+    (fun (reason, count) ->
+      Buffer.add_string b (Printf.sprintf "gas-reason:%d\t%s\n" count (Manifest.escape reason)))
+    gas_reasons;
   Buffer.contents b
 
 (* {2 Parsing} *)
@@ -240,8 +319,28 @@ let parse_hash_field ~line_no ~field ~prefix text =
         err Tool_error.Parse
           (Printf.sprintf "manifest line %d: %s is not 64 lowercase hex characters" line_no field)
 
-let parse_file_record ~line_no line =
-  match String.split_on_char '\t' line with
+let parse_gas_field ~line_no field =
+  match strip_prefix ~prefix:"gas:" field with
+  | None -> err Tool_error.Parse (Printf.sprintf "manifest line %d: expected field \"gas\"" line_no)
+  | Some rest -> (
+      match strip_prefix ~prefix:"ok:" rest with
+      | Some h ->
+          if is_hex64 h then Ok (Gas_ok { objdump_sha256 = h })
+          else
+            err Tool_error.Parse
+              (Printf.sprintf
+                 "manifest line %d: gas-objdump-sha256 is not 64 lowercase hex characters" line_no)
+      | None -> (
+          match strip_prefix ~prefix:"error:" rest with
+          | Some m ->
+              let* msg = Manifest.unescape m in
+              Ok (Gas_error msg)
+          | None ->
+              err Tool_error.Parse
+                (Printf.sprintf "manifest line %d: malformed \"gas\" field %S" line_no field)))
+
+let parse_outcome_fields ~line_no fields =
+  match fields with
   | [ path; source; generated; "outcome:accepted" ] ->
       let* () = Identifier.relative_path path |> Result.map ignore in
       let* source_sha256 =
@@ -250,7 +349,7 @@ let parse_file_record ~line_no line =
       let* generated_sha256 =
         parse_hash_field ~line_no ~field:"generated-sha256" ~prefix:"generated-sha256:" generated
       in
-      Ok { path; source_sha256; generated_sha256; outcome = Rec_accepted }
+      Ok (path, source_sha256, generated_sha256, Rec_accepted)
   | [ path; source; generated; "outcome:blocked"; undefined_field; reasons_field ] -> (
       let* () = Identifier.relative_path path |> Result.map ignore in
       let* source_sha256 =
@@ -278,13 +377,7 @@ let parse_file_record ~line_no line =
             (Printf.sprintf "manifest line %d: expected field \"reasons\"" line_no)
       | Some r ->
           let* reasons = Manifest.unescape r in
-          Ok
-            {
-              path;
-              source_sha256;
-              generated_sha256;
-              outcome = Rec_blocked { undefined_count; reasons };
-            })
+          Ok (path, source_sha256, generated_sha256, Rec_blocked { undefined_count; reasons }))
   | [ path; source; generated; "outcome:rejected"; reason ] -> (
       let* () = Identifier.relative_path path |> Result.map ignore in
       let* source_sha256 =
@@ -299,10 +392,21 @@ let parse_file_record ~line_no line =
             (Printf.sprintf "manifest line %d: expected field \"reason\"" line_no)
       | Some r ->
           let* reason = Manifest.unescape r in
-          Ok { path; source_sha256; generated_sha256; outcome = Rec_rejected reason })
+          Ok (path, source_sha256, generated_sha256, Rec_rejected reason))
   | _ ->
       err Tool_error.Parse
-        (Printf.sprintf "manifest line %d: malformed file record %S" line_no line)
+        (Printf.sprintf "manifest line %d: malformed file record %S" line_no
+           (String.concat "\t" fields))
+
+let parse_file_record ~line_no line =
+  match List.rev (String.split_on_char '\t' line) with
+  | gas_field :: rev_rest ->
+      let* gas = parse_gas_field ~line_no gas_field in
+      let* path, source_sha256, generated_sha256, outcome =
+        parse_outcome_fields ~line_no (List.rev rev_rest)
+      in
+      Ok { path; source_sha256; generated_sha256; outcome; gas }
+  | [] -> err Tool_error.Parse (Printf.sprintf "manifest line %d: empty record" line_no)
 
 let parse_manifest text =
   if text = "" || text.[String.length text - 1] <> '\n' then
@@ -438,7 +542,7 @@ let publish repo ~target (m : manifest) =
 
 (* {1 assemble-c} *)
 
-let assemble_c_core repo ~git ~runner ~compiler ~(target : Target.t) =
+let assemble_c_core repo ~git ~runner ~gas_prober ~compiler ~(target : Target.t) =
   let* () = CC.check_clean_checkout git in
   let* files = CC.discover_c_files repo in
   if files = [] then err Tool_error.Validate "modules/CompCert/test/c contains no .c files"
@@ -455,7 +559,7 @@ let assemble_c_core repo ~git ~runner ~compiler ~(target : Target.t) =
         (Ok []) files
     in
     let entries = List.rev entries in
-    let* records = classify_all runner entries in
+    let* records = classify_all runner gas_prober entries in
     let* ccomp_version = Ccomp.version compiler in
     let* compcert_revision = git.CC.head () in
     let shared_header_path = "test/endian.h" in
@@ -484,11 +588,19 @@ let assemble_c_core repo ~git ~runner ~compiler ~(target : Target.t) =
            (fun (r : file_record) -> match r.outcome with Rec_blocked _ -> true | _ -> false)
            records)
     in
+    let gas_ok =
+      List.length
+        (List.filter
+           (fun (r : file_record) -> match r.gas with Gas_ok _ -> true | _ -> false)
+           records)
+    in
     Ok
-      (Printf.sprintf "corpus assemble-c-%s: %d accepted, %d blocked, %d rejected (of %d)"
+      (Printf.sprintf
+         "corpus assemble-c-%s: %d accepted, %d blocked, %d rejected (of %d); gas: %d ok, %d error"
          (Target.to_string target) accepted blocked
          (List.length records - accepted - blocked)
-         (List.length records))
+         (List.length records) gas_ok
+         (List.length records - gas_ok))
 
 let fixture_work_root repo =
   Result.map Tool_workspace.read_path (Tool_workspace.fixture_work repo ~env:Sys.getenv_opt)
@@ -498,8 +610,10 @@ let assemble_c repo (target : Target.t) =
     let* work_root = fixture_work_root repo in
     let* () = Ccomp.require_all [ target ] ~work_root in
     let compiler = Ccomp.path target ~work_root in
-    assemble_c_core repo ~git:(CC.real_git_probe repo) ~runner:(real_runner repo target) ~compiler
-      ~target
+    let tools = Gnu_tools.for_target target in
+    let* () = Gnu_tools.require tools ~qemu:false in
+    assemble_c_core repo ~git:(CC.real_git_probe repo) ~runner:(real_runner repo target)
+      ~gas_prober:(real_gas_prober repo tools) ~compiler ~target
   in
   match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
 

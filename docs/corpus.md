@@ -434,9 +434,9 @@ ccomp-version:<first line of `ccomp -version`>
 ccomp-args:<space-joined x86_64 ccomp flags>
 compcert-revision:<git -C modules/CompCert rev-parse HEAD>
 shared-header:test/endian.h	sha256:<hex>
-modules/CompCert/test/c/return42.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted
-modules/CompCert/test/c/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:blocked	undefined:4	reasons:<sorted, deduplicated, "; "-joined diagnostic messages>
-modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first non-image.undefined diagnostic line>
+modules/CompCert/test/c/return42.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted	gas:ok:<hex>
+modules/CompCert/test/c/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:blocked	undefined:4	reasons:<sorted, deduplicated, "; "-joined diagnostic messages>	gas:ok:<hex>
+modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first non-image.undefined diagnostic line>	gas:error:<trimmed real-`as` diagnostic>
 ```
 
 `outcome:blocked` records `undefined:<n>`, the number of `image.undefined`
@@ -451,12 +451,34 @@ line at all (a crash, or a diagnostic-free nonzero exit) falls back to the
 first non-empty stderr line, or a fixed placeholder for empty stderr -
 mirroring `classify-c`'s own fallback.
 
+The trailing `gas:` field is Ordered Work item 5's differential ("Add a
+broader-corpus differential gate"), independent of `outcome:` above and
+always present regardless of it: whether the real, installed cross `as` for
+this target also accepts the identical generated `.s` file. `gas:ok:<hex>`
+is a sha256 of real `objdump -dr`'s disassembly (banner dropped, alias
+spellings kept - the same normalization `gas-xref`'s own frontier corpus
+uses); `gas:error:<msg>` is real `as`'s own trimmed diagnostic. Only a hash
+is committed, not the disassembly text, so a drift is visible as a changed
+hash on regen without this manifest growing a second `gas-xref`-sized
+artifact tree. This is deliberately *not* a byte-for-byte comparison against
+this project's own encoded output: every file in this corpus blocks on
+`image.undefined` (see above), so neither side has a linked image yet to
+compare bytes against - `gas:` records only whether the two assemblers agree
+on accept/reject, the evidence Ordered Work item 5 asks for before any
+resolved-image byte comparison is possible. A `gas:error` alongside
+`outcome:accepted`/`outcome:blocked` (this project accepts something real
+`as` rejects) or `gas:ok` alongside `outcome:rejected` on a non-`image.undefined`
+reason (real `as` accepts something this project doesn't) would both be
+real findings; none exist in the corpus as committed.
+
 `asm/fixtures/corpus/c-assemble/x86_64/summary.txt`: `total`/`accepted`/
 `blocked`/`rejected` counts, then *rejected* files grouped by exact reason
 text the same way `classify-c`'s summary groups its rejections - `blocked`
 files are not grouped by reason in the summary, since their per-file
 evidence already lives in `manifest.txt` and grouping by which libc
-functions a file happens to call would mostly just re-sort the corpus.
+functions a file happens to call would mostly just re-sort the corpus. Then
+`gas-ok`/`gas-error` totals and, for any `gas:error` files, the same
+exact-message grouping as `reason:` above but prefixed `gas-reason:`.
 
 ## The `classify-regression`/`classify-compression` manifest format
 
@@ -564,11 +586,18 @@ itself, which is `classify-c`'s job, not `check`'s.
 `check-assemble` verifies each `c-assemble/<target>/manifest.txt` the
 identical way, against the identical eight-step list, with two differences:
 `suite` must literally be `"c-assemble"` rather than `"c"` at step 2, and
-step 8 additionally re-derives the `blocked`/`accepted`/`rejected` totals
-`render_summary` computes rather than just `accepted`/`rejected`. It is a
-wholly separate command from `check` (own manifest, own destination
-directory, own errors) so an `assemble-c` regression is never conflated with
-a `classify-c` one, and vice versa.
+step 8 additionally re-derives the `blocked`/`accepted`/`rejected` and
+`gas-ok`/`gas-error` totals `render_summary` computes rather than just
+`accepted`/`rejected`. It is a wholly separate command from `check` (own
+manifest, own destination directory, own errors) so an `assemble-c`
+regression is never conflated with a `classify-c` one, and vice versa. The
+trailing `gas:` field on every file record (see "The `assemble-c` manifest
+format" above) goes through steps 1 and 3 like any other field - a malformed
+or missing `gas:` field fails to parse, and its exact text is part of the
+canonical round-trip - but, like `ccomp-version`/`generated-sha256`, is
+*recorded for audit only* at the `check` level: reproducing it needs the
+real cross `as`/`objdump`, which `assemble-c`'s own regen step needs and
+`check` deliberately does not.
 
 `check-regression`/`check-compression` verify `regression/<target>/` and
 `compression/<target>/` the same eight-step way, `suite` literally
@@ -1224,7 +1253,16 @@ above for what is fixed and what remains.
   stage, not one more `suite_spec`. Left for a future increment if the ABI
   suite's coverage turns out to matter enough to justify that.
 - Add a differential stage (GNU `as`/`objdump` cross-check) for accepted
-  files, across all four classified suites.
+  files, across all four classified suites. **Started**: `assemble-c`'s own
+  manifest now carries this (see "The `assemble-c` manifest format" above) -
+  every one of the 24 files on all six targets is real-`as`-accepted
+  (`gas-ok:24`/`gas-error:0` everywhere), so this first slice found no
+  disagreement, only recorded the evidence Ordered Work item 5 asked for.
+  `classify-c`/`classify-regression`/`classify-compression`/`classify-c-gcc`
+  (the other three of the "four classified suites", plus `classify-c` itself
+  - `assemble-c` was chosen first since it already runs the identical
+  generated `.s` files one pipeline stage further) do not carry this field
+  yet; a future increment.
 - Which recurring `assemble-c`/`classify-regression`/`classify-compression`
   reasons warrant new instruction/lowering support, and which are legitimate
   scope exclusions, is now decided in "Capability ladder: turning the
