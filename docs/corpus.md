@@ -1289,7 +1289,10 @@ above for what is fixed and what remains.
   every existing x86/ARM/AArch64 row is unchanged. Wiring `asm/helpers/
   riscv.c` through its own cross-gcc generator (or writing a hand-assembled
   `asm/helpers/riscv32.s`/`riscv64.s`) so RISC-V also gets Helper/Runtime
-  rows is a separate, larger follow-up, not done here.
+  rows is a separate, larger follow-up, not done here. **The Helper half is
+  now done** - see the dedicated Follow-ups entry near the end of this
+  document; Runtime stays excluded (CompCert's runtime tree still names its
+  RISC-V leg `riscV`, not `riscv32`/`riscv64`).
 - AArch64 `adr`/`br`: now fixed, closing `assemble-c`'s last named non-FP
   aarch64 gap (Capability ladder item 4 above). `vmach.c`/`siphash24.c`'s
   switch-statement jump-table dispatch is `adr x16, .Ltable; add x16, x16,
@@ -1643,3 +1646,111 @@ above for what is fixed and what remains.
   The only thing left in `gas_frontier.t` is the pre-existing, deliberate
   `.p2align` power-of-two-exponent M2-scope exclusion on x86_32/x86_64 -
   not a gap.
+- RISC-V now has a `gas_frontier.t` Helper row on both profiles, closing the
+  follow-up an earlier entry above flagged as "a separate, larger follow-up,
+  not done here": `asm/helpers/riscv32.s`/`riscv64.s` are committed (a real
+  `riscv32-linux-gnu-gcc -S`/`riscv64-linux-gnu-gcc -S` snapshot of the
+  existing freestanding `asm/helpers/riscv.c`, each with its own header
+  comment explaining it is a snapshot, not a build input -
+  `tools/asm-helpers.sh`'s own riscv32/riscv64 leg still compiles `riscv.c`
+  straight to an object, never through a `.s` file). `gas_xref_cmd.ml`'s own
+  `frontier_sources` needed no code change: it already reads
+  `asm/helpers/<target>.s` unconditionally for every target and simply had no
+  file to find for either RISC-V profile before now. Runtime stays excluded
+  for the reason already given (CompCert's own runtime tree names its
+  RISC-V leg `riscV`, not `riscv32`/`riscv64`).
+
+  Running this real gcc output through the full pipeline (`classify-c-gcc`
+  never reaches this far - it stops at `--dump-source-ast`) surfaced five
+  genuine gaps, all now fixed:
+
+  - `fence rw,w` (a memory barrier): the one predecessor/successor spelling
+    this file evidences, encoded as a fixed `Lowered.Fixed` word - the same
+    shape `fence.i`/`ecall`/`ebreak` already use, chosen deliberately over a
+    general pred/succ-decoding form since nothing here evidences a second
+    spelling (this project's own narrow-scope precedent, matching `fucomp`/
+    `fence.i` above). Byte-checked: `fence rw,w` -> `0310000f` (`fm=0000`,
+    `pred=0011`=r|w, `succ=0001`=w).
+  - `bgtu`/`bleu` (unsigned greater-than/less-or-equal branch pseudos): real
+    hardware defines no separate opcode - both are `bltu`/`bgeu` with the two
+    register operands swapped, and real `objdump` always disassembles the
+    swapped-operand word back as the real underlying mnemonic. This project's
+    own canonical printer now follows that choice (the same alias-preference
+    precedent as AArch64's `ubfx`/`ubfiz`, Capability ladder item 4 above),
+    reusing `Lowered.B` unchanged rather than adding a name-only variant.
+    Byte-checked: `bgtu a0, a1, .` -> `00a5e063` (decodes as `bltu a1, a0,
+    .`); `bleu a0, a1, .` -> `fea5fee3` (decodes as `bgeu a1, a0, .`).
+  - `snez rd, rs` / `sext.w rd, rs` (set-not-equal-zero and, RV64-only,
+    sign-extend-word pseudos): `sltu rd, zero, rs` and `addiw rd, rs, 0`
+    under different spellings - `Mv`'s own established precedent (reuse the
+    real instruction's exact lowering and name, rather than a new codec alt)
+    applied to two more pseudos. Byte-checked: `snez a2, a3` -> `00d03633`,
+    matching `sltu a2, zero, a3`; `sext.w a1, a2` -> `0006059b`, matching
+    `addiw a1, a2, 0`.
+  - `.file "riscv.c"` / `.ident "GCC: ..."`: gcc's own compiler-provenance
+    metadata, present on every target it compiles (confirmed: plain
+    `x86_64-linux-gnu-gcc -S`/`arm-linux-gnueabihf-gcc -S` output on a
+    trivial function carries both too) - `classify-c-gcc`'s own 24/24 corpus
+    never saw this because its check stops at `--dump-source-ast`, before
+    simplify (the phase that rejected these) ever runs. Both directives are
+    now generic, target-independent metadata: `directives.ml`'s shared
+    `is_metadata` (previously `.cfi_*` only) now also matches the two exact
+    names, dropped the same "understood and discarded" way on every target.
+  - `.attribute arch, "..."` / `.attribute unaligned_access, 0` / `.attribute
+    stack_align, 16`: RISC-V's own spelling of what ARM already handles as
+    `.eabi_attribute` - an ELF build attribute this project produces no ELF
+    for. One more `Handled`-and-ignored case in `riscv_family.ml`'s
+    `handle_directive`, `arm.ml`'s own `.eabi_attribute` case as precedent
+    (recorded as handled rather than rejected or silently treated as
+    unknown, so a real misspelling stays distinguishable from this).
+
+  Fixing those unmasked two more real, independent, pre-existing gaps in the
+  same two files, both fixed the same session:
+
+  - `li rd, <constant>` always lowered to a single `addi` regardless of the
+    constant's magnitude, so any value not fitting a signed 12-bit immediate
+    failed with `immediate is out of range` - unreached until now since no
+    prior fixture ever gave `li` a value that large. Real `as`'s own `li`
+    expansion collapses to a bare `lui` (no redundant `+0` `addi`) whenever
+    the constant's low 12 bits are exactly zero, the only large-constant
+    shape either helper file evidences (their page/window-aligned address
+    constants, e.g. `li a0, 0x30000000`); a constant needing a genuine
+    `lui`+`addi` pair, or one wider than 32 bits, is not evidenced and still
+    falls through to the unchanged single-`addi` form, which then reports
+    the same out-of-range diagnostic it always has. Byte-checked against
+    real `riscv32-linux-gnu-as`/`objdump`: `li a0, 0x30000000` -> `lui a0,
+    0x30000`; `li a2, -4096` -> `lui a2, 0xfffff` (the low-12-zero test
+    reduces the value to its own 32-bit signed form first, so a negative
+    constant's `lui` is computed by the identical arithmetic-shift-and-mask
+    real hardware/`as` use, not a separate signed/unsigned path).
+  - `sw`/`sd rs2, %lo(symbol)(base)` (an absolute, non-PIC store to a
+    `%hi`-anchored symbol - the store-side sibling of `la`'s own non-PIC
+    `%lo` case, both anchoring a page address materialized by an earlier
+    `lui`/`auipc`): a real, live gap masquerading as dead code. `Abs_lo12_s`
+    already existed in `fixup_kind` and in `evaluate_fixup` (lumped together
+    with `Abs_lo12_i` there since both reduce to the identical `rv32_absolute`
+    low-12-bit split), but `S`'s own `encode` case never had a `%lo` arm at
+    all - only `%pcrel_lo`, `I`'s own `%lo` case was never mirrored onto the
+    store side. Checked against real `riscv32-linux-gnu-as`/`objdump`:
+    `sw a0, %lo(control_alias)(s6)` carries a real `R_RISCV_LO12_S`
+    relocation against `control_alias`, the exact store-side sibling of
+    `I`'s own `R_RISCV_LO12_I`.
+
+  Both `asm/helpers/riscv32.s` and `riscv64.s` (roughly 1,500 lines of real
+  gcc output each) now clear this project's own full
+  `parse -> simplify -> lower -> encode -> plan_image` pipeline end to end -
+  freestanding code with no external references, so the bound image carries
+  zero `image.undefined` blocks either. `gas_frontier.t`'s own "assembles"
+  count moved from 29 to 31. `test/xref/test_xref.ml`'s independent,
+  machine-checked differential harness (which binds every segment of a case
+  at address zero to compare raw bytes against GNU's own recorded
+  `text.hex` - every M1 fixture is single-`.text` and relocation-free, so the
+  base never used to matter) moved its own "beyond M1" bucket from 20 to 22
+  for an unrelated, pre-existing reason: the new helper is a real
+  multi-segment freestanding program (`.text`/`.rodata.str1.N`/`.bss`/
+  `.sbss`/`.srodata`), which a zero-base bind of every segment at once
+  correctly reports as overlapping - a scope limit of that specific harness's
+  own comparison technique, not a new encoding disagreement (`0 differ`
+  both before and after this change). `make asm-ci` (including a fresh
+  `gas-xref regen`, bit-identical everywhere else) and the full
+  `asm-fixture-oracle-riscv32`/`-riscv64` suites stayed green throughout.
