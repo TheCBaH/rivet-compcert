@@ -33,6 +33,32 @@ val real_runner : Repo.t -> Target.t -> runner
 (** Invokes the real, already-built [asm.exe] with [--target <t>
     --dump-source-ast]. *)
 
+(** {1 Real GNU as/objdump differential}
+
+    Shared by every suite this module classifies ([test/c], [test/regression],
+    [test/compression]) and, via {!Corpus_classify_gcc_cmd}'s own re-export,
+    classify-c-gcc too - see {!Corpus_assemble_cmd}'s identical mechanism,
+    which this generalizes. *)
+
+type gas_record =
+  | Gas_ok of { objdump_sha256 : string }
+  | Gas_error of string
+      (** Whether real GNU [as] for the target also accepts the identical
+    generated [.s] file - a question independent of this module's own
+    [outcome] above, per Ordered Work item 5 ("Add a broader-corpus
+    differential gate"). Only a hash of real [objdump]'s disassembly is kept,
+    so a drift on regen is visible as a changed hash without committing the
+    text itself. *)
+
+type gas_prober = generated_s_rel:string -> (gas_record, Tool_error.t) Err.t
+(** Fakeable like {!runner}: every test in this module besides the real-GNU-as
+    integration test is hermetic. An [Error] means the probe's own machinery
+    broke; real [as] rejecting the input is [Ok (Gas_error _)]. *)
+
+val real_gas_prober : Repo.t -> Gnu_tools.t -> gas_prober
+(** Assembles [generated_s_rel] with the real, installed cross [as] for
+    [tools]'s target and, on success, hashes real [objdump]'s disassembly. *)
+
 (** {1 One compiled corpus file} *)
 
 type compiled_entry = {
@@ -51,12 +77,18 @@ type file_record = {
       (** [None] only for [Rec_compile_failed]: there is no generated [.s] to
           hash when [ccomp] itself never produced one. *)
   outcome : outcome;
+  gas : gas_record option;
+      (** [None] only for [Rec_compile_failed], for the identical reason as
+          [generated_sha256]: there is no generated [.s] to probe with real
+          GNU [as] either. *)
 }
 
-val classify_all : runner -> compiled_entry list -> (file_record list, Tool_error.t) Err.t
-(** Classify every entry with [runner]. A single [Runner_failed] outcome
-    aborts the whole traversal - it is a tooling failure, not a corpus
-    finding; an [Accepted]/[Rejected] outcome always becomes a record. *)
+val classify_all :
+  runner -> gas_prober -> compiled_entry list -> (file_record list, Tool_error.t) Err.t
+(** Classify every entry with [runner], then probe it with [gas_prober]. A
+    single [Runner_failed] outcome (from [runner]) or a [gas_prober] [Error]
+    aborts the whole traversal - both are tooling failures, not corpus
+    findings; an [Accepted]/[Rejected] outcome always becomes a record. *)
 
 (** {1 The manifest and summary formats} *)
 
@@ -178,9 +210,10 @@ val prepare_all :
   string list ->
   (prepared list, Tool_error.t) Err.t
 
-val classify_prepared : runner -> prepared list -> (file_record list, Tool_error.t) Err.t
+val classify_prepared :
+  runner -> gas_prober -> prepared list -> (file_record list, Tool_error.t) Err.t
 (** Like {!classify_all}, but passes an already-{!Precompiled} record through
-    unchanged instead of invoking [runner] on it. *)
+    unchanged instead of invoking [runner]/[gas_prober] on it. *)
 
 val check_clean_checkout : git_probe -> (unit, Tool_error.t) Err.t
 (** Fails, naming the dirty paths, unless [status_porcelain] is empty. Both
@@ -237,21 +270,23 @@ val classify_c_core :
   Repo.t ->
   git:git_probe ->
   runner:runner ->
+  gas_prober:gas_prober ->
   compiler:Fpath.t ->
   target:Target.t ->
   (string, Tool_error.t) Err.t
 (** {!classify_c}'s body, parameterized over the CompCert checkout probe, the
-    parser runner, the compiler path and the target, so a test can supply a
-    dirty [git] stub and confirm the run stops at {!check_clean_checkout} -
-    before [modules/CompCert/test/c] is even read - rather than reaching the
-    compiler at all. *)
+    parser runner, the gas prober, the compiler path and the target, so a test
+    can supply a dirty [git] stub and confirm the run stops at
+    {!check_clean_checkout} - before [modules/CompCert/test/c] is even read -
+    rather than reaching the compiler at all. *)
 
 val classify_c : Repo.t -> Target.t -> Command.t
 (** The heavy path for one target: requires that target's cross compiler
     ([make asm-cross-setup], or a single-target
-    [tools/compcert-fixture-setup.sh <target>]) and a clean [modules/CompCert]
-    checkout. Compiles all of [test/c/*.c] for it, classifies each with the
-    real parser, and publishes to [asm/fixtures/corpus/c/<target>/]. *)
+    [tools/compcert-fixture-setup.sh <target>]), the target's cross GNU [as]/
+    [objdump], and a clean [modules/CompCert] checkout. Compiles all of
+    [test/c/*.c] for it, classifies each with the real parser, probes each
+    with real GNU [as], and publishes to [asm/fixtures/corpus/c/<target>/]. *)
 
 val check_with : Repo.t -> git:git_probe -> Target.t -> Command.t
 (** {!check}'s body for one target, parameterized over the CompCert checkout
@@ -281,6 +316,7 @@ val classify_suite_core :
   Repo.t ->
   git:git_probe ->
   runner:runner ->
+  gas_prober:gas_prober ->
   compiler:Fpath.t ->
   spec:suite_spec ->
   target:Target.t ->

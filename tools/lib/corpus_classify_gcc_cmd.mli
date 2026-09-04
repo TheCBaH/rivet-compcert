@@ -25,6 +25,18 @@ val real_runner : Repo.t -> Target.t -> runner
     --dump-source-ast], the same 120s external [timeout] Corpus_classify_cmd's
     own runner uses. *)
 
+(** {1 Real GNU as/objdump differential} - re-exposed unchanged from
+    {!Corpus_classify_cmd}, which every classify-* suite shares this machinery
+    with. *)
+
+type gas_record = Corpus_classify_cmd.gas_record =
+  | Gas_ok of { objdump_sha256 : string }
+  | Gas_error of string
+
+type gas_prober = Corpus_classify_cmd.gas_prober
+
+val real_gas_prober : Repo.t -> Gnu_tools.t -> gas_prober
+
 (** {1 One compiled corpus file} *)
 
 type compiled_entry = {
@@ -41,9 +53,11 @@ type file_record = {
   source_sha256 : string;
   generated_sha256 : string;
   outcome : outcome;
+  gas : gas_record;
 }
 
-val classify_all : runner -> compiled_entry list -> (file_record list, Tool_error.t) Err.t
+val classify_all :
+  runner -> gas_prober -> compiled_entry list -> (file_record list, Tool_error.t) Err.t
 
 (** {1 The manifest and summary formats} *)
 
@@ -128,23 +142,25 @@ val classify_c_gcc_core :
   Repo.t ->
   git:git_probe ->
   runner:runner ->
+  gas_prober:gas_prober ->
   compiler:string ->
   args:string list ->
   gcc_version:string ->
   target:Target.t ->
   (string, Tool_error.t) Err.t
 (** {!classify_c_gcc}'s body, parameterized over the CompCert checkout probe,
-    the parser runner, and the compiler invocation, so a test can supply a
-    dirty [git] stub and confirm the run stops at {!check_clean_checkout} -
-    before [modules/CompCert/test/c] is even read, and before [gcc] is
-    required to be installed at all. *)
+    the parser runner, the gas prober, and the compiler invocation, so a test
+    can supply a dirty [git] stub and confirm the run stops at
+    {!check_clean_checkout} - before [modules/CompCert/test/c] is even read,
+    and before [gcc] is required to be installed at all. *)
 
 val classify_c_gcc : Repo.t -> Target.t -> Command.t
 (** The heavy path for one target: requires that target's cross [gcc]
     (installed system-wide - unlike classify-c, no [make asm-cross-setup] and
-    no CompCert build) and a clean [modules/CompCert] checkout. Compiles all of
-    [test/c/*.c] for it, classifies each with the real parser, and publishes
-    to [asm/fixtures/corpus/c-gcc/<target>/]. *)
+    no CompCert build), that target's cross GNU [as]/[objdump], and a clean
+    [modules/CompCert] checkout. Compiles all of [test/c/*.c] for it,
+    classifies each with the real parser, probes each with real GNU [as], and
+    publishes to [asm/fixtures/corpus/c-gcc/<target>/]. *)
 
 val check_with : Repo.t -> git:git_probe -> Target.t -> Command.t
 val published_targets : Repo.t -> Target.t list

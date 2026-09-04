@@ -37,9 +37,12 @@ val real_runner : Repo.t -> Target.t -> runner
 (** Invokes the real, already-built [asm.exe] with [--target <t>] and no
     [--dump] flag, i.e. its default full-pipeline path to [plan_image]. *)
 
-(** {1 Real GNU as/objdump differential} *)
+(** {1 Real GNU as/objdump differential}
 
-type gas_record =
+    Re-exposed unchanged from {!Corpus_classify_cmd}, which every classify-*
+    suite shares this machinery with. *)
+
+type gas_record = Corpus_classify_cmd.gas_record =
   | Gas_ok of { objdump_sha256 : string }
   | Gas_error of string
       (** Whether real GNU [as] for the target also accepts the identical generated
@@ -50,7 +53,7 @@ type gas_record =
     real [objdump]'s disassembly is kept, so a drift on regen is visible as a
     changed hash without committing the text itself. *)
 
-type gas_prober = generated_s_rel:string -> (gas_record, Tool_error.t) Err.t
+type gas_prober = Corpus_classify_cmd.gas_prober
 (** Fakeable like {!runner}: every test in this module besides the one
     integration test at the bottom is hermetic, and this seam is what keeps
     the gas differential hermetic-testable too. An [Error] means the probe's

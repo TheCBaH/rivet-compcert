@@ -52,6 +52,49 @@ let real_runner repo (target : Target.t) : runner =
       Runner_failed "parser exited abnormally"
   | Error e -> Runner_failed (Format.asprintf "%a" (Err.Error.pp Tool_error.pp) e)
 
+(* {1 Real GNU as/objdump differential}
+
+   Shared by every suite this module classifies (test/c, test/regression,
+   test/compression) and, via Corpus_classify_gcc_cmd's own re-export,
+   classify-c-gcc too: whether real GNU `as` for the target also accepts the
+   identical generated `.s` file, and a hash of what real `objdump`
+   disassembles it to - the same evidence Corpus_assemble_cmd's `assemble-c`
+   manifest already records, and for the identical reason (Ordered Work item
+   5, asm/docs/corpus.md). This is evidence about a different question than
+   `outcome` below ("does the reference assembler accept/produce the same
+   thing", not "does this project's own parser accept it") - no byte-level
+   image comparison, since a parse-level classification never reaches a
+   resolved image on either side; only a hash of real `objdump`'s disassembly
+   is kept (not the text itself), so a drift is visible as a changed hash on
+   regen. *)
+
+type gas_record = Gas_ok of { objdump_sha256 : string } | Gas_error of string
+
+(* Fakeable like [runner]: every test in this module besides the real-GNU-as
+   integration test is hermetic, and this seam is what keeps the gas
+   differential hermetic-testable too. An [Error] means the probe's own
+   machinery broke (a scratch-directory or objdump-invocation failure); real
+   [as] rejecting the input is data, not an error, and becomes
+   [Ok (Gas_error _)]. *)
+type gas_prober = generated_s_rel:string -> (gas_record, Tool_error.t) Err.t
+
+let real_gas_prober repo tools : gas_prober =
+ fun ~generated_s_rel ->
+  Tool_workspace.with_scratch ~label:"corpus-classify-gas" (fun work ->
+      let src = Fpath.(Repo.path repo // v generated_s_rel) in
+      let obj = Fpath.(work / "obj.o") in
+      let* outcome = Gnu_tools.try_assemble tools ~src ~obj ~include_dir:None in
+      match outcome with
+      | Gnu_tools.Rejected body -> Ok (Gas_error body)
+      | Gnu_tools.Assembled ->
+          let* disasm =
+            Gnu_tools.objdump_disasm tools obj ~scrub:work ~drop_banner:true ~riscv_numeric:false
+          in
+          let dump = Fpath.(work / "objdump.txt") in
+          let* () = Tool_fs.write dump disasm in
+          let* objdump_sha256 = Tool_fs.sha256 dump in
+          Ok (Gas_ok { objdump_sha256 }))
+
 (* {1 One compiled corpus file, and classifying it} *)
 
 type compiled_entry = {
@@ -70,34 +113,39 @@ type file_record = {
       (** [None] only for {!Rec_compile_failed}: there is no generated [.s] to
           hash when [ccomp] itself never produced one. *)
   outcome : outcome;
+  gas : gas_record option;
+      (** [None] only for {!Rec_compile_failed}, for the identical reason as
+          [generated_sha256]: there is no generated [.s] to probe with real
+          GNU [as] either. *)
 }
 
-let classify_entry runner (e : compiled_entry) =
+let classify_entry runner gas_prober (e : compiled_entry) =
   match normalize (runner ~generated_s_rel:e.ce_generated_s_rel) with
-  | Accepted ->
-      Ok
-        {
-          path = e.ce_path;
-          source_sha256 = e.ce_source_sha256;
-          generated_sha256 = Some e.ce_generated_sha256;
-          outcome = Rec_accepted;
-        }
-  | Rejected reason ->
-      Ok
-        {
-          path = e.ce_path;
-          source_sha256 = e.ce_source_sha256;
-          generated_sha256 = Some e.ce_generated_sha256;
-          outcome = Rec_rejected reason;
-        }
   | Runner_failed msg -> Error msg
+  | (Accepted | Rejected _) as normalized -> (
+      match gas_prober ~generated_s_rel:e.ce_generated_s_rel with
+      | Error gas_err -> Error (Format.asprintf "%a" (Err.Error.pp Tool_error.pp) gas_err)
+      | Ok gas -> (
+          let base =
+            {
+              path = e.ce_path;
+              source_sha256 = e.ce_source_sha256;
+              generated_sha256 = Some e.ce_generated_sha256;
+              outcome = Rec_accepted;
+              gas = Some gas;
+            }
+          in
+          match normalized with
+          | Accepted -> Ok base
+          | Rejected reason -> Ok { base with outcome = Rec_rejected reason }
+          | Runner_failed _ -> assert false))
 
-let classify_all runner entries =
+let classify_all runner gas_prober entries =
   let* records =
     List.fold_left
       (fun acc e ->
         let* rs = acc in
-        match classify_entry runner e with
+        match classify_entry runner gas_prober e with
         | Ok r -> Ok (r :: rs)
         | Error msg ->
             err Tool_error.Exec (Printf.sprintf "parser invocation failed for %s: %s" e.ce_path msg))
@@ -132,30 +180,35 @@ let render_manifest (m : manifest) =
   let sorted =
     List.sort (fun (a : file_record) (b : file_record) -> String.compare a.path b.path) m.files
   in
+  let render_gas = function
+    | Gas_ok { objdump_sha256 } -> Printf.sprintf "gas:ok:%s" objdump_sha256
+    | Gas_error msg -> Printf.sprintf "gas:error:%s" (Manifest.escape msg)
+  in
   List.iter
     (fun (r : file_record) ->
-      match (r.outcome, r.generated_sha256) with
-      | Rec_accepted, Some g ->
+      match (r.outcome, r.generated_sha256, r.gas) with
+      | Rec_accepted, Some g, Some gas ->
           Buffer.add_string b
-            (Printf.sprintf "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:accepted\n" r.path
-               r.source_sha256 g)
-      | Rec_rejected reason, Some g ->
+            (Printf.sprintf "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:accepted\t%s\n"
+               r.path r.source_sha256 g (render_gas gas))
+      | Rec_rejected reason, Some g, Some gas ->
           Buffer.add_string b
             (Printf.sprintf
-               "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:rejected\treason:%s\n" r.path
-               r.source_sha256 g (Manifest.escape reason))
-      | Rec_compile_failed reason, None ->
+               "%s\tsource-sha256:%s\tgenerated-sha256:%s\toutcome:rejected\treason:%s\t%s\n" r.path
+               r.source_sha256 g (Manifest.escape reason) (render_gas gas))
+      | Rec_compile_failed reason, None, None ->
           Buffer.add_string b
             (Printf.sprintf "%s\tsource-sha256:%s\toutcome:compile-failed\treason:%s\n" r.path
                r.source_sha256 (Manifest.escape reason))
-      | (Rec_accepted | Rec_rejected _), None ->
+      | (Rec_accepted | Rec_rejected _), _, _ ->
           invalid_arg
-            (Printf.sprintf "render_manifest: %s is accepted/rejected but has no generated-sha256"
+            (Printf.sprintf
+               "render_manifest: %s is accepted/rejected but is missing generated-sha256 or gas"
                r.path)
-      | Rec_compile_failed _, Some _ ->
+      | Rec_compile_failed _, _, _ ->
           invalid_arg
-            (Printf.sprintf "render_manifest: %s is compile-failed but carries a generated-sha256"
-               r.path))
+            (Printf.sprintf
+               "render_manifest: %s is compile-failed but carries a generated-sha256 or gas" r.path))
     sorted;
   Buffer.contents b
 
@@ -187,6 +240,28 @@ let render_summary (m : manifest) =
     group_reasons m.files (fun r ->
         match r.outcome with Rec_compile_failed s -> Some s | _ -> None)
   in
+  let gas_ok =
+    List.length
+      (List.filter
+         (fun (r : file_record) -> match r.gas with Some (Gas_ok _) -> true | _ -> false)
+         m.files)
+  in
+  let gas_error = total - compile_failed - gas_ok in
+  let gas_reasons =
+    List.filter_map
+      (fun (r : file_record) -> match r.gas with Some (Gas_error s) -> Some s | _ -> None)
+      m.files
+    |> List.sort_uniq String.compare
+    |> List.map (fun reason ->
+        let c =
+          List.length
+            (List.filter
+               (fun (r : file_record) ->
+                 match r.gas with Some (Gas_error s) -> String.equal s reason | _ -> false)
+               m.files)
+        in
+        (reason, c))
+  in
   let b = Buffer.create 1024 in
   Buffer.add_string b (Printf.sprintf "total:%d\n" total);
   Buffer.add_string b (Printf.sprintf "accepted:%d\n" accepted);
@@ -204,6 +279,12 @@ let render_summary (m : manifest) =
     (fun (reason, count) ->
       Buffer.add_string b (Printf.sprintf "compile-reason:%d\t%s\n" count (Manifest.escape reason)))
     compile_failed_reasons;
+  Buffer.add_string b (Printf.sprintf "gas-ok:%d\n" gas_ok);
+  Buffer.add_string b (Printf.sprintf "gas-error:%d\n" gas_error);
+  List.iter
+    (fun (reason, count) ->
+      Buffer.add_string b (Printf.sprintf "gas-reason:%d\t%s\n" count (Manifest.escape reason)))
+    gas_reasons;
   Buffer.contents b
 
 (* {2 Parsing} *)
@@ -234,9 +315,29 @@ let parse_hash_field ~line_no ~field ~prefix text =
         err Tool_error.Parse
           (Printf.sprintf "manifest line %d: %s is not 64 lowercase hex characters" line_no field)
 
+let parse_gas_field ~line_no field =
+  match strip_prefix ~prefix:"gas:" field with
+  | None -> err Tool_error.Parse (Printf.sprintf "manifest line %d: expected field \"gas\"" line_no)
+  | Some rest -> (
+      match strip_prefix ~prefix:"ok:" rest with
+      | Some h ->
+          if is_hex64 h then Ok (Gas_ok { objdump_sha256 = h })
+          else
+            err Tool_error.Parse
+              (Printf.sprintf
+                 "manifest line %d: gas-objdump-sha256 is not 64 lowercase hex characters" line_no)
+      | None -> (
+          match strip_prefix ~prefix:"error:" rest with
+          | Some m ->
+              let* msg = Manifest.unescape m in
+              Ok (Gas_error msg)
+          | None ->
+              err Tool_error.Parse
+                (Printf.sprintf "manifest line %d: malformed \"gas\" field %S" line_no field)))
+
 let parse_file_record ~line_no line =
   match String.split_on_char '\t' line with
-  | [ path; source; generated; "outcome:accepted" ] ->
+  | [ path; source; generated; "outcome:accepted"; gas_field ] ->
       let* () = Identifier.relative_path path |> Result.map ignore in
       let* source_sha256 =
         parse_hash_field ~line_no ~field:"source-sha256" ~prefix:"source-sha256:" source
@@ -244,8 +345,16 @@ let parse_file_record ~line_no line =
       let* generated_sha256 =
         parse_hash_field ~line_no ~field:"generated-sha256" ~prefix:"generated-sha256:" generated
       in
-      Ok { path; source_sha256; generated_sha256 = Some generated_sha256; outcome = Rec_accepted }
-  | [ path; source; generated; "outcome:rejected"; reason ] -> (
+      let* gas = parse_gas_field ~line_no gas_field in
+      Ok
+        {
+          path;
+          source_sha256;
+          generated_sha256 = Some generated_sha256;
+          outcome = Rec_accepted;
+          gas = Some gas;
+        }
+  | [ path; source; generated; "outcome:rejected"; reason; gas_field ] -> (
       let* () = Identifier.relative_path path |> Result.map ignore in
       let* source_sha256 =
         parse_hash_field ~line_no ~field:"source-sha256" ~prefix:"source-sha256:" source
@@ -253,6 +362,7 @@ let parse_file_record ~line_no line =
       let* generated_sha256 =
         parse_hash_field ~line_no ~field:"generated-sha256" ~prefix:"generated-sha256:" generated
       in
+      let* gas = parse_gas_field ~line_no gas_field in
       match strip_prefix ~prefix:"reason:" reason with
       | None ->
           err Tool_error.Parse
@@ -265,6 +375,7 @@ let parse_file_record ~line_no line =
               source_sha256;
               generated_sha256 = Some generated_sha256;
               outcome = Rec_rejected reason;
+              gas = Some gas;
             })
   | [ path; source; "outcome:compile-failed"; reason ] -> (
       let* () = Identifier.relative_path path |> Result.map ignore in
@@ -277,7 +388,14 @@ let parse_file_record ~line_no line =
             (Printf.sprintf "manifest line %d: expected field \"reason\"" line_no)
       | Some r ->
           let* reason = Manifest.unescape r in
-          Ok { path; source_sha256; generated_sha256 = None; outcome = Rec_compile_failed reason })
+          Ok
+            {
+              path;
+              source_sha256;
+              generated_sha256 = None;
+              outcome = Rec_compile_failed reason;
+              gas = None;
+            })
   | _ ->
       err Tool_error.Parse
         (Printf.sprintf "manifest line %d: malformed file record %S" line_no line)
@@ -521,6 +639,7 @@ let compile_or_record repo ~compiler ~args ~corpus_work_root ~(spec : suite_spec
              source_sha256;
              generated_sha256 = None;
              outcome = Rec_compile_failed reason;
+             gas = None;
            })
   | Ok { Tool_process.status = Process_status.Signaled _ | Process_status.Timed_out; _ } ->
       (* Unreachable for the same reason real_runner's is: accepted:Any_exit
@@ -539,7 +658,7 @@ let prepare_all repo ~compiler ~args ~corpus_work_root ~spec ~target files =
   in
   Ok (List.rev ps)
 
-let classify_prepared runner prepared =
+let classify_prepared runner gas_prober prepared =
   let* rs =
     List.fold_left
       (fun acc p ->
@@ -547,7 +666,7 @@ let classify_prepared runner prepared =
         match p with
         | Precompiled r -> Ok (r :: rs)
         | Ready e -> (
-            match classify_entry runner e with
+            match classify_entry runner gas_prober e with
             | Ok r -> Ok (r :: rs)
             | Error msg ->
                 err Tool_error.Exec
@@ -621,7 +740,7 @@ let publish_suite (spec : suite_spec) repo ~target (m : manifest) =
 
 (* {1 classify-c} *)
 
-let classify_c_core repo ~git ~runner ~compiler ~(target : Target.t) =
+let classify_c_core repo ~git ~runner ~gas_prober ~compiler ~(target : Target.t) =
   let* () = check_clean_checkout git in
   let* files = discover_c_files repo in
   if files = [] then err Tool_error.Validate "modules/CompCert/test/c contains no .c files"
@@ -638,7 +757,7 @@ let classify_c_core repo ~git ~runner ~compiler ~(target : Target.t) =
         (Ok []) files
     in
     let entries = List.rev entries in
-    let* records = classify_all runner entries in
+    let* records = classify_all runner gas_prober entries in
     let* ccomp_version = Ccomp.version compiler in
     let* compcert_revision = git.head () in
     let shared_header_path = "test/endian.h" in
@@ -661,11 +780,18 @@ let classify_c_core repo ~git ~runner ~compiler ~(target : Target.t) =
     let accepted =
       List.length (List.filter (fun (r : file_record) -> r.outcome = Rec_accepted) records)
     in
+    let gas_ok =
+      List.length
+        (List.filter
+           (fun (r : file_record) -> match r.gas with Some (Gas_ok _) -> true | _ -> false)
+           records)
+    in
     Ok
-      (Printf.sprintf "corpus classify-c-%s: %d accepted, %d rejected (of %d)"
+      (Printf.sprintf "corpus classify-c-%s: %d accepted, %d rejected (of %d); gas: %d ok, %d error"
          (Target.to_string target) accepted
          (List.length records - accepted)
-         (List.length records))
+         (List.length records) gas_ok
+         (List.length records - gas_ok))
 
 let fixture_work_root repo =
   Result.map Tool_workspace.read_path (Tool_workspace.fixture_work repo ~env:Sys.getenv_opt)
@@ -675,8 +801,10 @@ let classify_c repo (target : Target.t) =
     let* work_root = fixture_work_root repo in
     let* () = Ccomp.require_all [ target ] ~work_root in
     let compiler = Ccomp.path target ~work_root in
-    classify_c_core repo ~git:(real_git_probe repo) ~runner:(real_runner repo target) ~compiler
-      ~target
+    let tools = Gnu_tools.for_target target in
+    let* () = Gnu_tools.require tools ~qemu:false in
+    classify_c_core repo ~git:(real_git_probe repo) ~runner:(real_runner repo target)
+      ~gas_prober:(real_gas_prober repo tools) ~compiler ~target
   in
   match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
 
@@ -698,7 +826,8 @@ let compression_spec : suite_spec =
     dest = Repo.corpus_compression;
   }
 
-let classify_suite_core repo ~git ~runner ~compiler ~(spec : suite_spec) ~(target : Target.t) =
+let classify_suite_core repo ~git ~runner ~gas_prober ~compiler ~(spec : suite_spec)
+    ~(target : Target.t) =
   let* () = check_clean_checkout git in
   let* files = discover_suite_files repo spec in
   if files = [] then
@@ -709,7 +838,7 @@ let classify_suite_core repo ~git ~runner ~compiler ~(spec : suite_spec) ~(targe
     let* () = Tool_workspace.recreate_root corpus_work_root in
     let args = (Target.config target).Target.ccomp_args @ spec.extra_ccomp_args in
     let* prepared = prepare_all repo ~compiler ~args ~corpus_work_root ~spec ~target files in
-    let* records = classify_prepared runner prepared in
+    let* records = classify_prepared runner gas_prober prepared in
     let* ccomp_version = Ccomp.version compiler in
     let* compcert_revision = git.head () in
     let shared_header_path = "test/endian.h" in
@@ -739,19 +868,30 @@ let classify_suite_core repo ~git ~runner ~compiler ~(spec : suite_spec) ~(targe
              match r.outcome with Rec_compile_failed _ -> true | _ -> false)
            records)
     in
+    let gas_ok =
+      List.length
+        (List.filter
+           (fun (r : file_record) -> match r.gas with Some (Gas_ok _) -> true | _ -> false)
+           records)
+    in
+    let gas_total = List.length records - compile_failed in
     Ok
-      (Printf.sprintf "corpus classify-%s-%s: %d accepted, %d rejected, %d compile-failed (of %d)"
+      (Printf.sprintf
+         "corpus classify-%s-%s: %d accepted, %d rejected, %d compile-failed (of %d); gas: %d ok, \
+          %d error"
          spec.suite_tag (Target.to_string target) accepted
          (List.length records - accepted - compile_failed)
-         compile_failed (List.length records))
+         compile_failed (List.length records) gas_ok (gas_total - gas_ok))
 
 let classify_suite (spec : suite_spec) repo (target : Target.t) =
   let step =
     let* work_root = fixture_work_root repo in
     let* () = Ccomp.require_all [ target ] ~work_root in
     let compiler = Ccomp.path target ~work_root in
-    classify_suite_core repo ~git:(real_git_probe repo) ~runner:(real_runner repo target) ~compiler
-      ~spec ~target
+    let tools = Gnu_tools.for_target target in
+    let* () = Gnu_tools.require tools ~qemu:false in
+    classify_suite_core repo ~git:(real_git_probe repo) ~runner:(real_runner repo target)
+      ~gas_prober:(real_gas_prober repo tools) ~compiler ~spec ~target
   in
   match step with Error e -> Command.of_error e | Ok line -> Command.ok [ Diagnostic.stdout line ]
 

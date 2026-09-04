@@ -1,10 +1,12 @@
 total:108
-accepted:102
-rejected:3
+accepted:103
+rejected:2
 compile-failed:3
-reason:1	(no diagnostic; exit 124)
 reason:1	.corpus-work/regression/x86_32/dollars/output.s:14:2: error[parse]: unexpected token
 reason:1	.corpus-work/regression/x86_32/extasm/output.s:16:12: error[parse]: unexpected token
 compile-reason:1	modules/CompCert/test/regression/builtins-aarch64.c:13: error: use of unknown builtin '__builtin_cls'
 compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
 compile-reason:1	modules/CompCert/test/regression/funct1.c:3: error: too many arguments to function call, expected 0, have 1
+gas-ok:104
+gas-error:1
+gas-reason:1	:16: Error: no such instruction: `test0 out:%eax in:%edx'\n:35: Error: no such instruction: `test1 %'\n:38: Error: no such instruction: `test2 in:%ecx'\n

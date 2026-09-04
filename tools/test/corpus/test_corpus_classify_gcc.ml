@@ -85,10 +85,13 @@ let entry ?(stem = "case") ?(source_sha = String.make 64 'a') ?(generated_sha = 
     ce_generated_sha256 = generated_sha;
   }
 
+let fake_gas_ok : gas_prober =
+ fun ~generated_s_rel:_ -> Ok (Gas_ok { objdump_sha256 = String.make 64 '0' })
+
 let test_classify_all () =
   let accept ~generated_s_rel:_ = Exited { code = 0; stderr = "" } in
   let reject ~generated_s_rel:_ = Exited { code = 1; stderr = "boom\n" } in
-  (match classify_all accept [ entry ~stem:"a" (); entry ~stem:"b" () ] with
+  (match classify_all accept fake_gas_ok [ entry ~stem:"a" (); entry ~stem:"b" () ] with
   | Ok
       [
         { path = "modules/CompCert/test/c/a.c"; outcome = Rec_accepted; _ };
@@ -96,10 +99,15 @@ let test_classify_all () =
       ] ->
       check "classify_all: every file accepted, in input order" true
   | _ -> check "classify_all: every file accepted, in input order" false);
-  (match classify_all reject [ entry ~stem:"a" () ] with
+  (match classify_all reject fake_gas_ok [ entry ~stem:"a" () ] with
   | Ok [ { outcome = Rec_rejected "boom"; _ } ] ->
       check "classify_all: a rejection becomes a record" true
   | _ -> check "classify_all: a rejection becomes a record" false);
+  (match classify_all accept fake_gas_ok [ entry ~stem:"a" () ] with
+  | Ok [ { gas = Gas_ok { objdump_sha256 }; _ } ] ->
+      check "classify_all: the gas prober's result is threaded into the record"
+        (String.equal objdump_sha256 (String.make 64 '0'))
+  | _ -> check "classify_all: the gas prober's result is threaded into the record" false);
   let flaky = ref 0 in
   let runner : runner =
    fun ~generated_s_rel ->
@@ -108,7 +116,15 @@ let test_classify_all () =
     else Exited { code = 0; stderr = generated_s_rel }
   in
   check "classify_all: a Runner_failed outcome aborts the whole traversal, not just one record"
-    (is_err (classify_all runner [ entry ~stem:"a" (); entry ~stem:"b" (); entry ~stem:"c" () ]))
+    (is_err
+       (classify_all runner fake_gas_ok
+          [ entry ~stem:"a" (); entry ~stem:"b" (); entry ~stem:"c" () ]));
+  let failing_gas_prober : gas_prober =
+   fun ~generated_s_rel:_ ->
+    Err.fail ~pos:__POS__ ~pp_error:Tool_error.pp (Tool_error.v Tool_error.Exec "gas probe broke")
+  in
+  check "classify_all: a gas-prober Error aborts the whole traversal too"
+    (is_err (classify_all accept failing_gas_prober [ entry ~stem:"a" () ]))
 
 (* {1 manifest/summary rendering, parsing, and round-tripping} *)
 
@@ -133,12 +149,14 @@ let sample_manifest =
           source_sha256 = String.make 64 'a';
           generated_sha256 = String.make 64 'b';
           outcome = Rec_accepted;
+          gas = Gas_ok { objdump_sha256 = String.make 64 '1' };
         };
         {
           path = "modules/CompCert/test/c/fib.c";
           source_sha256 = String.make 64 'c';
           generated_sha256 = String.make 64 'd';
           outcome = Rec_rejected "cannot parse operand $.LC0";
+          gas = Gas_error "Error: no such instruction";
         };
       ];
   }
@@ -158,15 +176,25 @@ let test_manifest_round_trip () =
 let test_render_summary () =
   let text = render_summary sample_manifest in
   check_eq "render_summary: totals and one reason group"
-    ~expected:"total:2\naccepted:1\nrejected:1\nreason:1\tcannot parse operand $.LC0\n" ~actual:text
+    ~expected:
+      "total:2\n\
+       accepted:1\n\
+       rejected:1\n\
+       reason:1\tcannot parse operand $.LC0\n\
+       gas-ok:1\n\
+       gas-error:1\n\
+       gas-reason:1\tError: no such instruction\n"
+    ~actual:text
 
 let good_header =
   "suite:c-gcc\ntarget:x86_64\ngcc-version:v\ngcc-args:a\ncompcert-revision:" ^ String.make 40 '1'
   ^ "\nshared-header:test/endian.h\tsha256:" ^ String.make 64 '2' ^ "\n"
 
+let good_gas = "\tgas:ok:" ^ String.make 64 '3'
+
 let good_record =
   "modules/CompCert/test/c/aes.c\tsource-sha256:" ^ String.make 64 'a' ^ "\tgenerated-sha256:"
-  ^ String.make 64 'b' ^ "\toutcome:accepted\n"
+  ^ String.make 64 'b' ^ "\toutcome:accepted" ^ good_gas ^ "\n"
 
 let test_parse_manifest_rejects () =
   check "parse_manifest: a missing final newline is rejected"
@@ -177,19 +205,30 @@ let test_parse_manifest_rejects () =
     (is_err
        (parse_manifest
           (good_header ^ "modules/CompCert/test/c/aes.c\tsource-sha256:" ^ String.make 64 'a'
-         ^ "\tgenerated-sha256:" ^ String.make 64 'b' ^ "\toutcome:accepted\treason:x\n")));
+         ^ "\tgenerated-sha256:" ^ String.make 64 'b' ^ "\toutcome:accepted\treason:x" ^ good_gas
+         ^ "\n")));
   check "parse_manifest: outcome:rejected without a reason is rejected"
     (is_err
        (parse_manifest
           (good_header ^ "modules/CompCert/test/c/fib.c\tsource-sha256:" ^ String.make 64 'a'
-         ^ "\tgenerated-sha256:" ^ String.make 64 'b' ^ "\toutcome:rejected\n")));
+         ^ "\tgenerated-sha256:" ^ String.make 64 'b' ^ "\toutcome:rejected" ^ good_gas ^ "\n")));
+  check "parse_manifest: a record missing its trailing gas field is rejected"
+    (is_err
+       (parse_manifest
+          (good_header ^ "modules/CompCert/test/c/aes.c\tsource-sha256:" ^ String.make 64 'a'
+         ^ "\tgenerated-sha256:" ^ String.make 64 'b' ^ "\toutcome:accepted\n")));
+  check "parse_manifest: a malformed gas field is rejected"
+    (is_err
+       (parse_manifest
+          (good_header ^ "modules/CompCert/test/c/aes.c\tsource-sha256:" ^ String.make 64 'a'
+         ^ "\tgenerated-sha256:" ^ String.make 64 'b' ^ "\toutcome:accepted\tgas:maybe\n")));
   check "parse_manifest: a duplicate path is rejected"
     (is_err (parse_manifest (good_header ^ good_record ^ good_record)));
   check "parse_manifest: an absolute path is rejected"
     (is_err
        (parse_manifest
           (good_header ^ "/etc/passwd\tsource-sha256:" ^ String.make 64 'a' ^ "\tgenerated-sha256:"
-         ^ String.make 64 'b' ^ "\toutcome:accepted\n")));
+         ^ String.make 64 'b' ^ "\toutcome:accepted" ^ good_gas ^ "\n")));
   check "parse_manifest: a well-formed manifest with no file records is accepted"
     (is_ok (parse_manifest good_header))
 
@@ -308,12 +347,14 @@ let build_and_seed repo ~git =
             source_sha256 = source_sha "aes";
             generated_sha256 = String.make 64 'b';
             outcome = Rec_accepted;
+            gas = Gas_ok { objdump_sha256 = String.make 64 '1' };
           };
           {
             path = "modules/CompCert/test/c/fib.c";
             source_sha256 = source_sha "fib";
             generated_sha256 = String.make 64 'd';
             outcome = Rec_rejected "cannot parse operand $.LC0";
+            gas = Gas_error "Error: no such instruction";
           };
         ];
     }

@@ -1,11 +1,13 @@
 total:108
-accepted:101
-rejected:2
+accepted:102
+rejected:1
 compile-failed:5
-reason:1	(no diagnostic; exit 124)
 reason:1	.corpus-work/regression/arm/extasm/output.s:20:12: error[parse]: unexpected token
 compile-reason:1	modules/CompCert/test/regression/builtins-aarch64.c:13: error: use of unknown builtin '__builtin_cls'
 compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
 compile-reason:1	modules/CompCert/test/regression/builtins-riscV.c:14: error: use of unknown builtin '__builtin_fmadd'
 compile-reason:1	modules/CompCert/test/regression/builtins-x86.c:14: error: use of unknown builtin '__builtin_fmin'
 compile-reason:1	modules/CompCert/test/regression/funct1.c:3: error: too many arguments to function call, expected 0, have 1
+gas-ok:102
+gas-error:1
+gas-reason:1	:20: Error: bad instruction `test0 out:r0 in:r0'\n:41: Error: bad instruction `test1 %'\n:44: Error: bad instruction `test2 in:r1'\n

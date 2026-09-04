@@ -1,11 +1,12 @@
 total:108
-accepted:101
-rejected:1
+accepted:102
+rejected:0
 compile-failed:6
-reason:1	(no diagnostic; exit 124)
 compile-reason:1	modules/CompCert/test/regression/builtins-aarch64.c:13: error: use of unknown builtin '__builtin_cls'
 compile-reason:1	modules/CompCert/test/regression/builtins-arm.c:16: error: use of unknown builtin '__builtin_read16_reversed'
 compile-reason:1	modules/CompCert/test/regression/builtins-powerpc.c:23: error: use of unknown builtin '__builtin_mulhw'
 compile-reason:1	modules/CompCert/test/regression/builtins-x86.c:24: error: use of unknown builtin '__builtin_read16_reversed'
 compile-reason:1	modules/CompCert/test/regression/extasm.c:63: error: '%R0' in asm text does not designate any operand
 compile-reason:1	modules/CompCert/test/regression/funct1.c:3: error: too many arguments to function call, expected 0, have 1
+gas-ok:102
+gas-error:0

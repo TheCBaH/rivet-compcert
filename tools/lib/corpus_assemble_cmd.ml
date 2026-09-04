@@ -95,34 +95,16 @@ let real_runner repo (target : Target.t) : runner =
    linked image on either side yet to compare byte-for-byte. Only a hash is
    kept (not the disassembly text) to keep the manifest a manifest rather
    than a second gas-xref-sized artifact tree; a mismatch is visible as a
-   changed hash on regen, same as `generated-sha256` above. *)
+   changed hash on regen, same as `generated-sha256` above.
 
-type gas_record = Gas_ok of { objdump_sha256 : string } | Gas_error of string
+   The machinery itself lives in CC (Corpus_classify_cmd), which every
+   classify-* suite shares it with, and is re-exposed here unchanged rather
+   than duplicated. *)
 
-(* Fakeable like [runner] above, for the same reason: every other test in this
-   module is hermetic (no subprocess, no cross toolchain), and this seam keeps
-   it that way. [real_gas_prober] is the only caller that ever touches
-   [Gnu_tools]. An [Error] here means the probe's OWN machinery broke (a
-   scratch-directory or objdump-invocation failure); real GNU [as] rejecting
-   the input is data, not an error, and becomes [Ok (Gas_error _)]. *)
-type gas_prober = generated_s_rel:string -> (gas_record, Tool_error.t) Err.t
+type gas_record = CC.gas_record = Gas_ok of { objdump_sha256 : string } | Gas_error of string
+type gas_prober = CC.gas_prober
 
-let real_gas_prober repo tools : gas_prober =
- fun ~generated_s_rel ->
-  Tool_workspace.with_scratch ~label:"corpus-assemble-gas" (fun work ->
-      let src = Fpath.(Repo.path repo // v generated_s_rel) in
-      let obj = Fpath.(work / "obj.o") in
-      let* outcome = Gnu_tools.try_assemble tools ~src ~obj ~include_dir:None in
-      match outcome with
-      | Gnu_tools.Rejected body -> Ok (Gas_error body)
-      | Gnu_tools.Assembled ->
-          let* disasm =
-            Gnu_tools.objdump_disasm tools obj ~scrub:work ~drop_banner:true ~riscv_numeric:false
-          in
-          let dump = Fpath.(work / "objdump.txt") in
-          let* () = Tool_fs.write dump disasm in
-          let* objdump_sha256 = Tool_fs.sha256 dump in
-          Ok (Gas_ok { objdump_sha256 }))
+let real_gas_prober = CC.real_gas_prober
 
 (* {1 Classifying compiled entries} *)
 

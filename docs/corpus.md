@@ -403,8 +403,8 @@ ccomp-version:<first line of `ccomp -version`>
 ccomp-args:<space-joined x86_64 ccomp flags>
 compcert-revision:<git -C modules/CompCert rev-parse HEAD>
 shared-header:test/endian.h	sha256:<hex>
-modules/CompCert/test/c/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted
-modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>
+modules/CompCert/test/c/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted	gas:ok:<hex>
+modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>	gas:error:<trimmed real-`as` diagnostic>
 ```
 
 `outcome:accepted` never carries a `reason` field; `outcome:rejected` always
@@ -412,11 +412,22 @@ does. Values that could contain a backslash, tab or newline (`ccomp-version`,
 `ccomp-args`, `reason`) are escaped the same way `Manifest.escape` already
 escapes fixture manifest values.
 
+The trailing `gas:` field is the identical Ordered Work item 5 differential
+"The `assemble-c` manifest format" below describes in full, shared verbatim
+(`Corpus_classify_cmd.gas_record`/`gas_prober`) rather than reimplemented:
+whether the real, installed cross `as` for this target also accepts the
+identical generated `.s` file, and a hash of real `objdump`'s disassembly on
+success. Present on every `accepted`/`rejected` record; absent (along with
+`generated-sha256`) on a `compile-failed` one - see "The `classify-regression`/
+`classify-compression` manifest format" below.
+
 `asm/fixtures/corpus/c/x86_64/summary.txt`: total/accepted/rejected counts,
 then rejected files grouped by exact reason text, one `reason:<count><TAB>
-<text>` line per distinct reason, sorted by reason text. Both files are
-rendered by one canonical function each (`render_manifest`, `render_summary`)
-- `classify-c` and `check` never format them differently.
+<text>` line per distinct reason, sorted by reason text, then `gas-ok`/
+`gas-error` totals and, for any `gas:error` files, the same exact-message
+grouping prefixed `gas-reason:`. Both files are rendered by one canonical
+function each (`render_manifest`, `render_summary`) - `classify-c` and
+`check` never format them differently.
 
 The raw generated `.s` files are **not** committed, only their hashes.
 
@@ -495,8 +506,8 @@ ccomp-version:<first line of `ccomp -version`>
 ccomp-args:<space-joined x86_64 ccomp flags, including -fall>
 compcert-revision:<git -C modules/CompCert rev-parse HEAD>
 shared-header:test/endian.h	sha256:<hex>
-modules/CompCert/test/regression/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted
-modules/CompCert/test/regression/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>
+modules/CompCert/test/regression/aes.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted	gas:ok:<hex>
+modules/CompCert/test/regression/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>	gas:error:<trimmed real-`as` diagnostic>
 modules/CompCert/test/regression/funct1.c	source-sha256:<hex>	outcome:compile-failed	reason:<first ccomp diagnostic line>
 ```
 
@@ -504,7 +515,11 @@ modules/CompCert/test/regression/funct1.c	source-sha256:<hex>	outcome:compile-fa
 generated `.s` to hash when `ccomp` itself never produced one - and its
 `reason` is the same first-non-empty-stderr-line (or fixed placeholder for
 empty stderr) fallback `classify-c`'s own `Rejected` reason uses, applied to
-`ccomp`'s stderr instead of `asm.exe`'s.
+`ccomp`'s stderr instead of `asm.exe`'s. It also has no `gas:` field, for the
+identical reason: there is nothing to probe with real GNU `as` either. Every
+`accepted`/`rejected` record carries one, the same shared differential
+"The `classify-c` manifest format" above and "The `assemble-c` manifest
+format" below describe.
 
 `asm/fixtures/corpus/regression/x86_64/summary.txt`: `total`/`accepted`/
 `rejected` counts, a `compile-failed` count (omitted, along with its reason
@@ -515,7 +530,10 @@ files grouped by reason (`reason:<count><TAB><text>`, sorted) and
 *compile-failed* files grouped by reason the identical way
 (`compile-reason:<count><TAB><text>`, sorted) - two separate groups, since a
 file's `.c` source not compiling at all is different evidence from its
-generated `.s` not parsing.
+generated `.s` not parsing - then `gas-ok`/`gas-error` totals (over every
+`accepted`/`rejected` record; `compile-failed` ones are excluded from both,
+since they carry no `gas:` field) and, for any `gas:error` files, the same
+exact-message grouping prefixed `gas-reason:`.
 
 ## The `classify-c-gcc` manifest format
 
@@ -535,14 +553,25 @@ gcc-version:<first line of `<toolprefix>gcc --version`>
 gcc-args:<space-joined gcc flags>
 compcert-revision:<git -C modules/CompCert rev-parse HEAD>
 shared-header:test/endian.h	sha256:<hex>
-modules/CompCert/test/c/return42.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted
-modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>
+modules/CompCert/test/c/return42.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:accepted	gas:ok:<hex>
+modules/CompCert/test/c/fib.c	source-sha256:<hex>	generated-sha256:<hex>	outcome:rejected	reason:<first diagnostic line>	gas:error:<trimmed real-`as` diagnostic>
 ```
+
+Every record carries the trailing `gas:` field - unlike `classify-regression`/
+`classify-compression`, `classify-c-gcc` has no `compile-failed` outcome, so
+there is never a record without a generated `.s` to probe. The field is the
+same shared differential ("The `classify-c` manifest format" above),
+requiring `classify-c-gcc-<target>` to have the target's cross GNU `as`/
+`objdump` installed, in addition to its cross `gcc` - unlike before this
+field existed, when `classify-c-gcc` needed no `asm-cross-setup`-provided
+tool at all.
 
 `asm/fixtures/corpus/c-gcc/x86_64/summary.txt`: `total`/`accepted`/`rejected`
 counts, then rejected files grouped by exact reason text - `classify-c`'s own
-two-outcome summary shape, rendered by `Corpus_classify_gcc_cmd`'s own
-`render_summary` rather than `Corpus_classify_cmd`'s.
+two-outcome summary shape - then `gas-ok`/`gas-error` totals and, for any
+`gas:error` files, the same exact-message grouping prefixed `gas-reason:`,
+rendered by `Corpus_classify_gcc_cmd`'s own `render_summary` rather than
+`Corpus_classify_cmd`'s.
 
 `check-c-gcc` verifies each `c-gcc/<target>/manifest.txt` against the same
 eight-step list "What `check` verifies" describes below, `suite` literally
@@ -580,31 +609,39 @@ In order, failing on the first problem:
    the parsed manifest - not just the three totals, every reason group.
 
 **Recorded for audit only, never re-verified by `check`**: `ccomp-version`,
-`ccomp-args`, and every `generated-sha256` - reproducing these needs `ccomp`
-itself, which is `classify-c`'s job, not `check`'s.
+`ccomp-args`, every `generated-sha256`, and the trailing `gas:` field on
+every file record - reproducing `ccomp-version`/`ccomp-args`/
+`generated-sha256` needs `ccomp` itself, and reproducing `gas:` needs the
+real cross `as`/`objdump`, both of which are `classify-c`'s own regen job,
+not `check`'s. The `gas:` field still goes through steps 1 and 3 like any
+other field - a malformed or missing `gas:` field fails to parse, and its
+exact text is part of the canonical round-trip - and step 8 re-derives the
+`gas-ok`/`gas-error` totals `render_summary` computes, alongside
+`accepted`/`rejected`.
 
 `check-assemble` verifies each `c-assemble/<target>/manifest.txt` the
-identical way, against the identical eight-step list, with two differences:
-`suite` must literally be `"c-assemble"` rather than `"c"` at step 2, and
-step 8 additionally re-derives the `blocked`/`accepted`/`rejected` and
-`gas-ok`/`gas-error` totals `render_summary` computes rather than just
-`accepted`/`rejected`. It is a wholly separate command from `check` (own
+identical way, against the identical eight-step list, with the one
+difference that `suite` must literally be `"c-assemble"` rather than `"c"`
+at step 2 (step 8 already re-derives `blocked`/`accepted`/`rejected` and
+`gas-ok`/`gas-error` the same way `check` does for `classify-c`'s own three-
+outcome-fewer shape). It is a wholly separate command from `check` (own
 manifest, own destination directory, own errors) so an `assemble-c`
-regression is never conflated with a `classify-c` one, and vice versa. The
-trailing `gas:` field on every file record (see "The `assemble-c` manifest
-format" above) goes through steps 1 and 3 like any other field - a malformed
-or missing `gas:` field fails to parse, and its exact text is part of the
-canonical round-trip - but, like `ccomp-version`/`generated-sha256`, is
-*recorded for audit only* at the `check` level: reproducing it needs the
-real cross `as`/`objdump`, which `assemble-c`'s own regen step needs and
-`check` deliberately does not.
+regression is never conflated with a `classify-c` one, and vice versa.
 
 `check-regression`/`check-compression` verify `regression/<target>/` and
 `compression/<target>/` the same eight-step way, `suite` literally
 `"regression"`/`"compression"` at step 2 and step 4's inventory compared
 against `modules/CompCert/test/regression/*.c`/`test/compression/*.c`
 instead of `test/c/*.c` - each its own command, own manifests, own errors,
-never conflated with `classify-c`'s or each other's.
+never conflated with `classify-c`'s or each other's. Step 8's `gas-ok`/
+`gas-error` totals are computed over `accepted`/`rejected` records only, the
+same way `render_summary` excludes `compile-failed` ones from both.
+
+`check-c-gcc` verifies `c-gcc/<target>/manifest.txt` the same eight-step way
+too, `suite` literally `"c-gcc"` and the inventory compared against
+`test/c/*.c` (the same files `classify-c` itself classifies), with
+`gcc-version`/`gcc-args` recorded-for-audit-only in place of
+`ccomp-version`/`ccomp-args`.
 
 ## Publication is recoverable
 
