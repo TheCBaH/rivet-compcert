@@ -1306,14 +1306,20 @@ above for what is fixed and what remains.
   manifests into scope decisions" above - including the one gap (RISC-V
   `%pcrel_hi`/`%pcrel_lo` on a register-name-colliding symbol) that turned out
   to be a parser bug rather than a missing form, and is already fixed there.
-- `test/regression/floats.c` (~110K lines of generated assembly) makes this
-  project's `--dump-source-ast` take longer than 5 CPU-minutes without
-  returning, on every target (it is the one shared file, so the finding is
-  target-independent). `classify-regression` now bounds this with an external
-  120s `timeout` rather than hanging, but the underlying performance
-  pathology - almost certainly at least quadratic in input size somewhere in
-  the lexer, parser, or AST construction, given a well-formed 110K-line file
-  never finishing in 5 minutes - is itself unfixed and unprofiled.
+- `test/regression/floats.c` (~110K lines of generated assembly) once made
+  this project's `--dump-source-ast` take longer than 5 CPU-minutes without
+  returning, on every target (it is the one shared file, so the finding was
+  target-independent). `classify-regression` bounds this with an external
+  120s `timeout` rather than hanging. **Now fixed**: a current run no longer
+  reproduces the hang at all - the real `floats.s` (via `ccomp`) returns in
+  well under a second, as does a synthetic, CompCert-independent source at
+  the same ~110-160K-line order of magnitude - though no specific commit
+  targeted it, so the exact prior bottleneck was never isolated. Guarded
+  against regressing silently by a dedicated performance test,
+  `asm/test/perf/test_parse_perf.ml`: it generates that synthetic source
+  in-process and bounds the same `` `Source_ast `` stage at a realistic 20s,
+  wired into `asm-test`/`asm-ci` so a reintroduced blowup fails fast on every
+  CI leg, not only on this toolchain-gated corpus regen.
 - This session's riscv32 `ccomp`/`as` builds and runs fine, but
   `riscv32-linux-gnu-gcc` (the full cross-`gcc`, as opposed to
   `riscv32-linux-gnu-as`/binutils alone, which CompCert's own preprocessing
