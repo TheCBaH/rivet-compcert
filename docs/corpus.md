@@ -1361,19 +1361,12 @@ above for what is fixed and what remains.
   Along the way, `gas_frontier.t` (the gas-based frontier oracle described in
   "Testing" above) was extended to riscv32/riscv64: the underlying
   `gas-xref` corpus already carries a `fixture-asm_test_entry` frontier case
-  for both profiles (`gas_xref_cmd.ml`'s own comment explains why Helper/
-  Runtime stay excluded - no `asm/helpers/riscv32.s`/`riscv64.s` exists, and
-  CompCert's runtime tree names its RISC-V leg `riscV`, not `riscv32`/
-  `riscv64`), but the cram test's positive-control and aggregate-count loops
-  had never been widened to display it. Now they are: the aggregate
+  for both profiles, but the cram test's positive-control and aggregate-count
+  loops had never been widened to display it. Now they are: the aggregate
   "assembles" count moved from 10 to 12 (the two new fixture positives), and
-  every existing x86/ARM/AArch64 row is unchanged. Wiring `asm/helpers/
-  riscv.c` through its own cross-gcc generator (or writing a hand-assembled
-  `asm/helpers/riscv32.s`/`riscv64.s`) so RISC-V also gets Helper/Runtime
-  rows is a separate, larger follow-up, not done here. **The Helper half is
-  now done** - see the dedicated Follow-ups entry near the end of this
-  document; Runtime stays excluded (CompCert's runtime tree still names its
-  RISC-V leg `riscV`, not `riscv32`/`riscv64`).
+  every existing x86/ARM/AArch64 row is unchanged. **The Helper and Runtime
+  halves are now both done too** - see the dedicated Follow-ups entry near
+  the end of this document.
 - AArch64 `adr`/`br`: now fixed, closing `assemble-c`'s last named non-FP
   aarch64 gap (Capability ladder item 4 above). `vmach.c`/`siphash24.c`'s
   switch-statement jump-table dispatch is `adr x16, .Ltable; add x16, x16,
@@ -1737,9 +1730,69 @@ above for what is fixed and what remains.
   straight to an object, never through a `.s` file). `gas_xref_cmd.ml`'s own
   `frontier_sources` needed no code change: it already reads
   `asm/helpers/<target>.s` unconditionally for every target and simply had no
-  file to find for either RISC-V profile before now. Runtime stays excluded
-  for the reason already given (CompCert's own runtime tree names its
-  RISC-V leg `riscV`, not `riscv32`/`riscv64`).
+  file to find for either RISC-V profile before now.
+
+  The Runtime half is now done too: `gas_xref_cmd.ml` maps both RISC-V
+  profiles to CompCert's arch-named `runtime/riscV` directory (rather than the
+  non-existent `runtime/riscv32`/`riscv64`) and supplies the `-DMODEL_32`/
+  `-DMODEL_64` defines that select the 32- or 64-bit half of the one file
+  there, `vararg.S`. GNU as assembles both cleanly, adding one
+  `runtime-vararg` frontier case each - the runtime group now covers all six
+  targets.
+
+  That immediately paid for itself with frontier findings, which is what the
+  group is for. The two cases moved `test_xref.ml`'s summary from 22 to 24
+  beyond M1, with 0 differ, and `gas_frontier.t` carried the first
+  diagnostic. Investigating them turned up **three** independent gaps, not
+  one - the transcript showed only the first, which is exactly the trap that
+  file's own header warns about, except that here the later errors were not
+  consequences of the earlier ones. All three had to land together: fixing
+  only the first two would have made both cases assemble while still
+  producing 100 bytes against GNU's 112, moving them from "beyond M1" to
+  DIFFER - a hard failure.
+
+  1. `error[riscv*.lower]: no and form takes these operands` -
+     `vararg.S`'s `and t5, t5, -8`, the 8-alignment step in
+     `__compcert_va_int64`/`__compcert_va_float64`. GNU as reads an R-type
+     mnemonic with an immediate third operand as its I-type counterpart
+     wherever one exists. Probed against riscv64-linux-gnu-as 2.44 with
+     `<op> t5, t5, -8`: and/or/xor/add/slt/sltu/addw assemble as
+     andi/ori/xori/addi/slti/sltiu/addiw, and sub/subw/mul are rejected -
+     exactly the ops with no I-type form to name. `shift_i_alias` already
+     encoded this rule for sll/srl/sra(w); it became `imm_alias`, the same
+     rule generalized past the shift special case.
+  2. `error[riscv*.lower]: no fld form takes these operands` - not the `fld`
+     form itself, which exists, but the FP ABI register names. `fld f10,
+     -8(t5)` assembles; `fld fa0, -8(t5)` did not. `Reg.aliases` covered the
+     integer calling-convention names only, so ft0-ft11/fs0-fs11/fa0-fa7 were
+     unknown. The mapping is not contiguous - ft0-ft7 are 0-7 but ft8-ft11
+     are 28-31, and fs0/fs1 are 8/9 while fs2-fs11 are 18-27 - so it is a
+     table read out of riscv64-linux-gnu-as rather than a formula, added
+     beside `Reg.aliases` as `Reg.f_aliases`.
+  3. Section-end padding, the one that actually blocked agreement. With 1
+     and 2 fixed, every instruction byte matched GNU exactly and our 100
+     bytes were a byte-exact prefix of GNU's 112: GNU appends three `nop`s
+     to round `.text` up to its own 16-byte alignment, and we stopped at the
+     last instruction. This is **RISC-V-specific GAS behavior**, not a
+     general rule - rounding every section up to its alignment regardless of
+     target was tried and broke 12 previously-agreeing cases. Minimal
+     reproducer - assemble `.text; .balign 16; nop` and read the section
+     header: riscv64 GAS reports size 0x10, while aarch64 and arm GAS both
+     report 0x04, all three recording alignment 16. It matches the real
+     corpus, where GNU's recorded `.text` is 112 bytes for both RISC-V
+     profiles but 68 for x86_32, 100 for arm and 180 for aarch64 - none of
+     the last three a multiple of 16.
+
+  All three are fixed: `Target_encode.ENCODE` gained a
+  `pad_section_to_alignment` field, `false` on the other three encoders and
+  `true` on `riscv_family_encode.ml` alone, mirroring `merge_fill`'s existing
+  split between one target's divergence and the majority zero-fill default.
+  `pipeline.ml` threads it into `Image.plan_image` as a `?section_pad`
+  callback built from the target's own `nop_bytes` (not `merge_fill`, which
+  stays zero-fill on RISC-V); `plan_image` rounds a merged PROGBITS section's
+  final size up to its recorded alignment with that callback when set. Both
+  `runtime-vararg` cases now agree byte-for-byte with GNU, moving the summary
+  from 24 to 22 beyond M1 with 0 differ throughout.
 
   Running this real gcc output through the full pipeline (`classify-c-gcc`
   never reaches this far - it stops at `--dump-source-ast`) surfaced five
