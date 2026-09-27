@@ -6,6 +6,7 @@
 
    Usage:
      tier_a_test.exe <fixtures-dir>   the report
+     tier_a_test.exe --soak <corpus-dir> <cycles>  compile-only soak (see [soak])
      tier_a_test.exe --probe <file.c> compile one file and print the assembly;
                                       the file is read before a
                                       "--- compile start" marker on stderr, so
@@ -263,7 +264,9 @@ let runtime fixtures =
          other helpers it calls), so that one unit's failure hides no other. *)
       List.iter
         (fun (name, text) ->
-          let entry = "__compcert_" ^ name in
+          let entry =
+            match Compcert_embed.globals text with g :: _ -> g | [] -> "__compcert_" ^ name
+          in
           Printf.printf "%s: %s\n" name
             (match Embed.assemble_units ~entry [ (name, text) ] with
             | Ok _ -> "ok"
@@ -301,6 +304,69 @@ let stages () =
   | Ok _ -> print_endline "unexpectedly Ok"
   | Error e -> Printf.printf "stage %s\n" (Compcert_embed.stage_name e.stage)
 
+(* {1 Robustness} *)
+
+(* Varargs are refused on the C program, before code generation, on every target
+   (DEC-VARARGS): a variadic definition, and a call through a variadic external. *)
+let varargs () =
+  print_endline "== varargs";
+  List.iter print_result
+    [
+      Embed.compile_to_asm ~name:"gen.c"
+        "int sum(int n, ...) { return n; }\nint entry(void) { return sum(1, 2); }\n";
+      Embed.compile_to_asm ~name:"gen.c"
+        "int printf(const char *, ...);\nint entry(void) { return printf(\"x\"); }\n";
+    ]
+
+(* Compile and assemble the corpus round robin in one process. Every cycle's assembly must
+   equal the first cycle's for that program, and the image must plan; growth of the OCaml heap
+   and of CompCert's atom table is reported every 1000 cycles. *)
+let soak dir cycles =
+  let programs =
+    Sys.readdir dir |> Array.to_list
+    |> List.filter (fun f -> Filename.check_suffix f ".c")
+    |> List.sort compare
+    |> List.map (fun f -> (f, read (dir / f)))
+    |> Array.of_list
+  in
+  let first = Hashtbl.create 32 in
+  let report i =
+    let st = Gc.quick_stat () in
+    Printf.printf "cycle %6d  cpu %6.1fs  heap %7d KB  top-heap %7d KB  atoms %6d\n%!" i
+      (Sys.time ())
+      (* [( / )] is [Filename.concat] in this file *)
+      ((st.heap_words * 8) lsr 10)
+      ((st.top_heap_words * 8) lsr 10)
+      (Hashtbl.length Embed.CC.Camlcoq.atom_of_string)
+  in
+  Printf.printf "target %s, %d programs, %d cycles\n" target (Array.length programs) cycles;
+  report 0;
+  for i = 1 to cycles do
+    let name, source = programs.(i mod Array.length programs) in
+    let fail m =
+      Printf.printf "cycle %d: %s: %s\n" i name m;
+      exit 1
+    in
+    match Embed.compile_to_asm ~name source with
+    | Error e -> fail (Format.asprintf "%a" pp_error e)
+    | Ok asm -> (
+        (match Hashtbl.find_opt first name with
+        | None -> Hashtbl.add first name asm
+        | Some a -> (
+            if not (String.equal a asm) then
+              match
+                first_difference (String.split_on_char '\n' a) (String.split_on_char '\n' asm)
+              with
+              | Some (l, w, g) ->
+                  fail
+                    (Printf.sprintf
+                       "assembly differs from its first compile at line %d: %S, then %S" l w g)
+              | None -> fail "assembly differs from its first compile"));
+        match Embed.assemble ~unit_name:name asm with
+        | Error e -> fail (Format.asprintf "%a" pp_error e)
+        | Ok _ -> if i mod 1000 = 0 then report i)
+  done
+
 let probe file =
   let source = read file in
   prerr_endline "--- compile start";
@@ -313,6 +379,7 @@ let probe file =
 let () =
   match Sys.argv with
   | [| _; "--probe"; file |] -> probe file
+  | [| _; "--soak"; dir; cycles |] -> soak dir (int_of_string cycles)
   | [| _; fixtures |] ->
       Printf.printf "target %s\n" target;
       identity fixtures;
@@ -320,7 +387,9 @@ let () =
       repeated fixtures;
       link fixtures;
       runtime fixtures;
-      stages ()
+      stages ();
+      varargs ()
   | _ ->
-      prerr_endline "usage: tier_a_test.exe <fixtures-dir> | --probe <file.c>";
+      prerr_endline
+        "usage: tier_a_test.exe <fixtures-dir> | --soak <corpus-dir> <cycles> | --probe <file.c>";
       exit 2

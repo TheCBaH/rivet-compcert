@@ -45,8 +45,10 @@ let%expect_test "every corpus program returns its expected value natively" =
     fixture_return42.c: ok
     float_math.c: ok
     globals_sections.c: ok
+    int64_helpers.c: ok
     io_buffer.c: ok
     misc_int.c: ok
+    narrow_div32.c: ok
     recursion_frames.c: ok
     struct_byvalue.c: ok
     switch_table.c: ok |}]

@@ -61,3 +61,8 @@ stage plan, codes image.undefined,image.undefined
 <synthesized by riscv32.encode>: error[image.undefined]: fixup hi references undefined symbol helper
 <synthesized by riscv32.encode>: error[image.undefined]: fixup lo references undefined symbol helper
 stage compile
+== varargs
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): sum
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): printf

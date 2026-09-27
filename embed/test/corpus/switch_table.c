@@ -2,6 +2,9 @@
 /* Dense switches, which CompCert compiles to jump tables, plus a sparse one
    that stays a compare chain. */
 
+typedef long long i64;
+static long fold(i64 x) { return (int)(x ^ (x >> 32)); }
+
 static int dense(int x)
 {
   switch (x) {
@@ -32,9 +35,9 @@ static int sparse(int x)
 
 long entry(void *io)
 {
-  long acc = 0;
+  i64 acc = 0;
   int i;
   for (i = -2; i < 14; i++) acc = acc * 3 % 1000003 + dense(i);
   acc += sparse(1) + 10 * sparse(100) + 100 * sparse(10000) + 1000 * sparse(-5) + sparse(7);
-  return acc;
+  return fold(acc);
 }

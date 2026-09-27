@@ -68,3 +68,8 @@ i64_divmod (embed helpers) .data: identical
 stage plan, codes image.undefined
 <synthesized by x86.encode>: error[image.undefined]: fixup target references undefined symbol helper
 stage compile
+== varargs
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): sum
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): printf

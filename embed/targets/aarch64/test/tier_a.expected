@@ -44,3 +44,8 @@ helpers.c plans: ok
 stage plan, codes image.undefined
 <synthesized by aarch64.encode>: error[image.undefined]: fixup target references undefined symbol helper
 stage compile
+== varargs
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): sum
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): printf

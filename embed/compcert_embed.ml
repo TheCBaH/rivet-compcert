@@ -91,8 +91,14 @@ let symbols_after prefix ~skip_blanks text =
 let globals text =
   symbols_after ".globl" ~skip_blanks:true text @ symbols_after ".global" ~skip_blanks:true text
 
+(* The runtime's symbol prefixes: CompCert's own helpers, and the AAPCS division functions
+   its arm code calls. *)
+let runtime_prefixes = [ "__compcert_i64_"; "__aeabi_" ]
+
 let helper_references text =
-  symbols_after "__compcert_i64_" ~skip_blanks:false text |> List.map (( ^ ) "__compcert_i64_")
+  List.concat_map
+    (fun prefix -> symbols_after prefix ~skip_blanks:false text |> List.map (( ^ ) prefix))
+    runtime_prefixes
 
 module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
   module P = Driver.Pipeline.Make (T)
@@ -124,8 +130,8 @@ module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
     at Lower (P.lower ~state:T.default_state norm)
 
   (* [units] plus every runtime helper they need, directly or through other
-     helpers: a helper is added when some unit names a [__compcert_i64_]
-     symbol that no unit defines. Units that define a helper themselves
+     helpers: a helper is added when some unit names a runtime symbol
+     ({!runtime_prefixes}) that no unit defines. Units that define a helper themselves
      (for example a fixture's own copy) keep it. *)
   let with_runtime units =
     let defined us = List.concat_map (fun (_, t) -> globals t) us in

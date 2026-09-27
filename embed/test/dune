@@ -40,27 +40,6 @@
    (= %{env:ASM_COMPCERT_EMBED=false} true)
    (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
 
-; Native vs QEMU over the corpus (make asm-compcert-embed-qemu). Not a test
-; rule: it needs qemu-aarch64 and the exec-ABI helpers, like the other oracle
-; legs.
-
-(executable
- (name qemu_diff)
- (modules qemu_diff)
- (libraries
-  compcert_embed
-  compcert_embed_aarch64
-  native_exec
-  image
-  foundation
-  asm_oracle
-  asm_oracle_run
-  fmt)
- (enabled_if
-  (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
-
 ; The E5 soak (make asm-compcert-embed-soak): thousands of compile+run cycles
 ; in one process, reporting memory growth. Too slow for a test rule.
 

@@ -37,7 +37,7 @@ global_ldst .data: identical
 loop .text: identical
 return42 .text: identical
 == runtime helpers
-available: i64_dtos i64_dtou i64_sar i64_sdiv i64_shl i64_shr i64_smod i64_stod i64_stof i64_udivmod i64_udiv i64_umod i64_utod i64_utof i64_smulh i64_umulh
+available: i64_dtos i64_dtou i64_sar i64_sdiv i64_shl i64_shr i64_smod i64_stod i64_stof i64_udivmod i64_udiv i64_umod i64_utod i64_utof i64_smulh i64_umulh aeabi_div
 i64_dtos: ok
 i64_dtou: ok
 i64_sar: ok
@@ -54,9 +54,15 @@ i64_utod: ok
 i64_utof: ok
 i64_smulh: ok
 i64_umulh: ok
+aeabi_div: ok
 helpers.c links: i64_dtos i64_dtou i64_sar i64_sdiv i64_shl i64_shr i64_smod i64_stod i64_stof i64_udiv i64_umod i64_utod i64_utof i64_smulh i64_udivmod
 helpers.c plans: ok
 == stage-tagged errors
 stage plan, codes image.undefined
 <synthesized by arm.encode>: error[image.undefined]: fixup target references undefined symbol helper
 stage compile
+== varargs
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): sum
+Error:
+gen.c: error: variadic functions are not supported (vararg.S is never linked): printf

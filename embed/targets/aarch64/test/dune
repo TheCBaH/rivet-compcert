@@ -3,9 +3,25 @@
 
 (copy_files# ../../../tier_a/tier_a_test.ml)
 
-(executable
- (name tier_a_test)
- (libraries compcert_embed compcert_embed_aarch64 image foundation)
+(copy_files# ../../../qemu/qemu_diff.ml)
+
+; tier_a_test is the report below. qemu_diff runs the corpus under QEMU (make
+; asm-compcert-embed-qemu-aarch64), and natively too on a host of this ISA; it is
+; not a test rule, since it needs the target's QEMU and the exec-ABI
+; helpers, like the other oracle legs.
+
+(executables
+ (names tier_a_test qemu_diff)
+ (modes exe byte)
+ (libraries
+  compcert_embed
+  compcert_embed_aarch64
+  native_exec
+  image
+  foundation
+  asm_oracle
+  asm_oracle_run
+  fmt)
  (enabled_if
   (and
    (= %{env:ASM_COMPCERT_EMBED=false} true)

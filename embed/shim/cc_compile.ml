@@ -68,9 +68,32 @@ let variadic_functions (p : CC.Csyntax.program) =
       | _ -> None)
     p.CC.Ctypes.prog_defs
 
+(* CompCert's atom tables ([Camlcoq]) intern every identifier ever seen, for the life of the
+   process: ccomp compiles one unit per process, so it never notices. Here they leak between
+   compiles, visibly - [C2C]'s string-literal names skip any name already interned, so the
+   second compile of a program with literals printed [__stringlit_5] where ccomp prints
+   [__stringlit_2] - and they grow without bound. So they are put back, before every compile,
+   to what they held before the first one. *)
+let atoms_at_start =
+  lazy
+    ( Hashtbl.copy CC.Camlcoq.atom_of_string,
+      Hashtbl.copy CC.Camlcoq.string_of_atom,
+      !CC.Camlcoq.next_atom )
+
+let restore_atoms () =
+  let a, s, n = Lazy.force atoms_at_start in
+  let refill dst src =
+    Hashtbl.reset dst;
+    Hashtbl.iter (Hashtbl.add dst) src
+  in
+  refill CC.Camlcoq.atom_of_string a;
+  refill CC.Camlcoq.string_of_atom s;
+  CC.Camlcoq.next_atom := n
+
 let render_errcode msg = Format.asprintf "%a" CC.Driveraux.print_error msg
 
 let compile_to_asm ~name source =
+  restore_atoms ();
   set_options ();
   CC.Diagnostics.reset ();
   CC.Frontend.init ();
