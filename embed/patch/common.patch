@@ -1,0 +1,98 @@
+--- a/Configuration.ml
++++ b/Configuration.ml
+@@ -1,3 +1,4 @@
++open Embed_config
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/Diagnostics.ml
++++ b/Diagnostics.ml
+@@ -1,3 +1,4 @@
++open Embed_diag_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/Diagnostics.mli
++++ b/Diagnostics.mli
+@@ -1,3 +1,4 @@
++open Embed_diag_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/DwarfPrinter.ml
++++ b/DwarfPrinter.ml
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/DwarfPrinter.mli
++++ b/DwarfPrinter.mli
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/DwarfTypes.mli
++++ b/DwarfTypes.mli
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/Fileinfo.ml
++++ b/Fileinfo.ml
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/Parse.ml
++++ b/Parse.ml
+@@ -1,3 +1,4 @@
++open Embed_source_in
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/PrintAsmaux.ml
++++ b/PrintAsmaux.ml
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/PrintAsm.ml
++++ b/PrintAsm.ml
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/PrintAsm.mli
++++ b/PrintAsm.mli
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/Printlines.ml
++++ b/Printlines.ml
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/Printlines.mli
++++ b/Printlines.mli
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/TargetPrinter.ml
++++ b/TargetPrinter.ml
+@@ -1,3 +1,4 @@
++open Embed_asm_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)

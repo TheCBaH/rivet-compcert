@@ -1,0 +1,48 @@
+; Tier A for riscv64 (../../../tier_a/tier_a_test.ml): C -> assembly -> image
+; against the committed fixtures. The report must equal tier_a.expected.
+
+(copy_files# ../../../tier_a/tier_a_test.ml)
+
+(copy_files# ../../../qemu/qemu_diff.ml)
+
+; tier_a_test is the report below. qemu_diff runs the corpus under QEMU (make
+; asm-compcert-embed-qemu-riscv64), and natively too on a host of this ISA; it is
+; not a test rule, since it needs the target's QEMU and the exec-ABI
+; helpers, like the other oracle legs.
+
+(executables
+ (names tier_a_test qemu_diff)
+ (libraries
+  compcert_embed
+  compcert_embed_riscv64
+  native_exec
+  image
+  foundation
+  asm_oracle
+  asm_oracle_run
+  fmt)
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_RISCV64=false} true))))
+
+(rule
+ (deps
+  (source_tree ../../../../fixtures/compcert-3.17))
+ (action
+  (with-stdout-to
+   tier_a.output
+   (run %{exe:tier_a_test.exe} ../../../../fixtures/compcert-3.17)))
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_RISCV64=false} true))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff tier_a.expected tier_a.output))
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_RISCV64=false} true))))

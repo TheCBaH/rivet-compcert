@@ -1,0 +1,53 @@
+; The aarch64 suite (phases E0-E5): fixture identity, fixture bytes, the
+; embedded corpus run natively, robustness, and the QEMU and soak drivers.
+
+(library
+ (name test_compcert_embed)
+ (modes byte native)
+ (libraries
+  compcert_embed
+  compcert_embed_aarch64
+  native_exec
+  image
+  foundation)
+ (modules
+  test_skeleton
+  test_compile_to_asm
+  test_assemble
+  test_corpus
+  test_robustness)
+ (inline_tests
+  (deps
+   (source_tree ../../fixtures/compcert-3.17)
+   (source_tree corpus)))
+ (preprocess
+  (pps ppx_expect))
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
+
+; Compiles (and with --run, also runs) one C file given on the command line,
+; entirely in memory. Exists so the no-file-I/O property can be checked from
+; outside the process (strace), which an inline test cannot do to itself.
+
+(executable
+ (name embed_probe)
+ (modules embed_probe)
+ (libraries compcert_embed compcert_embed_aarch64 native_exec)
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
+
+; The E5 soak (make asm-compcert-embed-soak): thousands of compile+run cycles
+; in one process, reporting memory growth. Too slow for a test rule.
+
+(executable
+ (name soak)
+ (modules soak)
+ (libraries compcert_embed compcert_embed_aarch64 native_exec unix)
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))

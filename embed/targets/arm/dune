@@ -1,0 +1,15 @@
+; Compcert_embed for arm: the shared shim (../../shim) over this target's
+; CompCert embed variant (compcert_arm_embed, from
+; ../../../../compcert-lib-arm-embed, resolved via OCAMLPATH). Enabled only
+; when that variant has been built, which ASM_COMPCERT_EMBED_ARM says.
+
+(copy_files# ../../shim/cc_compile.ml)
+
+(library
+ (name compcert_embed_arm)
+ (modes byte native)
+ (libraries compcert_embed compcert_arm_embed arm native_exec)
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_ARM=false} true))))
