@@ -1,0 +1,9 @@
+(library
+ (name test_compcert_embed)
+ (modes byte native)
+ (libraries compcert_embed compcert_aarch64_embed image)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect))
+ (enabled_if
+  (= %{env:ASM_COMPCERT_EMBED=false} true)))
