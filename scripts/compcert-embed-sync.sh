@@ -36,7 +36,7 @@ rm -rf "$variant"
 mkdir -p "$variant/src"
 cp "$pristine"/src/*.ml "$pristine"/src/*.mli "$variant/src/"
 
-for m in embed_asm_out embed_source_in embed_config; do
+for m in embed_asm_out embed_source_in embed_config embed_diag_out; do
   cp "$EMBED_DIR/$m.ml" "$variant/src/"
 done
 "$EMBED_DIR/gen-config-data.sh" "$ini" > "$variant/src/embed_config_data.ml"

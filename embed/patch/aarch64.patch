@@ -5,6 +5,20 @@
  (* *********************************************************************)
  (*                                                                     *)
  (*              The Compcert verified compiler                         *)
+--- a/Diagnostics.ml
++++ b/Diagnostics.ml
+@@ -1,3 +1,4 @@
++open Embed_diag_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
+--- a/Diagnostics.mli
++++ b/Diagnostics.mli
+@@ -1,3 +1,4 @@
++open Embed_diag_out
+ (* *********************************************************************)
+ (*                                                                     *)
+ (*              The Compcert verified compiler                         *)
 --- a/DwarfPrinter.ml
 +++ b/DwarfPrinter.ml
 @@ -1,3 +1,4 @@

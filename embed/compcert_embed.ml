@@ -11,7 +11,9 @@ module CC = Compcert_aarch64_embed
 
 type error = { message : string }
 
-(* CompCert reports through [Format.err_formatter]. Diverting it into a buffer
+(* CompCert reports through [Format.err_formatter], except for syntax errors,
+   which the embed variant sends to [Embed_diag_out.stderr]. Diverting the
+   formatter into a buffer
    for the duration of [f] keeps diagnostics off the host's stderr and gives
    them back to the caller; the previous output functions are restored on
    every path. *)
@@ -25,10 +27,13 @@ let capturing_diagnostics f =
     Format.pp_print_flush Format.err_formatter ();
     Format.pp_set_formatter_out_functions Format.err_formatter saved
   in
+  Buffer.clear CC.Embed_diag_out.stderr;
   match f () with
   | v ->
       restore ();
-      (v, Buffer.contents buf)
+      (* A raw fatal error (Embed_diag_out) is always the last thing reported:
+         it raises [Abort] as soon as it is printed. *)
+      (v, Buffer.contents buf ^ Buffer.contents CC.Embed_diag_out.stderr)
   | exception e ->
       restore ();
       raise e
@@ -77,6 +82,11 @@ let compile_to_asm ?(name = "gen.c") source =
       CC.Compiler.apply_partial (CC.Compiler.transf_c_program csyntax) CC.Asmexpand.expand_program
     with
     | CC.Errors.OK asm ->
+        (* The printer numbers its own labels from a process-wide counter that
+           starts at 100; ccomp prints one unit per process, so it always
+           starts there. Everything else the printers keep is reset per
+           function or per file. *)
+        CC.PrintAsmaux.next_label := 100;
         let out = Buffer.create 4096 in
         CC.PrintAsm.print_program out asm;
         Ok (Buffer.contents out)

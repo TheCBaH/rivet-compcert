@@ -2,8 +2,22 @@
  (name test_compcert_embed)
  (modes byte native)
  (libraries compcert_embed compcert_aarch64_embed image)
- (inline_tests)
+ (modules test_skeleton test_compile_to_asm)
+ (inline_tests
+  (deps
+   (source_tree ../../fixtures/compcert-3.17)))
  (preprocess
   (pps ppx_expect))
+ (enabled_if
+  (= %{env:ASM_COMPCERT_EMBED=false} true)))
+
+; Compiles one C file given on the command line, entirely in memory, and
+; prints the assembly. Exists so the no-file-I/O property can be checked from
+; outside the process (strace), which an inline test cannot do to itself.
+
+(executable
+ (name embed_probe)
+ (modules embed_probe)
+ (libraries compcert_embed)
  (enabled_if
   (= %{env:ASM_COMPCERT_EMBED=false} true)))
