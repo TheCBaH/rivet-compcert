@@ -1,0 +1,15 @@
+; Compcert_embed for x86_32: the shared shim (../../shim) over this target's
+; CompCert embed variant (compcert_x86_32_embed, from
+; ../../../../compcert-lib-x86_32-embed, resolved via OCAMLPATH). Enabled only
+; when that variant has been built, which ASM_COMPCERT_EMBED_X86_32 says.
+
+(copy_files# ../../shim/cc_compile.ml)
+
+(library
+ (name compcert_embed_x86_32)
+ (modes byte native)
+ (libraries compcert_embed compcert_x86_32_embed x86_32 native_exec)
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_X86_32=false} true))))

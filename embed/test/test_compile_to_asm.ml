@@ -43,7 +43,7 @@ let compile case file =
   let source =
     read (Filename.concat fixtures (Filename.concat case (Filename.concat "source" file)))
   in
-  Compcert_embed.compile_to_asm ~name:file source
+  Compcert_embed_aarch64.compile_to_asm ~name:file source
 
 let%expect_test "every fixture source compiles to its checked-in aarch64 assembly" =
   List.iter
@@ -53,7 +53,7 @@ let%expect_test "every fixture source compiles to its checked-in aarch64 assembl
          passed through. *)
       if flags case <> "-fno-pie" then Printf.printf "%s: unexpected flags %S\n" case (flags case);
       match compile case file with
-      | Error { message } -> Printf.printf "%s/%s: ERROR\n%s" case file message
+      | Error { message; _ } -> Printf.printf "%s/%s: ERROR\n%s" case file message
       | Ok asm ->
           let want = without_command_line (expected case file) in
           let got = without_command_line asm in
@@ -82,15 +82,16 @@ let%expect_test "the command-line comment is the only line excluded, and it is p
       |> List.filter (fun l -> String.starts_with ~prefix:"// Command line:" l)
       |> List.length
       |> Printf.printf "command-line lines: %d\n"
-  | Error { message } -> print_string message);
+  | Error { message; _ } -> print_string message);
   [%expect {| command-line lines: 1 |}]
 
 let print_result = function
   | Ok _ -> print_endline "Ok"
-  | Error { Compcert_embed.message } -> Printf.printf "Error:\n%s" message
+  | Error { Compcert_embed.message; _ } -> Printf.printf "Error:\n%s" message
 
 let%expect_test "a syntax error is an Error carrying CompCert's message" =
-  print_result (Compcert_embed.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
+  print_result
+    (Compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
   [%expect
     {|
     Error:
@@ -101,7 +102,7 @@ let%expect_test "a syntax error is an Error carrying CompCert's message" =
 
 let%expect_test "a type error is an Error carrying CompCert's message" =
   print_result
-    (Compcert_embed.compile_to_asm ~name:"bad.c"
+    (Compcert_embed_aarch64.compile_to_asm ~name:"bad.c"
        "struct s { int a; };\nint entry(void) { struct s x; return x + 1; }\n");
   [%expect
     {|
@@ -109,8 +110,9 @@ let%expect_test "a type error is an Error carrying CompCert's message" =
     bad.c:2: error: invalid operands to binary '+' ('struct s' and 'int') |}]
 
 let%expect_test "the process keeps compiling after errors" =
-  print_result (Compcert_embed.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
-  print_result (Compcert_embed.compile_to_asm "int entry(void) { return 7; }\n");
+  print_result
+    (Compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
+  print_result (Compcert_embed_aarch64.compile_to_asm "int entry(void) { return 7; }\n");
   [%expect
     {|
     Error:
@@ -125,12 +127,13 @@ let%expect_test "100 sequential compiles of mixed inputs give identical outputs"
   let inputs =
     inputs
     @ [
-        (fun () -> Compcert_embed.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
+        (fun () ->
+          Compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
       ]
   in
   let render = function
     | Ok s -> "ok\n" ^ s
-    | Error { Compcert_embed.message } -> "error\n" ^ message
+    | Error { Compcert_embed.message; _ } -> "error\n" ^ message
   in
   let first = List.map (fun f -> render (f ())) inputs in
   let n = List.length inputs in

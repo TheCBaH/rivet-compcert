@@ -1,0 +1,63 @@
+target riscv32
+== C -> assembly: byte identity with ccomp -S (command-line comment excluded)
+args_arith/args_arith.c: identical
+cond_select/cond_select.c: identical
+cross_bss/caller.c: identical
+cross_bss/data.c: identical
+cross_call/callee.c: identical
+cross_call/caller.c: identical
+cross_data/caller.c: identical
+cross_data/data.c: identical
+direct_call/direct_call.c: identical
+global_ldst/global_ldst.c: identical
+loop/loop.c: identical
+return42/asm_test_entry.c: identical
+== C -> assembly: errors
+Error:
+bad.c:1:29: syntax error after '+' and before ';'.
+Ill-formed use of the binary operator '+'.
+At this point, an expression is expected.
+Fatal error; compilation aborted.
+Error:
+bad.c:2: error: invalid operands to binary '+' ('struct s' and 'int')
+Ok
+== C -> assembly: 100 sequential compiles
+inputs: 16, compiles: 100, mismatches: 0
+== assembly -> image: GNU ld oracle bytes at the oracle's addresses
+args_arith .text: identical
+cond_select .text: identical
+cross_bss .text: identical
+cross_bss .bss: size matches
+cross_call .text: identical
+cross_data .text: identical
+cross_data .data: identical
+direct_call .text: identical
+global_ldst .text: identical
+global_ldst .data: identical
+loop .text: identical
+return42 .text: identical
+== runtime helpers
+available: i64_dtos i64_dtou i64_sar i64_sdiv i64_shl i64_shr i64_smod i64_stod i64_stof i64_udivmod i64_udiv i64_umod i64_utod i64_utof i64_smulh i64_umulh
+i64_dtos: ok
+i64_dtou: ok
+i64_sar: ok
+i64_sdiv: ok
+i64_shl: ok
+i64_shr: ok
+i64_smod: ok
+i64_stod: ok
+i64_stof: ok
+i64_udivmod: ok
+i64_udiv: ok
+i64_umod: ok
+i64_utod: ok
+i64_utof: ok
+i64_smulh: ok
+i64_umulh: ok
+helpers.c links: i64_dtos i64_dtou i64_sar i64_sdiv i64_shl i64_shr i64_smod i64_stod i64_stof i64_udiv i64_umod i64_utod i64_utof i64_smulh i64_udivmod i64_umulh
+helpers.c plans: ok
+== stage-tagged errors
+stage plan, codes image.undefined,image.undefined
+<synthesized by riscv32.encode>: error[image.undefined]: fixup hi references undefined symbol helper
+<synthesized by riscv32.encode>: error[image.undefined]: fixup lo references undefined symbol helper
+stage compile

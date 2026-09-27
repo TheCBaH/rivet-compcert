@@ -20,12 +20,22 @@ WORK_ROOT="${COMPCERT_LIB_WORK:-$REPO_ROOT/.compcert-lib-work}"
 
 Fatal() { echo "FATAL: $*" >&2; exit 1; }
 
+# shellcheck source=target-matrix.sh
+. "$SCRIPT_DIR/target-matrix.sh"
+
 target="${1:-}"
-[ "$target" = aarch64 ] || Fatal "usage: $0 aarch64 (the only target with an embed patch)"
+found=false
+for t in "${FIXTURE_TARGETS[@]}"; do
+  [ "$t" = "$target" ] && found=true
+done
+[ "$found" = true ] || Fatal "usage: $0 <target>  (targets: ${FIXTURE_TARGETS[*]})"
 
 pristine="$REPO_ROOT/compcert-lib-$target"
 variant="$REPO_ROOT/compcert-lib-$target-embed"
-patchfile="$EMBED_DIR/$target.patch"
+# One patch for every target: the only per-target file it touches is
+# TargetPrinter.ml, whose banner (the hunk's whole context) is the same in
+# each architecture's directory.
+patchfile="$EMBED_DIR/common.patch"
 ini="$WORK_ROOT/build/$target/compcert.ini"
 
 [ -f "$pristine/src/Compiler.ml" ] ||
@@ -39,7 +49,10 @@ cp "$pristine"/src/*.ml "$pristine"/src/*.mli "$variant/src/"
 for m in embed_asm_out embed_source_in embed_config embed_diag_out; do
   cp "$EMBED_DIR/$m.ml" "$variant/src/"
 done
-"$EMBED_DIR/gen-config-data.sh" "$ini" > "$variant/src/embed_config_data.ml"
+"$EMBED_DIR/gen-config-data.sh" "$ini" "$pristine/src/Readconfig.ml" > "$variant/src/embed_config_data.ml"
+"$EMBED_DIR/gen-runtime-data.sh" "$ini" "$pristine/src/Readconfig.ml" "$pristine/src/Version.ml" \
+  "$REPO_ROOT/modules/CompCert/runtime" > "$variant/src/embed_runtime_data.ml" ||
+  Fatal "could not generate the runtime helpers for $target"
 
 (cd "$variant/src" && patch -p1 --forward --fuzz=0 --no-backup-if-mismatch < "$patchfile") ||
   Fatal "$patchfile does not apply exactly to $pristine/src"
@@ -59,5 +72,13 @@ sed -e "s/compcert_$target\b/compcert_${target}_embed/g" -e '/^;/d' \
   "$pristine/src/dune" > "$variant/src/dune"
 grep -q "(name compcert_${target}_embed)" "$variant/src/dune" ||
   Fatal "could not derive $variant/src/dune from $pristine/src/dune"
+# Only some pristine libraries are installable; the variant always is, since
+# asm/ finds it through OCAMLPATH.
+if ! grep -q "(public_name compcert_${target}_embed)" "$variant/src/dune"; then
+  sed -i "s/^\( *\)(name compcert_${target}_embed)\$/&\n\1(public_name compcert_${target}_embed)/" \
+    "$variant/src/dune"
+  grep -q "(public_name compcert_${target}_embed)" "$variant/src/dune" ||
+    Fatal "could not add a public_name to $variant/src/dune"
+fi
 
 echo "== [$target] done: $variant synced =="

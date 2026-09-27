@@ -1,51 +1,33 @@
-(* In-process CompCert for aarch64: C source text in, assembly text out, with
-   no file read or written on the way.
+(* In-process CompCert: C source text in, assembly text, a laid-out image, or
+   a native run out, with no file read or written on the way.
 
-   The embed variant of CompCert (compcert_aarch64_embed) reads the source
-   from [Embed_source_in.files] and prints into a [Buffer.t]; everything else
-   is CompCert's own unmodified pipeline, driven here the way ccomp -S drives
-   it. Compiles share CompCert's global state, so they are serialized: this
-   API is not reentrant. *)
+   This is the target-agnostic half. The CompCert-facing half (options,
+   diagnostics capture, the varargs check and the printer call) touches types
+   that are distinct per CompCert build, so each target has its own copy,
+   compcert_embed_<target>, which applies [Make] to its assembler target and
+   that copy. Compiles share CompCert's global state, so they are serialized:
+   this API is not reentrant. *)
 
-module CC = Compcert_aarch64_embed
+(* Which step failed. [Compile] is CompCert (including the varargs check),
+   [Execute] is mapping or calling the image, and the others are the
+   assembler's own pipeline stages. *)
+type stage = Compile | Parse | Simplify | Lower | Plan | Execute
 
-type error = { message : string }
+type error = {
+  stage : stage;
+  message : string;
+  codes : string list;  (** diagnostic codes, e.g. [image.undefined]; empty for [Compile] *)
+}
 
-(* CompCert reports through [Format.err_formatter], except for syntax errors,
-   which the embed variant sends to [Embed_diag_out.stderr]. Diverting the
-   formatter into a buffer
-   for the duration of [f] keeps diagnostics off the host's stderr and gives
-   them back to the caller; the previous output functions are restored on
-   every path. *)
-let capturing_diagnostics f =
-  let buf = Buffer.create 256 in
-  let saved = Format.pp_get_formatter_out_functions Format.err_formatter () in
-  Format.pp_print_flush Format.err_formatter ();
-  Format.pp_set_formatter_out_functions Format.err_formatter
-    { saved with Format.out_string = Buffer.add_substring buf; out_flush = ignore };
-  let restore () =
-    Format.pp_print_flush Format.err_formatter ();
-    Format.pp_set_formatter_out_functions Format.err_formatter saved
-  in
-  Buffer.clear CC.Embed_diag_out.stderr;
-  match f () with
-  | v ->
-      restore ();
-      (* A raw fatal error (Embed_diag_out) is always the last thing reported:
-         it raises [Abort] as soon as it is printed. *)
-      (v, Buffer.contents buf ^ Buffer.contents CC.Embed_diag_out.stderr)
-  | exception e ->
-      restore ();
-      raise e
+let stage_name = function
+  | Compile -> "compile"
+  | Parse -> "parse"
+  | Simplify -> "simplify"
+  | Lower -> "lower"
+  | Plan -> "plan"
+  | Execute -> "execute"
 
-(* ccomp's defaults, except for the two options every fixture is compiled
-   with: -fno-pie (there is no GOT to route global accesses through: images
-   are bound absolutely) and no -g. Reset before each compile because the
-   options are global refs a previous caller may have changed. *)
-let set_options () =
-  CC.Clflags.option_fpie := false;
-  CC.Clflags.option_fpic := false;
-  CC.Clflags.option_g := false
+let pp_error ppf e = Format.fprintf ppf "[%s] %s" (stage_name e.stage) e.message
 
 (* CompCert colors its diagnostics when the host's stderr is a terminal, and
    the switch is not exported. Captured text is for the caller, not the
@@ -68,36 +50,140 @@ let strip_colors s =
   go 0;
   Buffer.contents b
 
-let render_errcode msg = Format.asprintf "%a" CC.Driveraux.print_error msg
+(* One target's CompCert, driven the way ccomp -S drives it. [Error] carries
+   everything CompCert reported, as it would have appeared on stderr. *)
+module type COMPILER = sig
+  val compile_to_asm : name:string -> string -> (string, string) result
 
-let compile_to_asm ?(name = "gen.c") source =
-  set_options ();
-  CC.Diagnostics.reset ();
-  CC.Frontend.init ();
-  CC.DebugInit.init ();
-  Hashtbl.replace CC.Embed_source_in.files name source;
-  let compile () =
-    let csyntax = CC.Frontend.parse_c_file name name in
-    match
-      CC.Compiler.apply_partial (CC.Compiler.transf_c_program csyntax) CC.Asmexpand.expand_program
-    with
-    | CC.Errors.OK asm ->
-        (* The printer numbers its own labels from a process-wide counter that
-           starts at 100; ccomp prints one unit per process, so it always
-           starts there. Everything else the printers keep is reset per
-           function or per file. *)
-        CC.PrintAsmaux.next_label := 100;
-        let out = Buffer.create 4096 in
-        CC.PrintAsm.print_program out asm;
-        Ok (Buffer.contents out)
-    | CC.Errors.Error msg -> Error (Printf.sprintf "%s: error: %s\n" name (render_errcode msg))
+  val runtime_units : unit -> ((string * string) list, string) result
+  (** the target's [__compcert_i64_*] helpers as assembly units, named after
+      their CompCert runtime file ([i64_sdiv], ...); empty where ccomp links
+      none *)
+end
+
+(* {1 Runtime helpers} *)
+
+let is_symbol_char = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' | '$' -> true
+  | _ -> false
+
+(* Every symbol that follows [prefix] in [text], in order of appearance. *)
+let symbols_after prefix ~skip_blanks text =
+  let n = String.length text and k = String.length prefix in
+  let rec scan i acc =
+    if i + k > n then List.rev acc
+    else if String.sub text i k = prefix then (
+      let j = ref (i + k) in
+      if skip_blanks then
+        while !j < n && (text.[!j] = ' ' || text.[!j] = '\t') do
+          incr j
+        done;
+      let start = !j in
+      while !j < n && is_symbol_char text.[!j] do
+        incr j
+      done;
+      let name = String.sub text start (!j - start) in
+      scan !j (if name = "" then acc else name :: acc))
+    else scan (i + 1) acc
   in
-  let result, diagnostics =
-    Fun.protect
-      ~finally:(fun () -> Hashtbl.remove CC.Embed_source_in.files name)
-      (fun () ->
-        capturing_diagnostics (fun () -> try compile () with CC.Diagnostics.Abort -> Error ""))
-  in
-  match result with
-  | Ok asm -> Ok asm
-  | Error extra -> Error { message = strip_colors (diagnostics ^ extra) }
+  scan 0 []
+
+let globals text =
+  symbols_after ".globl" ~skip_blanks:true text @ symbols_after ".global" ~skip_blanks:true text
+
+let helper_references text =
+  symbols_after "__compcert_i64_" ~skip_blanks:false text |> List.map (( ^ ) "__compcert_i64_")
+
+module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
+  module P = Driver.Pipeline.Make (T)
+
+  let target = T.name
+
+  let compile_to_asm ?(name = "gen.c") source =
+    C.compile_to_asm ~name source
+    |> Result.map_error (fun m -> { stage = Compile; message = strip_colors m; codes = [] })
+
+  (* {1 Assembly} *)
+
+  let entry_symbol = "entry"
+
+  let assembler_error stage e =
+    {
+      stage;
+      message = Foundation.Diag.render e;
+      codes = List.map Foundation.Diagnostic.code (Foundation.Diag.diagnostics e);
+    }
+
+  let ( let* ) = Result.bind
+  let at stage r = Result.map_error (assembler_error stage) r
+
+  let lower_unit (unit_name, text) =
+    let source = Foundation.Span.source ~name:unit_name ~contents:text in
+    let* src = at Parse (P.parse ~unit_name ~source) in
+    let* norm, _ = at Simplify (P.simplify ~state:T.default_state src) in
+    at Lower (P.lower ~state:T.default_state norm)
+
+  (* [units] plus every runtime helper they need, directly or through other
+     helpers: a helper is added when some unit names a [__compcert_i64_]
+     symbol that no unit defines. Units that define a helper themselves
+     (for example a fixture's own copy) keep it. *)
+  let with_runtime units =
+    let defined us = List.concat_map (fun (_, t) -> globals t) us in
+    let missing us =
+      let d = defined us in
+      List.concat_map (fun (_, t) -> helper_references t) us
+      |> List.sort_uniq compare
+      |> List.filter (fun s -> not (List.mem s d))
+    in
+    match missing units with
+    | [] -> Ok units
+    | _ -> (
+        match C.runtime_units () with
+        | Error m -> Error { stage = Compile; message = strip_colors m; codes = [] }
+        | Ok runtime ->
+            let rec close us =
+              let wanted = missing us in
+              let adds =
+                List.filter
+                  (fun (name, t) ->
+                    (not (List.mem_assoc name us))
+                    && List.exists (fun g -> List.mem g wanted) (globals t))
+                  runtime
+              in
+              if adds = [] then us else close (us @ adds)
+            in
+            Ok (close units))
+
+  let runtime_units () =
+    C.runtime_units ()
+    |> Result.map_error (fun m -> { stage = Compile; message = strip_colors m; codes = [] })
+
+  let assemble_units ?(entry = entry_symbol) units =
+    let* units = with_runtime units in
+    let rec lower_all acc = function
+      | [] -> Ok (List.rev acc)
+      | u :: rest ->
+          let* m = lower_unit u in
+          lower_all (m :: acc) rest
+    in
+    let* modules = lower_all [] units in
+    match modules with [ m ] -> at Plan (P.plan ~entry m) | ms -> at Plan (P.plan_many ~entry ms)
+
+  let assemble ?entry ?(unit_name = "gen") text = assemble_units ?entry [ (unit_name, text) ]
+
+  let compile ?entry ?name source =
+    let* text = compile_to_asm ?name source in
+    assemble ?entry ?unit_name:name text
+
+  (* {1 Running} *)
+
+  (* Only where this process runs [target]'s ISA; elsewhere [Native_exec]
+     refuses the image. [~isolate:true] runs it in a forked child (see
+     [Native_exec.run]): a crash or a hang in generated code is then an
+     [Execute] error instead of the end of this process. *)
+  let run ?entry ?name ?read_globals ?isolate ?timeout_s source ~io =
+    let* laid = compile ?entry ?name source in
+    Native_exec.run ~target ?read_globals ?isolate ?timeout_s laid ~io
+    |> Result.map_error (fun e ->
+        { stage = Execute; message = Format.asprintf "%a" Native_exec.pp_error e; codes = [] })
+end

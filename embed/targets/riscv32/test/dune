@@ -1,0 +1,33 @@
+; Tier A for riscv32 (../../../tier_a/tier_a_test.ml): C -> assembly -> image
+; against the committed fixtures. The report must equal tier_a.expected.
+
+(copy_files# ../../../tier_a/tier_a_test.ml)
+
+(executable
+ (name tier_a_test)
+ (libraries compcert_embed compcert_embed_riscv32 image foundation)
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_RISCV32=false} true))))
+
+(rule
+ (deps
+  (source_tree ../../../../fixtures/compcert-3.17))
+ (action
+  (with-stdout-to
+   tier_a.output
+   (run %{exe:tier_a_test.exe} ../../../../fixtures/compcert-3.17)))
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_RISCV32=false} true))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff tier_a.expected tier_a.output))
+ (enabled_if
+  (and
+   (= %{env:ASM_COMPCERT_EMBED=false} true)
+   (= %{env:ASM_COMPCERT_EMBED_RISCV32=false} true))))

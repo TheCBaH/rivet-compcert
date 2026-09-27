@@ -1,15 +1,15 @@
 ; In-process CompCert: C source string -> assembly text -> laid-out image,
-; with nothing written to disk.
+; with nothing written to disk. This is the target-agnostic core;
+; targets/<target>/ instantiates it for each target's CompCert embed variant.
 ;
-; Gated like compcert_adapter/: it links the embed variant of CompCert
-; (compcert_aarch64_embed, from ../../compcert-lib-aarch64-embed, resolved via
-; OCAMLPATH), which needs a Rocq extraction, so it must stay out of every
-; default build. ASM_COMPCERT_EMBED is set only by the asm-compcert-embed-test
-; Makefile target.
+; Gated like compcert_adapter/: the per-target libraries link a CompCert
+; build, which needs a Rocq extraction, so all of this must stay out of every
+; default build. ASM_COMPCERT_EMBED is set only by the asm-compcert-embed-*
+; Makefile targets.
 
 (library
  (name compcert_embed)
  (modes byte native)
- (libraries compcert_aarch64_embed foundation asm_core image driver fmt)
+ (libraries foundation asm_core image driver target_intf native_exec fmt)
  (enabled_if
   (= %{env:ASM_COMPCERT_EMBED=false} true)))
