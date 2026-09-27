@@ -12,7 +12,6 @@
 
 (executables
  (names tier_a_test qemu_diff)
- (modes exe byte)
  (libraries
   compcert_embed
   compcert_embed_riscv32

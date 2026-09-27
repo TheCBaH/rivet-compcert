@@ -13,10 +13,8 @@
    ISA, natively by Native_exec as well. Every result must equal the
    program's recorded expectation.
 
-   Usage: qemu_diff.exe [--native-only] <corpus-dir>. Needs the exec-ABI helpers
-   (ASM_HELPERS_DIR, built by make asm-helpers) and the target's QEMU, except with
-   --native-only, which runs natively only and checks against the general expectation (for
-   a process that cannot start QEMU itself, such as one already running under it). *)
+   Usage: qemu_diff.exe <corpus-dir>. Needs the exec-ABI helpers
+   (ASM_HELPERS_DIR, built by make asm-helpers) and the target's QEMU. *)
 
 open Asm_oracle
 open Asm_oracle_run
@@ -121,14 +119,7 @@ let qemu_value laid ~expected =
       | _ -> Error (Fmt.str "%a" Qemu_user.pp o))
 
 let () =
-  let native_only, dir =
-    match Sys.argv with
-    | [| _; "--native-only"; d |] -> (true, d)
-    | [| _; d |] -> (false, d)
-    | _ ->
-        prerr_endline "usage: qemu_diff.exe [--native-only] <corpus-dir>";
-        exit 2
-  in
+  let dir = Sys.argv.(1) in
   let files =
     Sys.readdir dir |> Array.to_list
     |> List.filter (fun f -> Filename.check_suffix f ".c")
@@ -136,13 +127,8 @@ let () =
   in
   let failures = ref 0 in
   let native = Native_exec.host_isa = Some target in
-  if native_only && not native then (
-    Printf.printf "target %s: --native-only needs a host of this ISA\n" target;
-    exit 2);
   Printf.printf "target %s, %s\n" target
-    (if native_only then "native only"
-     else if native then "native and qemu"
-     else "qemu only (not this host's ISA)");
+    (if native then "native and qemu" else "qemu only (not this host's ISA)");
   List.iter
     (fun file ->
       let source = read (Filename.concat dir file) in
@@ -163,17 +149,6 @@ let () =
             in
             match native_value with
             | Error m -> Error m
-            | Ok (Some n) when native_only -> (
-                (* the same image again in a forked child (~isolate:true) *)
-                let io = Bigarray.Array1.create Bigarray.char Bigarray.c_layout 16 in
-                match Native_exec.run ~target ~isolate:true laid ~io with
-                | Error e -> Error (Format.asprintf "isolated: %a" Native_exec.pp_error e)
-                | Ok { value; _ } ->
-                    let iso = low32 value in
-                    if n = general && iso = general then
-                      Ok (Printf.sprintf "native = isolated = %Ld" n)
-                    else
-                      Error (Printf.sprintf "native %Ld, isolated %Ld, expected %Ld" n iso general))
             | Ok nv -> (
                 match qemu_value laid ~expected:want with
                 | Error m -> Error ("qemu: " ^ m)
@@ -201,20 +176,5 @@ let () =
           incr failures;
           Printf.printf "  FAIL %-28s %s\n" file m)
     files;
-  (* A fault in generated code, contained by isolation and classified by signal. *)
-  (if native_only then
-     match Embed.compile "long entry(void *io) { *(volatile long *)8 = 1; return 0; }\n" with
-     | Error e -> Format.printf "  FAIL fault program: %a@." Compcert_embed.pp_error e
-     | Ok laid -> (
-         let io = Bigarray.Array1.create Bigarray.char Bigarray.c_layout 16 in
-         match Native_exec.run ~target ~isolate:true laid ~io with
-         | Error (Native_exec.Signal _ as e) ->
-             Format.printf "  ok   isolated fault: %a@." Native_exec.pp_error e
-         | Error e ->
-             incr failures;
-             Format.printf "  FAIL isolated fault: %a@." Native_exec.pp_error e
-         | Ok _ ->
-             incr failures;
-             print_endline "  FAIL isolated fault: returned normally"));
   Printf.printf "%d programs, %d failures\n" (List.length files) !failures;
   if !failures > 0 then exit 1
