@@ -33,6 +33,7 @@ let%expect_test "every corpus program returns its expected value natively" =
     (programs ());
   [%expect
     {|
+    byteswap.c: ok
     fixture_args_arith.c: ok
     fixture_cond_select.c: ok
     fixture_cross_bss.c: ok
