@@ -1,0 +1,9 @@
+(executable
+ (name rivet_compcert_tools)
+ (modes byte native)
+ (libraries
+  rivet_compcert_tools
+  rivet-tools.lib
+  rivet-tools.cli
+  cmdliner
+  fpath))

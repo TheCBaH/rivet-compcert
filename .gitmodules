@@ -1,0 +1,3 @@
+[submodule "vendor/rivet"]
+	path = vendor/rivet
+	url = https://github.com/TheCBaH/rivet.git

@@ -1,0 +1,9 @@
+; rivet-tools' modules are opened so that the corpus commands, which were
+; written as part of that library, read unchanged.
+
+(library
+ (name rivet_compcert_tools)
+ (modes byte native)
+ (flags
+  (:standard -open Rivet_tools))
+ (libraries rivet-tools.lib bos fpath digestif.ocaml mtime.clock.os unix))

@@ -1,0 +1,4 @@
+; rivet is a submodule. Vendoring keeps its warnings out of this build and its
+; sources out of @fmt, and lets the libraries here depend on its public
+; rivet.<library> names.
+(vendored_dirs vendor)

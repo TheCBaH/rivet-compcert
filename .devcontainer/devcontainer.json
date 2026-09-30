@@ -1,0 +1,38 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+    "name": "rivet-compcert devcontainer",
+    "build":  {
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": "true",
+            "username": "vscode",
+            "userUid": "1000",
+            "userGid": "1000",
+            "upgradePackages": "false"
+        },
+        "ghcr.io/thecbah/ocaml-features/ocaml:1": {
+            "version": "${localEnv:OCAML_VERSION}",
+            "packages": "bos bytesrw cmdliner digestif fmt fpath jsont mtime menhir ocamlformat#0.28.1 ppx_expect qcheck zarith",
+            "system-packages": "libgmp-dev pkg-config"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ocamllabs.ocaml-platform"
+            ]
+        }
+    },
+    "remoteUser": "vscode",
+    "postCreateCommand": {
+	"submodules": "git submodule update --init --depth 1 vendor/rivet && git -C vendor/rivet submodule update --init --depth 1 vendor/fmt/upstream vendor/err_trace/upstream",
+        // See .devcontainer/fix-opam-owner.sh: a blind `chown -R` here forces
+        // a full data copy-up of the whole opam install on every fresh
+        // container (this host's overlay2 has metacopy disabled), even
+        // though ownership is usually already correct from image build.
+        "opam": "sudo .devcontainer/fix-opam-owner.sh $(id -u) $(id -g)"
+    },
+    "waitFor": "postCreateCommand"
+}
