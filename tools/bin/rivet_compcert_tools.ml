@@ -134,5 +134,5 @@ let () =
   exit
     (Cli.main ~name:"rivet-compcert-tools"
        ~doc:"rivet's repository tooling with CompCert as the fixture compiler"
-       ~fixtures:("vendor/rivet/fixtures/c", "fixtures/compcert-3.17")
-       ~extra:[ corpus_cmd ] ~compiler:(Ccomp.compiler ~work_root) ())
+       ~fixtures:("fixtures/c", "fixtures/compcert-3.17")
+       ~preexisting:Ccomp.preexisting ~extra:[ corpus_cmd ] ~compiler:(Ccomp.compiler ~work_root) ())

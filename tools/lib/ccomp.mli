@@ -49,3 +49,18 @@ val compile_s :
 
 val compiler : work_root:Fpath.t -> Compiler.t
 (** What {!Fixture_cmd} generates and verifies the fixtures with. *)
+
+val runtime_dir : Target.t -> string
+(** CompCert's runtime directory for the target: [riscV] for both RISC-V profiles. *)
+
+val runtime_defines : Target.t -> string list
+(** The [-DMODEL_]/[-DABI_]/[-DENDIANNESS_]/[-DSYS_] values CompCert builds its
+    runtime with. *)
+
+val runtime_source : Repo.t -> target:Target.t -> string -> (Fpath.t, Tool_error.t) Err.t
+(** Where the export tarball holds the runtime file a fixture [origin] names,
+    given as [modules/CompCert/runtime/<target>/<file>]. *)
+
+val preexisting : Fixture_cmd.preexisting
+(** Preprocesses an origin unit's upstream [.S] with the runtime's own defines.
+    Pass it to [Cli.main ~preexisting]. *)
