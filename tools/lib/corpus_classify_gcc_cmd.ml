@@ -45,7 +45,9 @@ let normalize = function
    produced could in principle hit the same pathology test/regression/
    floats.c does. *)
 let classify_timeout_s = 120
-let asm_exe repo = Fpath.(Repo.path repo / "asm" / "_build" / "default" / "tool" / "asm.exe")
+
+let asm_exe repo =
+  Fpath.(Repo.path repo / "_build" / "default" / "vendor" / "rivet" / "tool" / "asm.exe")
 
 let real_runner repo (target : Target.t) : runner =
  fun ~generated_s_rel ->
@@ -463,7 +465,7 @@ let default_restore : restore_step =
 
 let publish_with repo ~(target : Target.t) (m : manifest) ~commit_manifest ~commit_summary ~restore
     =
-  let dest_dir = Repo.corpus_c_gcc repo target in
+  let dest_dir = Corpus_paths.c_gcc repo target in
   let* () = Tool_fs.mkdir_p dest_dir in
   let manifest_path = Fpath.(dest_dir / "manifest.txt") in
   let summary_path = Fpath.(dest_dir / "summary.txt") in
@@ -501,7 +503,7 @@ let classify_c_gcc_core repo ~git ~runner ~gas_prober ~compiler ~args ~gcc_versi
   let* files = discover_c_files repo in
   if files = [] then err Tool_error.Validate "modules/CompCert/test/c contains no .c files"
   else
-    let* corpus_work_root = Tool_workspace.corpus_work repo in
+    let* corpus_work_root = Tool_workspace.repo_relative_work repo ~name:".corpus-work" in
     let* () = Tool_workspace.recreate_root corpus_work_root in
     let* entries =
       List.fold_left
@@ -552,7 +554,7 @@ let classify_c_gcc repo (target : Target.t) =
   let step =
     let* () = Gcc.require_all [ target ] in
     let compiler = Gcc.tool_name target in
-    let args = Gcc.args target in
+    let args = Ccomp.gcc_args target in
     let* gcc_version = Gcc.version target in
     let tools = Gnu_tools.for_target target in
     let* () = Gnu_tools.require tools ~qemu:false in
@@ -565,7 +567,7 @@ let classify_c_gcc repo (target : Target.t) =
 
 let check_with repo ~git (target : Target.t) =
   let target_s = Target.to_string target in
-  let dest_dir = Repo.corpus_c_gcc repo target in
+  let dest_dir = Corpus_paths.c_gcc repo target in
   let manifest_path = Fpath.(dest_dir / "manifest.txt") in
   let summary_path = Fpath.(dest_dir / "summary.txt") in
   let step =
@@ -654,7 +656,7 @@ let check_with repo ~git (target : Target.t) =
 let published_targets repo =
   List.filter
     (fun target ->
-      Sys.file_exists (Fpath.to_string Fpath.(Repo.corpus_c_gcc repo target / "manifest.txt")))
+      Sys.file_exists (Fpath.to_string Fpath.(Corpus_paths.c_gcc repo target / "manifest.txt")))
     Target.all
 
 let check repo =

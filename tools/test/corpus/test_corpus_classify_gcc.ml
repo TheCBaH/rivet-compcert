@@ -6,7 +6,8 @@
    test/c/ corpus cleanly on every target, so the module carries only
    accepted/rejected). *)
 
-open Compcert_tools
+open Rivet_tools
+open Rivet_compcert_tools
 open Corpus_classify_gcc_cmd
 
 let ( let* ) = Result.bind
@@ -55,8 +56,8 @@ let write p s =
 
 let make_repo root =
   write Fpath.(root / "Makefile") "";
-  write Fpath.(root / "tools" / "target-matrix.sh") "";
-  write Fpath.(root / "asm" / "dune-project") "";
+  write Fpath.(root / "scripts" / "target-matrix.sh") "";
+  write Fpath.(root / "dune-project") "";
   match Repo.resolve ~cli:(Some root) ~env:(fun _ -> None) ~cwd:root with
   | Ok r -> r
   | Error _ -> failwith "test repo did not validate"
@@ -255,7 +256,7 @@ let read p = match Tool_fs.read p with Ok s -> s | Error _ -> failwith "read fai
 let test_publish_first_run_no_prior () =
   with_tmp (fun root ->
       let repo = make_repo root in
-      let dest = Repo.corpus_c_gcc repo Target.X86_64 in
+      let dest = Corpus_paths.c_gcc repo Target.X86_64 in
       check "publish: the destination directory does not exist yet" (not (exists dest));
       match publish repo ~target:Target.X86_64 sample_manifest with
       | Error _ -> check "publish: a from-scratch run creates the directory and both files" false
@@ -273,7 +274,7 @@ let other_manifest = { sample_manifest with files = [ List.hd sample_manifest.fi
 let test_publish_rollback_with_prior () =
   with_tmp (fun root ->
       let repo = make_repo root in
-      let dest = Repo.corpus_c_gcc repo Target.X86_64 in
+      let dest = Corpus_paths.c_gcc repo Target.X86_64 in
       match publish repo ~target:Target.X86_64 sample_manifest with
       | Error _ -> check "publish: seeding a prior pair" false
       | Ok () -> (
@@ -443,7 +444,7 @@ let test_check_with_fixed_header_literal () =
       | Error _ -> check "check_with: seeding a valid corpus" false
       | Ok m ->
           let wrong = { m with header = { m.header with target = "arm" } } in
-          let dest = Repo.corpus_c_gcc repo Target.X86_64 in
+          let dest = Corpus_paths.c_gcc repo Target.X86_64 in
           write Fpath.(dest / "manifest.txt") (render_manifest wrong);
           write Fpath.(dest / "summary.txt") (render_summary wrong);
           check "check_with: a manifest declaring the wrong target is rejected"
@@ -456,7 +457,7 @@ let test_check_with_stale_summary () =
       match build_and_seed repo ~git with
       | Error _ -> check "check_with: seeding a valid corpus" false
       | Ok _ ->
-          let dest = Repo.corpus_c_gcc repo Target.X86_64 in
+          let dest = Corpus_paths.c_gcc repo Target.X86_64 in
           write Fpath.(dest / "summary.txt") "total:2\naccepted:2\nrejected:0\n";
           check "check_with: a stale summary.txt (wrong totals) is rejected"
             (not (command_is_success (check_with repo ~git Target.X86_64))))
@@ -469,7 +470,9 @@ let test_real_runner_integration () =
       let bad = Fpath.(dir / "bad.s") in
       write good ".text\n.globl main\nmain:\n  ret\n";
       write bad ".text\n\tmovl %eax, [[[\n";
-      let asm = Filename.concat (Filename.dirname Sys.executable_name) "../../../tool/asm.exe" in
+      let asm =
+        Filename.concat (Filename.dirname Sys.executable_name) "../../../vendor/rivet/tool/asm.exe"
+      in
       let run rel =
         Tool_process.exec
           (Tool_process.spec ~cwd:dir ~stdout:Tool_process.Out_null ~stderr:Tool_process.Err_capture

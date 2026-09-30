@@ -30,7 +30,9 @@ let normalize = function
    same reserved code expected-status.mli documents) instead of hanging the
    whole classify run - and, in CI, the whole pipeline - forever. *)
 let classify_timeout_s = 120
-let asm_exe repo = Fpath.(Repo.path repo / "asm" / "_build" / "default" / "tool" / "asm.exe")
+
+let asm_exe repo =
+  Fpath.(Repo.path repo / "_build" / "default" / "vendor" / "rivet" / "tool" / "asm.exe")
 
 let real_runner repo (target : Target.t) : runner =
  fun ~generated_s_rel ->
@@ -488,30 +490,36 @@ type git_probe = {
   head : unit -> (string, Tool_error.t) Err.t;
 }
 
-let git_in_compcert repo args ~label =
-  Tool_process.exec
-    (Tool_process.spec ~cwd:(Repo.path repo) ~stdout:Tool_process.Out_capture
-       ~stderr:Tool_process.Err_capture ~accepted:Process_status.Zero_only ~label "git"
-       ([ "-C"; "modules/CompCert" ] @ args))
+(* There is no CompCert checkout to be dirty: the artifacts are verified by
+   checksum, and the revision they were built from is in the export's MANIFEST. *)
+let export_revision repo =
+  let read target =
+    Tool_fs.read Fpath.(Ccomp.work_root repo / Target.to_string target / "export" / "MANIFEST")
+  in
+  let revision_of text =
+    String.split_on_char '\n' text
+    |> List.find_map (fun l ->
+        let prefix = "compcert-revision: " in
+        let n = String.length prefix in
+        if String.length l >= n && String.sub l 0 n = prefix then
+          Some (String.trim (String.sub l n (String.length l - n)))
+        else None)
+  in
+  match List.find_map (fun t -> Result.to_option (read t)) Target.all with
+  | None ->
+      err Tool_error.Validate "no _compcert/<target>/export/MANIFEST: run 'make compcert-fetch'"
+  | Some text -> (
+      match revision_of text with
+      | Some r -> Ok r
+      | None -> err Tool_error.Parse "MANIFEST has no compcert-revision line")
 
 let real_git_probe repo =
-  {
-    status_porcelain =
-      (fun () ->
-        Result.map
-          (fun (r : Tool_process.result) -> Option.value r.stdout ~default:"")
-          (git_in_compcert repo [ "status"; "--porcelain" ] ~label:"corpus-classify git status"));
-    head =
-      (fun () ->
-        Result.map
-          (fun (r : Tool_process.result) -> String.trim (Option.value r.stdout ~default:""))
-          (git_in_compcert repo [ "rev-parse"; "HEAD" ] ~label:"corpus-classify git rev-parse"));
-  }
+  { status_porcelain = (fun () -> Ok ""); head = (fun () -> export_revision repo) }
 
 let check_clean_checkout git =
   let* out = git.status_porcelain () in
   if String.trim out = "" then Ok ()
-  else err Tool_error.Validate (Printf.sprintf "modules/CompCert checkout is dirty:\n%s" out)
+  else err Tool_error.Validate (Printf.sprintf "CompCert checkout is dirty:\n%s" out)
 
 let check_revision_matches git ~expected =
   let* head = git.head () in
@@ -540,7 +548,7 @@ let compile_entry repo ~compiler ~args ~corpus_work_root ~(target : Target.t) fi
   let out_rel = ".corpus-work/c/" ^ target_s ^ "/" ^ stem ^ "/output.s" in
   let source_rel = "modules/CompCert/test/c/" ^ file in
   let* () =
-    Ccomp.compile_s ~compiler ~cwd:(Repo.path repo) ~args ~out_rel ~source_rel ~case:stem ~target
+    Ccomp.compile_s ~compiler ~cwd:(Repo.path repo) ~args ~out_rel ~source_rel ~case:stem ~target ()
   in
   let* source_sha256 = Tool_fs.sha256 Fpath.(Repo.path repo // v source_rel) in
   let* generated_sha256 = Tool_fs.sha256 Fpath.(Repo.path repo // v out_rel) in
@@ -701,7 +709,7 @@ let default_restore : restore_step =
 
 let publish_with repo ~(target : Target.t) ?dest_dir (m : manifest) ~commit_manifest ~commit_summary
     ~restore =
-  let dest_dir = match dest_dir with Some d -> d | None -> Repo.corpus_c repo target in
+  let dest_dir = match dest_dir with Some d -> d | None -> Corpus_paths.c repo target in
   (* After all compilation/classification has already succeeded, and
      idempotent on every later run - this is a brand-new corpus and
      Tool_fs.write never creates a missing parent directory. *)
@@ -745,9 +753,9 @@ let classify_c_core repo ~git ~runner ~gas_prober ~compiler ~(target : Target.t)
   let* files = discover_c_files repo in
   if files = [] then err Tool_error.Validate "modules/CompCert/test/c contains no .c files"
   else
-    let* corpus_work_root = Tool_workspace.corpus_work repo in
+    let* corpus_work_root = Tool_workspace.repo_relative_work repo ~name:".corpus-work" in
     let* () = Tool_workspace.recreate_root corpus_work_root in
-    let args = (Target.config target).Target.ccomp_args in
+    let args = Ccomp.args target in
     let* entries =
       List.fold_left
         (fun acc f ->
@@ -793,8 +801,7 @@ let classify_c_core repo ~git ~runner ~gas_prober ~compiler ~(target : Target.t)
          (List.length records) gas_ok
          (List.length records - gas_ok))
 
-let fixture_work_root repo =
-  Result.map Tool_workspace.read_path (Tool_workspace.fixture_work repo ~env:Sys.getenv_opt)
+let fixture_work_root repo = Ok (Ccomp.work_root repo)
 
 let classify_c repo (target : Target.t) =
   let step =
@@ -815,7 +822,7 @@ let regression_spec : suite_spec =
     suite_tag = "regression";
     test_subdir = "regression";
     extra_ccomp_args = [ "-fall" ];
-    dest = Repo.corpus_regression;
+    dest = Corpus_paths.regression;
   }
 
 let compression_spec : suite_spec =
@@ -823,7 +830,7 @@ let compression_spec : suite_spec =
     suite_tag = "compression";
     test_subdir = "compression";
     extra_ccomp_args = [];
-    dest = Repo.corpus_compression;
+    dest = Corpus_paths.compression;
   }
 
 let classify_suite_core repo ~git ~runner ~gas_prober ~compiler ~(spec : suite_spec)
@@ -834,9 +841,9 @@ let classify_suite_core repo ~git ~runner ~gas_prober ~compiler ~(spec : suite_s
     err Tool_error.Validate
       (Printf.sprintf "modules/CompCert/test/%s contains no .c files" spec.test_subdir)
   else
-    let* corpus_work_root = Tool_workspace.corpus_work repo in
+    let* corpus_work_root = Tool_workspace.repo_relative_work repo ~name:".corpus-work" in
     let* () = Tool_workspace.recreate_root corpus_work_root in
-    let args = (Target.config target).Target.ccomp_args @ spec.extra_ccomp_args in
+    let args = Ccomp.args target @ spec.extra_ccomp_args in
     let* prepared = prepare_all repo ~compiler ~args ~corpus_work_root ~spec ~target files in
     let* records = classify_prepared runner gas_prober prepared in
     let* ccomp_version = Ccomp.version compiler in
@@ -902,7 +909,7 @@ let classify_compression repo (target : Target.t) = classify_suite compression_s
 
 let check_with repo ~git (target : Target.t) =
   let target_s = Target.to_string target in
-  let dest_dir = Repo.corpus_c repo target in
+  let dest_dir = Corpus_paths.c repo target in
   let manifest_path = Fpath.(dest_dir / "manifest.txt") in
   let summary_path = Fpath.(dest_dir / "summary.txt") in
   let step =
@@ -997,7 +1004,7 @@ let check_with repo ~git (target : Target.t) =
 let published_targets repo =
   List.filter
     (fun target ->
-      Sys.file_exists (Fpath.to_string Fpath.(Repo.corpus_c repo target / "manifest.txt")))
+      Sys.file_exists (Fpath.to_string Fpath.(Corpus_paths.c repo target / "manifest.txt")))
     Target.all
 
 let check repo =

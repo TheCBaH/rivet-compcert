@@ -59,7 +59,8 @@ let normalize = function
             | None -> Rejected (snd (List.hd diags))))
   | Runner_failed msg -> Runner_failed msg
 
-let asm_exe repo = Fpath.(Repo.path repo / "asm" / "_build" / "default" / "tool" / "asm.exe")
+let asm_exe repo =
+  Fpath.(Repo.path repo / "_build" / "default" / "vendor" / "rivet" / "tool" / "asm.exe")
 
 (* No --dump flag: the default path all the way to plan_image (asm/tool/asm.ml),
    exactly the "actually assembling this corpus" check asm/docs/corpus.md
@@ -492,7 +493,7 @@ let default_restore : restore_step =
 
 let publish_with repo ~(target : Target.t) (m : manifest) ~commit_manifest ~commit_summary ~restore
     =
-  let dest_dir = Repo.corpus_c_assemble repo target in
+  let dest_dir = Corpus_paths.c_assemble repo target in
   let* () = Tool_fs.mkdir_p dest_dir in
   let manifest_path = Fpath.(dest_dir / "manifest.txt") in
   let summary_path = Fpath.(dest_dir / "summary.txt") in
@@ -529,9 +530,9 @@ let assemble_c_core repo ~git ~runner ~gas_prober ~compiler ~(target : Target.t)
   let* files = CC.discover_c_files repo in
   if files = [] then err Tool_error.Validate "modules/CompCert/test/c contains no .c files"
   else
-    let* corpus_work_root = Tool_workspace.corpus_work repo in
+    let* corpus_work_root = Tool_workspace.repo_relative_work repo ~name:".corpus-work" in
     let* () = Tool_workspace.recreate_root corpus_work_root in
-    let args = (Target.config target).Target.ccomp_args in
+    let args = Ccomp.args target in
     let* entries =
       List.fold_left
         (fun acc f ->
@@ -584,8 +585,7 @@ let assemble_c_core repo ~git ~runner ~gas_prober ~compiler ~(target : Target.t)
          (List.length records) gas_ok
          (List.length records - gas_ok))
 
-let fixture_work_root repo =
-  Result.map Tool_workspace.read_path (Tool_workspace.fixture_work repo ~env:Sys.getenv_opt)
+let fixture_work_root repo = Ok (Ccomp.work_root repo)
 
 let assemble_c repo (target : Target.t) =
   let step =
@@ -603,7 +603,7 @@ let assemble_c repo (target : Target.t) =
 
 let check_with repo ~git (target : Target.t) =
   let target_s = Target.to_string target in
-  let dest_dir = Repo.corpus_c_assemble repo target in
+  let dest_dir = Corpus_paths.c_assemble repo target in
   let manifest_path = Fpath.(dest_dir / "manifest.txt") in
   let summary_path = Fpath.(dest_dir / "summary.txt") in
   let step =
@@ -699,7 +699,7 @@ let check_with repo ~git (target : Target.t) =
 let published_targets repo =
   List.filter
     (fun target ->
-      Sys.file_exists (Fpath.to_string Fpath.(Repo.corpus_c_assemble repo target / "manifest.txt")))
+      Sys.file_exists (Fpath.to_string Fpath.(Corpus_paths.c_assemble repo target / "manifest.txt")))
     Target.all
 
 let check repo =
