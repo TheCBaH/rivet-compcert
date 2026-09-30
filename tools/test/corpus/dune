@@ -6,11 +6,16 @@
 (executable
  (name test_corpus_classify)
  (modes byte native)
- (libraries compcert_tools err_trace fpath unix))
+ (libraries
+  rivet_compcert_tools
+  rivet-tools.lib
+  rivet-tools.err_trace
+  fpath
+  unix))
 
 (rule
  (alias runtest)
- (deps ../../../tool/asm.exe)
+ (deps ../../../vendor/rivet/tool/asm.exe)
  (action
   (run ./test_corpus_classify.exe)))
 
@@ -20,11 +25,16 @@
 (executable
  (name test_corpus_assemble)
  (modes byte native)
- (libraries compcert_tools err_trace fpath unix))
+ (libraries
+  rivet_compcert_tools
+  rivet-tools.lib
+  rivet-tools.err_trace
+  fpath
+  unix))
 
 (rule
  (alias runtest)
- (deps ../../../tool/asm.exe)
+ (deps ../../../vendor/rivet/tool/asm.exe)
  (action
   (run ./test_corpus_assemble.exe)))
 
@@ -34,10 +44,15 @@
 (executable
  (name test_corpus_classify_gcc)
  (modes byte native)
- (libraries compcert_tools err_trace fpath unix))
+ (libraries
+  rivet_compcert_tools
+  rivet-tools.lib
+  rivet-tools.err_trace
+  fpath
+  unix))
 
 (rule
  (alias runtest)
- (deps ../../../tool/asm.exe)
+ (deps ../../../vendor/rivet/tool/asm.exe)
  (action
   (run ./test_corpus_classify_gcc.exe)))

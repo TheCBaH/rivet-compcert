@@ -255,14 +255,14 @@ val publish_with :
 (** {!publish}'s body, parameterized over its three fallible steps, so a test
     can fail each independently: committing the manifest, committing the
     summary, and restoring or removing the manifest when the summary commit
-    fails. [dest_dir] defaults to [Repo.corpus_c repo target] - {!publish}'s
+    fails. [dest_dir] defaults to [Corpus_paths.c repo target] - {!publish}'s
     own destination; {!publish_suite} overrides it with the [suite_spec]'s
     own. *)
 
 val publish_suite :
   suite_spec -> Repo.t -> target:Target.t -> manifest -> (unit, Tool_error.t) Err.t
 (** {!publish}, publishing to [spec.dest repo target] instead of
-    {!Repo.corpus_c}. *)
+    {!Corpus_paths.c}. *)
 
 (** {1 CLI entry points} *)
 

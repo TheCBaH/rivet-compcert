@@ -1,0 +1,10 @@
+version = 0.28.1
+profile = conventional
+margin = 100
+
+# Docstrings are left exactly as written. With parse-docstrings enabled,
+# ocamlformat reformats {[ ]} blocks as OCaml source, which rewrote Bigint's
+# pp_repr sample output ("+1" -> "1", "2^14" -> "2 ^ 14") into something the
+# function does not print. A doc comment that shows literal output has to stay
+# literal.
+parse-docstrings = false

@@ -1,0 +1,34 @@
+name: images
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  devcontainer:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux/amd64
+          - os: ubuntu-24.04-arm
+            platform: linux/arm64
+    permissions:
+      packages: write
+    env:
+      OCAML_VERSION: 4.14.3
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+    - name: image
+      id: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+        platform: ${{ matrix.platform }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: smoke test
+      run: ${{ steps.devcontainer.outputs.exec }} echo "hello world"
