@@ -58,6 +58,10 @@ let stack_16k = 16 * 1024
    does not have. *)
 let corpus_root = "fixtures/compcert-3.17"
 
+(* The author's files - C sources and expected-status.txt - live apart from what
+   the compiler generated. *)
+let sources_root = "fixtures/c"
+
 let read path =
   let ic = open_in_bin path in
   let n = in_channel_length ic in
@@ -73,7 +77,7 @@ let read path =
    expected-status.txt is a canonical decimal integer; this just trusts and
    parses it). *)
 let expected_value case =
-  let path = Filename.concat (Filename.concat corpus_root case) "expected-status.txt" in
+  let path = Filename.concat (Filename.concat sources_root case) "expected-status.txt" in
   let text = read path in
   match String.index_opt text '\n' with
   | Some i -> Int64.of_string (String.sub text 0 i)
@@ -82,7 +86,7 @@ let expected_value case =
 let cases () =
   Sys.readdir corpus_root |> Array.to_list
   |> List.filter (fun c ->
-      Sys.file_exists (Filename.concat (Filename.concat corpus_root c) "source"))
+      Sys.file_exists (Filename.concat (Filename.concat corpus_root c) "manifest.txt"))
   |> List.sort compare
 
 (* {1 Assembling the fixture at the profile's addresses}

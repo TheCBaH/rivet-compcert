@@ -7,9 +7,9 @@
  (libraries
   compcert_embed
   compcert_embed_aarch64
-  native_exec
-  image
-  foundation)
+  rivet.native_exec
+  rivet.image
+  rivet.foundation)
  (modules
   test_skeleton
   test_compile_to_asm
@@ -24,8 +24,8 @@
   (pps ppx_expect))
  (enabled_if
   (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{env:RIVET_COMPCERT_EMBED_AARCH64=false} true))))
 
 ; Compiles (and with --run, also runs) one C file given on the command line,
 ; entirely in memory. Exists so the no-file-I/O property can be checked from
@@ -34,11 +34,11 @@
 (executable
  (name embed_probe)
  (modules embed_probe)
- (libraries compcert_embed compcert_embed_aarch64 native_exec)
+ (libraries compcert_embed compcert_embed_aarch64 rivet.native_exec)
  (enabled_if
   (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{env:RIVET_COMPCERT_EMBED_AARCH64=false} true))))
 
 ; The E5 soak (make asm-compcert-embed-soak): thousands of compile+run cycles
 ; in one process, reporting memory growth. Too slow for a test rule.
@@ -46,8 +46,8 @@
 (executable
  (name soak)
  (modules soak)
- (libraries compcert_embed compcert_embed_aarch64 native_exec unix)
+ (libraries compcert_embed compcert_embed_aarch64 rivet.native_exec unix)
  (enabled_if
   (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{env:RIVET_COMPCERT_EMBED_AARCH64=false} true))))

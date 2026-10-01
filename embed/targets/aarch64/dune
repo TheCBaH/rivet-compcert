@@ -1,15 +1,15 @@
 ; Compcert_embed for aarch64: the shared shim (../../shim) over this target's
 ; CompCert embed variant (compcert_aarch64_embed, from
 ; ../../../../compcert-lib-aarch64-embed, resolved via OCAMLPATH). Enabled only
-; when that variant has been built, which ASM_COMPCERT_EMBED_AARCH64 says.
+; when that variant has been built, which RIVET_COMPCERT_EMBED_AARCH64 says.
 
 (copy_files# ../../shim/cc_compile.ml)
 
 (library
  (name compcert_embed_aarch64)
  (modes byte native)
- (libraries compcert_embed compcert_aarch64_embed aarch64 native_exec)
+ (libraries compcert_embed compcert_aarch64_embed rivet.aarch64 rivet.native_exec)
  (enabled_if
   (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_AARCH64=false} true))))
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{env:RIVET_COMPCERT_EMBED_AARCH64=false} true))))

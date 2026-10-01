@@ -1,0 +1,16 @@
+; The E5 rung over the CompCert fixtures: assembles the committed ccomp output
+; with rivet and runs it under QEMU. The CompCert-reading counterpart of
+; rivet's own exec over fixtures/gcc-*.
+
+(executable
+ (name exec)
+ (modules exec fixture_meta)
+ (modes exe)
+ (libraries
+  rivet.oracle
+  rivet.oracle_run
+  rivet.driver
+  rivet.image
+  rivet.target_intf
+  rivet.foundation
+  rivet.fmt))

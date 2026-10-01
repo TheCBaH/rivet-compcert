@@ -111,6 +111,17 @@ let corpus_classify_c_gcc_cmd (target : Target.t) =
             (Target.to_string target)))
     Cmdliner.Term.(const run $ Cli.common)
 
+let gas_frontier_cmd =
+  let run (err_trace, root) = (err_trace, Cli.with_repo root Gas_frontier_cmd.regen) in
+  Cmdliner.Cmd.group
+    (Cmdliner.Cmd.info "gas-frontier" ~doc:"GNU as outcomes for CompCert's own assembly")
+    [
+      Cmdliner.Cmd.v
+        (Cmdliner.Cmd.info "regen"
+           ~doc:"Re-record every frontier case in place; git diff is the check")
+        Cmdliner.Term.(const run $ Cli.common);
+    ]
+
 let corpus_cmd =
   Cmdliner.Cmd.group
     (Cmdliner.Cmd.info "corpus" ~doc:"CompCert's own test suites, classified against the parser")
@@ -134,5 +145,5 @@ let () =
   exit
     (Cli.main ~name:"rivet-compcert-tools"
        ~doc:"rivet's repository tooling with CompCert as the fixture compiler"
-       ~fixtures:("vendor/rivet/fixtures/c", "fixtures/compcert-3.17")
-       ~extra:[ corpus_cmd ] ~compiler:(Ccomp.compiler ~work_root) ())
+       ~fixtures:("fixtures/c", "fixtures/compcert-3.17")
+       ~preexisting:Ccomp.preexisting ~extra:[ corpus_cmd; gas_frontier_cmd ] ~compiler:(Ccomp.compiler ~work_root) ())
