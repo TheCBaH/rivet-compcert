@@ -121,6 +121,76 @@ $(CORPUS_CLASSIFY_GOALS): corpus-classify-%: ccomp-% tools-build asm-build
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) corpus classify-c-gcc-$*
 	git diff --exit-code -- fixtures/corpus
 
+# {1 The CompCert adapter and the embedded compiler}
+#
+# Both link a CompCert library built from the export tarball (make ccomp-<t>),
+# so they stay out of every default build behind the RIVET_COMPCERT_* gates.
+
+INSTALL_LIB = $(CURDIR)/_compcert/$(1)/install/lib
+EMBED_LIB   = $(CURDIR)/_compcert/$(1)/embed/_build/install/default/lib
+HELPERS_DIR := $(CURDIR)/vendor/rivet/.asm-helpers
+
+adapter-test: submodules ccomp-aarch64
+	OCAMLPATH=$(call INSTALL_LIB,aarch64):$$OCAMLPATH \
+	  COMPCERT_CONFIG=$(CURDIR)/_compcert/aarch64/install/share/compcert.ini \
+	  RIVET_COMPCERT_ADAPTER=true opam exec -- dune build @adapter/runtest
+
+# The environment that enables embed/ for one target: its variant on OCAMLPATH,
+# the shared gate and the target's own. COMPCERT_CONFIG is unset on purpose: the
+# variant must not need a compcert.ini.
+embed_env = env -u COMPCERT_CONFIG \
+  OCAMLPATH=$(call EMBED_LIB,$(1)):$$OCAMLPATH \
+  RIVET_COMPCERT_EMBED=true RIVET_COMPCERT_EMBED_$(shell echo $(1) | tr a-z A-Z)=true
+
+# The target's library and its Tier A report (C to assembly to image against the
+# committed fixtures), plus embed/test on aarch64.
+embed_suites = @embed/targets/$(1)/all @embed/targets/$(1)/runtest \
+  $(if $(filter aarch64,$(1)),@embed/test/runtest)
+
+EMBED_BUILD_GOALS := $(addprefix embed-build-,$(TARGETS))
+EMBED_TEST_GOALS  := $(addprefix embed-test-,$(TARGETS))
+EMBED_QEMU_GOALS  := $(addprefix embed-qemu-,$(TARGETS))
+EMBED_SOAK_GOALS  := $(addprefix embed-soak-,$(TARGETS))
+.PHONY: $(EMBED_BUILD_GOALS) $(EMBED_TEST_GOALS) $(EMBED_QEMU_GOALS) $(EMBED_SOAK_GOALS) \
+  embed-corpus-check helpers exec
+
+$(EMBED_BUILD_GOALS): embed-build-%: compcert-fetch
+	scripts/compcert-embed-sync.sh $*
+	cd _compcert/$*/embed && opam exec -- dune build @install
+
+$(EMBED_TEST_GOALS): embed-test-%: submodules embed-build-%
+	$(call embed_env,$*) opam exec -- dune build $(call embed_suites,$*)
+
+# The embedded corpus under each target's QEMU; every result must equal the
+# program's recorded expectation.
+$(EMBED_QEMU_GOALS): embed-qemu-%: helpers
+	$(call embed_env,$*) opam exec -- dune build embed/targets/$*/test/qemu_diff.exe
+	RIVET_HELPERS_DIR=$(HELPERS_DIR) \
+	  ./_build/default/embed/targets/$*/test/qemu_diff.exe embed/test/corpus
+
+# SOAK_CYCLES compile+assemble cycles over the corpus in one process, each
+# checked against its first compile.
+SOAK_CYCLES ?= 10000
+$(EMBED_SOAK_GOALS): embed-soak-%:
+	$(call embed_env,$*) opam exec -- dune build embed/targets/$*/test/tier_a_test.exe
+	./_build/default/embed/targets/$*/test/tier_a_test.exe --soak embed/test/corpus $(SOAK_CYCLES)
+
+# Every corpus program's expectation against gcc for the host and each cross
+# target. Needs the cross toolchains and QEMU.
+embed-corpus-check:
+	embed/test/corpus-expect.sh embed/test/corpus
+
+# {1 Execution}
+
+# The helpers are rivet's; its Makefile builds them.
+helpers: submodules
+	$(MAKE) -C vendor/rivet helpers
+
+# The assembler's own image of each CompCert fixture, run under QEMU.
+exec: helpers fixtures-check
+	opam exec -- dune build test/exec/exec.exe
+	RIVET_HELPERS_DIR=$(HELPERS_DIR) ./_build/default/test/exec/exec.exe
+
 .PHONY: default fmt-ocamlformat submodules build fmt fmt-check compcert-fetch compcert-bump \
   tools-build tools-test asm-build fixtures-check fixture-oracle fixtures-regen tools-oracle-diff \
-  corpus-check
+  corpus-check adapter-test
