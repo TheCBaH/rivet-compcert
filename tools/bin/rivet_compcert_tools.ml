@@ -146,4 +146,5 @@ let () =
     (Cli.main ~name:"rivet-compcert-tools"
        ~doc:"rivet's repository tooling with CompCert as the fixture compiler"
        ~fixtures:("fixtures/c", "fixtures/compcert-3.17")
-       ~preexisting:Ccomp.preexisting ~extra:[ corpus_cmd; gas_frontier_cmd ] ~compiler:(Ccomp.compiler ~work_root) ())
+       ~preexisting:Ccomp.preexisting ~extra:[ corpus_cmd; gas_frontier_cmd ]
+       ~compiler:(Ccomp.compiler ~work_root) ())

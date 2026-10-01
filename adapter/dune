@@ -18,7 +18,13 @@
  (name compcert_adapter)
  (modules adapter test_adapter)
  (modes byte native)
- (libraries compcert_aarch64 rivet.foundation rivet.asm_core rivet.aarch64 rivet.test_support rivet.fmt)
+ (libraries
+  compcert_aarch64
+  rivet.foundation
+  rivet.asm_core
+  rivet.aarch64
+  rivet.test_support
+  rivet.fmt)
  (inline_tests)
  (preprocess
   (pps ppx_expect))

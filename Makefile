@@ -112,7 +112,11 @@ $1
 # committed manifests; corpus-classify-<target> regenerates that target's
 # corpora from the pinned artifacts and requires them unchanged.
 
-corpus-check: tools-build
+# The manifests record each source's hash under its logical modules/CompCert name,
+# so even the check reads the sources through the corpus view (any target's
+# unpacked suite is the same).
+corpus-check: tools-build compcert-fetch
+	scripts/corpus-view.sh x86_64
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) corpus check
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) corpus check-assemble
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) corpus check-regression
@@ -149,12 +153,13 @@ adapter-test: submodules ccomp-aarch64
 # variant must not need a compcert.ini.
 embed_env = env -u COMPCERT_CONFIG \
   OCAMLPATH=$(call EMBED_LIB,$(1)):$$OCAMLPATH \
-  RIVET_COMPCERT_EMBED=true RIVET_COMPCERT_EMBED_$(shell echo $(1) | tr a-z A-Z)=true
+  RIVET_NATIVE_EXEC=true RIVET_COMPCERT_EMBED=true RIVET_COMPCERT_EMBED_$(shell echo $(1) | tr a-z A-Z)=true
 
 # The target's library and its Tier A report (C to assembly to image against the
-# committed fixtures), plus embed/test on aarch64.
+# committed fixtures), plus embed/test, which runs aarch64 code, on an aarch64 host.
+EMBED_HOST_ISA := $(shell uname -m | sed -e 's/^amd64$$/x86_64/' -e 's/^arm64$$/aarch64/')
 embed_suites = @embed/targets/$(1)/all @embed/targets/$(1)/runtest \
-  $(if $(filter aarch64,$(1)),@embed/test/runtest)
+  $(if $(filter $(EMBED_HOST_ISA),$(1)),$(if $(filter aarch64,$(1)),@embed/test/runtest))
 
 EMBED_BUILD_GOALS := $(addprefix embed-build-,$(TARGETS))
 EMBED_TEST_GOALS  := $(addprefix embed-test-,$(TARGETS))
@@ -165,7 +170,7 @@ EMBED_SOAK_GOALS  := $(addprefix embed-soak-,$(TARGETS))
 
 $(EMBED_BUILD_GOALS): embed-build-%: compcert-fetch
 	scripts/compcert-embed-sync.sh $*
-	cd _compcert/$*/embed && opam exec -- dune build @install
+	cd _compcert/$*/embed && opam exec -- dune build --root . @install
 
 $(EMBED_TEST_GOALS): embed-test-%: submodules embed-build-%
 	$(call embed_env,$*) opam exec -- dune build $(call embed_suites,$*)

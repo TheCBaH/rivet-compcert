@@ -51,7 +51,7 @@ let cases fixtures =
   |> List.filter (fun c -> Sys.file_exists (fixtures / c / target))
 
 let sources fixtures case =
-  let dir = fixtures / case / "source" in
+  let dir = Filename.dirname fixtures / "c" / case in
   Sys.readdir dir |> Array.to_list |> List.sort compare
   |> List.filter (fun f -> Filename.check_suffix f ".c")
   |> List.map (fun f -> (f, read (dir / f)))

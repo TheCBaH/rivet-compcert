@@ -28,7 +28,8 @@
 
 (rule
  (deps
-  (source_tree ../../../../fixtures/compcert-3.17))
+  (source_tree ../../../../fixtures/compcert-3.17)
+  (source_tree ../../../../fixtures/c))
  (action
   (with-stdout-to
    tier_a.output
