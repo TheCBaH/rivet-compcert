@@ -156,9 +156,10 @@ embed_env = env -u COMPCERT_CONFIG \
   RIVET_NATIVE_EXEC=true RIVET_COMPCERT_EMBED=true RIVET_COMPCERT_EMBED_$(shell echo $(1) | tr a-z A-Z)=true
 
 # The target's library and its Tier A report (C to assembly to image against the
-# committed fixtures), plus embed/test on aarch64.
+# committed fixtures), plus embed/test, which runs aarch64 code, on an aarch64 host.
+EMBED_HOST_ISA := $(shell uname -m | sed -e 's/^amd64$$/x86_64/' -e 's/^arm64$$/aarch64/')
 embed_suites = @embed/targets/$(1)/all @embed/targets/$(1)/runtest \
-  $(if $(filter aarch64,$(1)),@embed/test/runtest)
+  $(if $(filter $(EMBED_HOST_ISA),$(1)),$(if $(filter aarch64,$(1)),@embed/test/runtest))
 
 EMBED_BUILD_GOALS := $(addprefix embed-build-,$(TARGETS))
 EMBED_TEST_GOALS  := $(addprefix embed-test-,$(TARGETS))

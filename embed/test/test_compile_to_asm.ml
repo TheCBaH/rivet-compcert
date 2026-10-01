@@ -41,9 +41,7 @@ let flags case =
   |> Option.value ~default:"?"
 
 let compile case file =
-  let source =
-    read (Filename.concat fixture_sources (Filename.concat case file))
-  in
+  let source = read (Filename.concat fixture_sources (Filename.concat case file)) in
   Compcert_embed_aarch64.compile_to_asm ~name:file source
 
 let%expect_test "every fixture source compiles to its checked-in aarch64 assembly" =
