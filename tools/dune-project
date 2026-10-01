@@ -7,4 +7,5 @@
 
 (package
  (name rivet-compcert-tools)
+ (allow_empty)
  (synopsis "rivet-tools with CompCert as the fixture compiler, plus the corpus commands"))
