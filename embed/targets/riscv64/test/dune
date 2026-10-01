@@ -15,28 +15,29 @@
  (libraries
   compcert_embed
   compcert_embed_riscv64
-  native_exec
-  image
-  foundation
-  asm_oracle
-  asm_oracle_run
-  fmt)
+  rivet.native_exec
+  rivet.image
+  rivet.foundation
+  rivet.oracle
+  rivet.oracle_run
+  rivet.fmt)
  (enabled_if
   (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_RISCV64=false} true))))
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{env:RIVET_COMPCERT_EMBED_RISCV64=false} true))))
 
 (rule
  (deps
-  (source_tree ../../../../fixtures/compcert-3.17))
+  (source_tree ../../../../fixtures/compcert-3.17)
+  (source_tree ../../../../fixtures/c))
  (action
   (with-stdout-to
    tier_a.output
    (run %{exe:tier_a_test.exe} ../../../../fixtures/compcert-3.17)))
  (enabled_if
   (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_RISCV64=false} true))))
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{env:RIVET_COMPCERT_EMBED_RISCV64=false} true))))
 
 (rule
  (alias runtest)
@@ -44,5 +45,5 @@
   (diff tier_a.expected tier_a.output))
  (enabled_if
   (and
-   (= %{env:ASM_COMPCERT_EMBED=false} true)
-   (= %{env:ASM_COMPCERT_EMBED_RISCV64=false} true))))
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{env:RIVET_COMPCERT_EMBED_RISCV64=false} true))))

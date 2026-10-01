@@ -5,7 +5,7 @@
 ; compcert_aarch64 unconditionally would require compcert-lib-build-aarch64's
 ; Rocq-extracted output on OCAMLPATH for every `dune build @all`/`@runtest`,
 ; breaking make asm-build/asm-test/asm-ci's "neither Rocq nor a cross
-; toolchain" guarantee. ASM_COMPCERT_ADAPTER is set explicitly by the new
+; toolchain" guarantee. RIVET_COMPCERT_ADAPTER is set explicitly by the new
 ; asm-compcert-adapter-test Makefile target, never left to a default.
 ;
 ; compcert_aarch64 is resolved via OCAMLPATH (an installed dune package from
@@ -18,9 +18,15 @@
  (name compcert_adapter)
  (modules adapter test_adapter)
  (modes byte native)
- (libraries compcert_aarch64 foundation asm_core aarch64 test_coherence fmt)
+ (libraries
+  compcert_aarch64
+  rivet.foundation
+  rivet.asm_core
+  rivet.aarch64
+  rivet.test_support
+  rivet.fmt)
  (inline_tests)
  (preprocess
   (pps ppx_expect))
  (enabled_if
-  (= %{env:ASM_COMPCERT_ADAPTER=false} true)))
+  (= %{env:RIVET_COMPCERT_ADAPTER=false} true)))

@@ -119,3 +119,53 @@ let compiler ~work_root =
             compile_s ?env:(fixture_env target ~work_root) ~compiler ~cwd ~args:(args target)
               ~out_rel ~source_rel ~case ~target ());
   }
+
+(* CompCert's runtime tree is arch-named, not target-named: both RISC-V profiles
+   share runtime/riscV, and it is the MODEL_ define - not the directory - that
+   selects the 32- or 64-bit half of vararg.S. *)
+let runtime_dir = function Target.Riscv32 | Target.Riscv64 -> "riscV" | t -> Target.to_string t
+
+(* CompCert compiles its runtime with -DMODEL_/-DABI_/-DENDIANNESS_/-DSYS_, the
+   values its own configure picks per target. Without them FUNCTION is left
+   undefined and every file preprocesses to text no assembler can read. *)
+let runtime_defines = function
+  | Target.Arm -> [ "-DMODEL_armv7a"; "-DABI_hardfloat"; "-DENDIANNESS_little"; "-DSYS_linux" ]
+  | Target.X86_32 -> [ "-DMODEL_32sse2"; "-DABI_standard"; "-DENDIANNESS_little"; "-DSYS_linux" ]
+  | Target.X86_64 -> [ "-DMODEL_64"; "-DABI_standard"; "-DENDIANNESS_little"; "-DSYS_linux" ]
+  | Target.Aarch64 -> [ "-DMODEL_default"; "-DABI_standard"; "-DENDIANNESS_little"; "-DSYS_linux" ]
+  | Target.Riscv32 -> [ "-DMODEL_32"; "-DABI_standard"; "-DENDIANNESS_little"; "-DSYS_linux" ]
+  | Target.Riscv64 -> [ "-DMODEL_64"; "-DABI_standard"; "-DENDIANNESS_little"; "-DSYS_linux" ]
+
+let logical_runtime = "modules/CompCert/runtime/"
+
+(* The runtime sources an origin names, inside the export tarball: the logical
+   name stays modules/CompCert/runtime/<dir>/<file>, as committed in the
+   manifests, and maps to _compcert/<target>/export/runtime. *)
+let runtime_source repo ~target origin =
+  let has_prefix dir =
+    let p = logical_runtime ^ dir ^ "/" in
+    String.length origin > String.length p && String.sub origin 0 (String.length p) = p
+  in
+  let expected = logical_runtime ^ runtime_dir target ^ "/" in
+  if not (has_prefix (Target.to_string target) || has_prefix (runtime_dir target)) then
+    Err.fail ~pos:__POS__ ~pp_error:Tool_error.pp
+      (Tool_error.v Tool_error.Validate
+         (Printf.sprintf "origin %S is not under %s for target %s" origin expected
+            (Target.to_string target)))
+  else
+    let rest = Filename.concat (runtime_dir target) (Filename.basename origin) in
+    Ok Fpath.(work_root repo / Target.to_string target / "export" / "runtime" // v rest)
+
+let preexisting repo ~target ~origin ~out =
+  let ( let* ) = Result.bind in
+  let* src = runtime_source repo ~target origin in
+  let tools = Gnu_tools.for_target target in
+  let* ok =
+    Gnu_tools.preprocess tools ~src ~out ~defines:(runtime_defines target)
+      ~include_dir:(Fpath.parent src)
+  in
+  if ok then Ok ()
+  else
+    Err.fail ~pos:__POS__ ~pp_error:Tool_error.pp
+      (Tool_error.v Tool_error.Spawn
+         (Printf.sprintf "preprocessing %s for %s failed" origin (Target.to_string target)))

@@ -3,3 +3,4 @@ _compcert/
 .fixture-work/
 .corpus-work/
 .asm-helpers/
+/modules/

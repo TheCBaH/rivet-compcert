@@ -13,7 +13,14 @@
    single global function, not something inferred generically from the
    program value. *)
 
-module CC = Compcert_aarch64
+(* The export is an unwrapped library, so CompCert's modules are top-level. *)
+module CC = struct
+  module AST = AST
+  module Asm = Asm
+  module BinNums = BinNums
+  module Camlcoq = Camlcoq
+end
+
 module CC_asm = CC.Asm
 open Asm_core
 

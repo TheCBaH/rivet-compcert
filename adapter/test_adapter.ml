@@ -5,7 +5,17 @@
    and against the text (parse/simplify) path - the "fourth producer" against
    the same assertions that file already makes. *)
 
-module CC = Compcert_aarch64
+(* The export is an unwrapped library, so CompCert's modules are top-level. *)
+module CC = struct
+  module Asm = Asm
+  module Asmexpand = Asmexpand
+  module Camlcoq = Camlcoq
+  module Compiler = Compiler
+  module Driveraux = Driveraux
+  module Errors = Errors
+  module Frontend = Frontend
+end
+
 module P = Driver.Registry.Aarch64
 module T = Aarch64
 open Asm_core

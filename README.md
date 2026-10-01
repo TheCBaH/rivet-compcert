@@ -9,7 +9,7 @@ driver.
 ## Data flow
 
 ```
-TheCBaH/devcontainer.CompCert  --release v3.17-1-->  compcert.lock  --make compcert-fetch-->  _compcert/<target>/
+TheCBaH/devcontainer.CompCert  --release v3.17-2-->  compcert.lock  --make compcert-fetch-->  _compcert/<target>/
 TheCBaH/rivet                  --submodule------->   vendor/rivet
 ```
 
@@ -28,9 +28,19 @@ TheCBaH/rivet                  --submodule------->   vendor/rivet
 ```sh
 make compcert-fetch          # download and verify the pinned artifacts
 make ccomp-aarch64           # build ccomp from the aarch64 export tarball
-make test                    # build and run the tests
-make compcert-bump TAG=v3.17-2
+make build tools-test        # build everything, run the tool and corpus tests
+make fixtures-check corpus-check   # committed evidence, no toolchain needed
+make fixture-oracle-aarch64  # regenerate one target's fixtures, GNU oracle, QEMU
+make embed-test-aarch64      # the embedded compiler for one target
+make adapter-test            # the aarch64 adapter
+make gas-frontier-diff       # GNU as outcome for CompCert's own assembly
+make compcert-bump TAG=v3.17-3   # repin to another extractor release
 ```
+
+Every regeneration goal ends in `git diff`: the committed bytes must reproduce
+from the pinned artifacts. CI (`.github/workflows/ci.yml`) runs `check`,
+`oracle-diff`, `fixture-oracle` and `compcert-embed` per target,
+`compcert-embed-corpus` and `adapter`; `corpus-regen` is a manual dispatch.
 
 `docs/fixture-oracle.md` and `docs/corpus.md` describe the evidence chain and
 the corpora.

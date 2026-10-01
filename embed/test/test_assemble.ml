@@ -5,11 +5,12 @@
    the bytes GNU ld produced. *)
 
 let fixtures = "../../fixtures/compcert-3.17"
+let fixture_sources = "../../fixtures/c"
 let read path = In_channel.with_open_bin path In_channel.input_all
 let ( / ) = Filename.concat
 
 let sources case =
-  let dir = fixtures / case / "source" in
+  let dir = fixture_sources / case in
   Sys.readdir dir |> Array.to_list |> List.sort compare
   |> List.filter (fun f -> Filename.check_suffix f ".c")
   |> List.map (fun f -> (Filename.chop_suffix f ".c", read (dir / f)))

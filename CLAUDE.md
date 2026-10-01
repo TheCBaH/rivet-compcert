@@ -13,5 +13,5 @@ Integration of CompCert with rivet. Boundaries that must hold:
 - Anything CompCert-derived stays under `fixtures/`, `embed/`, `adapter/` and
   `_compcert/`, covered by `LICENSE.CompCert`.
 
-`make build`, `make test`, `make compcert-fetch` are the entry points; CI runs
-the same goals.
+`make build`, `make tools-test`, `make compcert-fetch` are the entry points; CI
+runs the same goals (see the README for the per-target ones).

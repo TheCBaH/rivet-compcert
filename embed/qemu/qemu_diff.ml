@@ -14,7 +14,7 @@
    program's recorded expectation.
 
    Usage: qemu_diff.exe <corpus-dir>. Needs the exec-ABI helpers
-   (ASM_HELPERS_DIR, built by make asm-helpers) and the target's QEMU. *)
+   (RIVET_HELPERS_DIR, built by make helpers) and the target's QEMU. *)
 
 open Asm_oracle
 open Asm_oracle_run
