@@ -149,7 +149,7 @@ adapter-test: submodules ccomp-aarch64
 # variant must not need a compcert.ini.
 embed_env = env -u COMPCERT_CONFIG \
   OCAMLPATH=$(call EMBED_LIB,$(1)):$$OCAMLPATH \
-  RIVET_COMPCERT_EMBED=true RIVET_COMPCERT_EMBED_$(shell echo $(1) | tr a-z A-Z)=true
+  RIVET_NATIVE_EXEC=true RIVET_COMPCERT_EMBED=true RIVET_COMPCERT_EMBED_$(shell echo $(1) | tr a-z A-Z)=true
 
 # The target's library and its Tier A report (C to assembly to image against the
 # committed fixtures), plus embed/test on aarch64.

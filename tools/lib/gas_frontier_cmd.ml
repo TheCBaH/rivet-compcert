@@ -1,5 +1,8 @@
 let ( let* ) = Result.bind
-let err detail = Err.fail ~pos:__POS__ ~pp_error:Tool_error.pp (Tool_error.v Tool_error.Validate detail)
+
+let err detail =
+  Err.fail ~pos:__POS__ ~pp_error:Tool_error.pp (Tool_error.v Tool_error.Validate detail)
+
 let fixture_origin = "asm/fixtures/compcert-3.17/return42/"
 
 let record_gas tools ~dir ~src =
@@ -51,7 +54,8 @@ let regen repo =
           let* entries = Tool_fs.files ~root:tdir ~exclude:(fun _ -> false) in
           let cases =
             List.filter_map
-              (fun rel -> if Filename.basename rel = "origin.txt" then Some (Filename.dirname rel) else None)
+              (fun rel ->
+                if Filename.basename rel = "origin.txt" then Some (Filename.dirname rel) else None)
               entries
             |> List.sort String.compare
           in
