@@ -4,6 +4,7 @@
    process did the compiling. *)
 
 let fixtures = "../../fixtures/compcert-3.17"
+let fixture_sources = "../../fixtures/c"
 let read path = In_channel.with_open_bin path In_channel.input_all
 
 let without_command_line text =
@@ -14,7 +15,7 @@ let without_command_line text =
 let sources () =
   Sys.readdir fixtures |> Array.to_list |> List.sort compare
   |> List.concat_map (fun case ->
-      let dir = Filename.concat (Filename.concat fixtures case) "source" in
+      let dir = Filename.concat fixture_sources case in
       (* Not every case has an aarch64 build: i64_divmod is 32-bit only. *)
       if
         Sys.file_exists dir
@@ -41,7 +42,7 @@ let flags case =
 
 let compile case file =
   let source =
-    read (Filename.concat fixtures (Filename.concat case (Filename.concat "source" file)))
+    read (Filename.concat fixture_sources (Filename.concat case file))
   in
   Compcert_embed_aarch64.compile_to_asm ~name:file source
 

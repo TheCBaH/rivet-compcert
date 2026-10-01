@@ -19,6 +19,7 @@
  (inline_tests
   (deps
    (source_tree ../../fixtures/compcert-3.17)
+   (source_tree ../../fixtures/c)
    (source_tree corpus)))
  (preprocess
   (pps ppx_expect))

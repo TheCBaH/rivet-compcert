@@ -142,9 +142,12 @@ let logical_runtime = "modules/CompCert/runtime/"
    name stays modules/CompCert/runtime/<dir>/<file>, as committed in the
    manifests, and maps to _compcert/<target>/export/runtime. *)
 let runtime_source repo ~target origin =
-  let expected = logical_runtime ^ Target.to_string target ^ "/" in
-  let n = String.length expected in
-  if not (String.length origin > n && String.sub origin 0 n = expected) then
+  let has_prefix dir =
+    let p = logical_runtime ^ dir ^ "/" in
+    String.length origin > String.length p && String.sub origin 0 (String.length p) = p
+  in
+  let expected = logical_runtime ^ runtime_dir target ^ "/" in
+  if not (has_prefix (Target.to_string target) || has_prefix (runtime_dir target)) then
     Err.fail ~pos:__POS__ ~pp_error:Tool_error.pp
       (Tool_error.v Tool_error.Validate
          (Printf.sprintf "origin %S is not under %s for target %s" origin expected
