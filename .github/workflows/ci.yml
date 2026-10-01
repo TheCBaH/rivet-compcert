@@ -1,0 +1,215 @@
+name: ci
+
+# CompCert-derived evidence for rivet: ccomp's output for rivet's fixtures, the
+# GNU/QEMU oracle over it, CompCert's own test suites classified against rivet,
+# the adapter and the embedded compiler. CompCert itself comes from the
+# extractor's release artifacts pinned in compcert.lock, never from source, so
+# no job here has Rocq.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  OCAML_VERSION: 5.5.0
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      id: devcontainer
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+    - name: setup
+      run: |
+        echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+    - name: fmt-check
+      run: |
+        ${{ env.EXEC }} make fmt-check
+    - name: build
+      run: |
+        ${{ env.EXEC }} make build
+    - name: fixtures
+      run: |
+        ${{ env.EXEC }} make fixtures-check
+    - name: corpora
+      run: |
+        ${{ env.EXEC }} make corpus-check
+    - name: tool tests
+      run: |
+        ${{ env.EXEC }} make tools-test
+
+  # The committed ccomp output through the GNU oracle, then rivet's own image of
+  # each fixture under QEMU. Neither needs ccomp.
+  oracle-diff:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      id: devcontainer
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+    - name: setup
+      run: |
+        echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+    - name: oracle artifacts reproduce byte-for-byte
+      run: |
+        ${{ env.EXEC }} make tools-oracle-diff
+    - name: execution
+      run: |
+        ${{ env.EXEC }} make exec
+
+  # One job per target so a failure names the leg whose evidence broke. The make
+  # goal is the single definition of the ordered flow: pinned ccomp, exact
+  # regeneration, GNU oracle, QEMU execution, manifest completeness, clean tree.
+  fixture-oracle:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_32, x86_64, arm, aarch64, riscv32, riscv64]
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: ccomp cache
+      uses: actions/cache@v5
+      with:
+        path: _compcert
+        key: compcert-${{ matrix.target }}-${{ hashFiles('compcert.lock') }}
+    - name: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      id: devcontainer
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+    - name: setup
+      run: |
+        echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+    - name: fixture oracle
+      run: |
+        ${{ env.EXEC }} make fixture-oracle-${{ matrix.target }}
+    - name: failure evidence
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: fixture-oracle-${{ matrix.target }}-failure
+        path: |
+          fixtures/compcert-3.17/*/${{ matrix.target }}/
+
+  # In-process CompCert + assembler for each target: the variant sync, the Tier A
+  # report, the corpus under QEMU, and a compile-only soak. Where the runner's
+  # own ISA is the target's, the same goals also run natively.
+  compcert-embed:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - { os: ubuntu-24.04, platform: linux/amd64, target: x86_32 }
+        - { os: ubuntu-24.04, platform: linux/amd64, target: x86_64 }
+        - { os: ubuntu-24.04, platform: linux/amd64, target: arm }
+        - { os: ubuntu-24.04, platform: linux/amd64, target: aarch64 }
+        - { os: ubuntu-24.04, platform: linux/amd64, target: riscv32 }
+        - { os: ubuntu-24.04, platform: linux/amd64, target: riscv64 }
+        - { os: ubuntu-24.04-arm, platform: linux/arm64, target: aarch64 }
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      id: devcontainer
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+        platform: ${{ matrix.platform }}
+    - name: setup
+      run: |
+        echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+    - name: sync and Tier A
+      run: |
+        ${{ env.EXEC }} make embed-test-${{ matrix.target }}
+    - name: corpus under QEMU
+      run: |
+        ${{ env.EXEC }} make embed-qemu-${{ matrix.target }}
+    - name: compile-only soak
+      run: |
+        ${{ env.EXEC }} make embed-soak-${{ matrix.target }} SOAK_CYCLES=2000
+
+  # The embedded corpus's recorded expectations against gcc for the host and
+  # every cross target under QEMU.
+  compcert-embed-corpus:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      id: devcontainer
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+    - name: setup
+      run: |
+        echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+    - name: expectations against gcc
+      run: |
+        ${{ env.EXEC }} make embed-corpus-check
+
+  adapter:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      id: devcontainer
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+    - name: setup
+      run: |
+        echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+    - name: adapter tests
+      run: |
+        ${{ env.EXEC }} make adapter-test
+
+  # Manual: regenerate each target's corpora from the pinned artifacts and
+  # require them unchanged.
+  corpus-regen:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_32, x86_64, arm, aarch64, riscv32, riscv64]
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: devcontainer
+      uses: TheCBaH/devcontainer-action/devcontainer@v1
+      id: devcontainer
+      with:
+        variant: ${{ env.OCAML_VERSION }}
+    - name: setup
+      run: |
+        echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+    - name: classify
+      run: |
+        ${{ env.EXEC }} make corpus-classify-${{ matrix.target }}
