@@ -97,7 +97,16 @@ tools-oracle-diff: tools-build
 	  git status --porcelain -- fixtures/compcert-3.17; \
 	  echo "oracle artifacts changed - review the diff above" >&2; exit 1; }
 
-# {1 The corpora}
+# The GNU as outcome for CompCert's own assembly (fixtures/gas-frontier), re-recorded
+# from the committed fixtures and the pinned export's runtime sources. It must
+# leave the tree unchanged.
+gas-frontier-diff: compcert-fetch tools-build
+	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) gas-frontier regen
+	@test -z "$$(git status --porcelain -- fixtures/gas-frontier)" || { \
+	  git status --porcelain -- fixtures/gas-frontier; \
+	  echo "gas-frontier changed - review the diff above" >&2; exit 1; }
+
+$1
 #
 # CompCert's own test suites, classified against rivet. The *-check goals read
 # committed manifests; corpus-classify-<target> regenerates that target's
@@ -193,4 +202,4 @@ exec: helpers fixtures-check
 
 .PHONY: default fmt-ocamlformat submodules build fmt fmt-check compcert-fetch compcert-bump \
   tools-build tools-test asm-build fixtures-check fixture-oracle fixtures-regen tools-oracle-diff \
-  corpus-check adapter-test
+  corpus-check adapter-test gas-frontier-diff

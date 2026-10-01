@@ -66,6 +66,9 @@ jobs:
     - name: oracle artifacts reproduce byte-for-byte
       run: |
         ${{ env.EXEC }} make tools-oracle-diff
+    - name: gas frontier reproduces
+      run: |
+        ${{ env.EXEC }} make gas-frontier-diff
     - name: execution
       run: |
         ${{ env.EXEC }} make exec
