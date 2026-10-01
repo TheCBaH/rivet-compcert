@@ -67,8 +67,11 @@ opam-version: "2.0"
 synopsis: "CompCert $target, patched to compile from and print into memory"
 OPAM
 # Same stanza as the pristine library's src/dune, under the variant's name.
+# The export is unwrapped for ccomp's own main; the embed code addresses the
+# library through its wrapper module, as it always has.
 sed -e "s/compcert_$target\b/compcert_${target}_embed/g" -e '/^;/d' \
   "$pristine/src/dune" > "$variant/src/dune"
+sed -i '/^ *(wrapped false)$/d' "$variant/src/dune"
 grep -q "(name compcert_${target}_embed)" "$variant/src/dune" ||
   Fatal "could not derive $variant/src/dune from $pristine/src/dune"
 # Only some pristine libraries are installable; the variant always is, since
