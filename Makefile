@@ -112,7 +112,11 @@ $1
 # committed manifests; corpus-classify-<target> regenerates that target's
 # corpora from the pinned artifacts and requires them unchanged.
 
-corpus-check: tools-build
+# The manifests record each source's hash under its logical modules/CompCert name,
+# so even the check reads the sources through the corpus view (any target's
+# unpacked suite is the same).
+corpus-check: tools-build compcert-fetch
+	scripts/corpus-view.sh x86_64
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) corpus check
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) corpus check-assemble
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) corpus check-regression
