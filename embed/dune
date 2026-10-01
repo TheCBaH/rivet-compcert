@@ -10,6 +10,13 @@
 (library
  (name compcert_embed)
  (modes byte native)
- (libraries rivet.foundation rivet.asm_core rivet.image rivet.driver rivet.target_intf rivet.native_exec rivet.fmt)
+ (libraries
+  rivet.foundation
+  rivet.asm_core
+  rivet.image
+  rivet.driver
+  rivet.target_intf
+  rivet.native_exec
+  rivet.fmt)
  (enabled_if
   (= %{env:RIVET_COMPCERT_EMBED=false} true)))

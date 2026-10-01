@@ -8,7 +8,11 @@
 (library
  (name compcert_embed_aarch64)
  (modes byte native)
- (libraries compcert_embed compcert_aarch64_embed rivet.aarch64 rivet.native_exec)
+ (libraries
+  compcert_embed
+  compcert_aarch64_embed
+  rivet.aarch64
+  rivet.native_exec)
  (enabled_if
   (and
    (= %{env:RIVET_COMPCERT_EMBED=false} true)
