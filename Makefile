@@ -165,7 +165,7 @@ EMBED_SOAK_GOALS  := $(addprefix embed-soak-,$(TARGETS))
 
 $(EMBED_BUILD_GOALS): embed-build-%: compcert-fetch
 	scripts/compcert-embed-sync.sh $*
-	cd _compcert/$*/embed && opam exec -- dune build @install
+	cd _compcert/$*/embed && opam exec -- dune build --root . @install
 
 $(EMBED_TEST_GOALS): embed-test-%: submodules embed-build-%
 	$(call embed_env,$*) opam exec -- dune build $(call embed_suites,$*)
