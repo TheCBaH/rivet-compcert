@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* In-process CompCert: C source text in, assembly text, a laid-out image, or
    a native run out, with no file read or written on the way.
 

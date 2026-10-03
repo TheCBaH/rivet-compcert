@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 module CC = Corpus_classify_cmd
 
 let ( let* ) = Result.bind

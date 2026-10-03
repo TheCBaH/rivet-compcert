@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* CompCert Asm.program -> Normalized_ast.module_, scoped to exactly the six
    instruction forms the aarch64 return42/asm_test_entry fixture needs. Not a
    general N-instruction, N-global program converter - widening past this

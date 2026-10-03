@@ -1,7 +1,7 @@
 /* expect: 42 */
 /* Seeded from the direct_call fixture (asm/fixtures/compcert-3.17/direct_call), with an entry wrapper. */
 
-/* M2's direct-call slice (.ai/asm_plan.md §12, Milestone 2).
+/* The direct-call slice.
 
    The [+ 2] is load-bearing. Written as `return asm_test_callee(20);` this
    becomes a tail branch on x86-64, ARM and AArch64, and the fixture would

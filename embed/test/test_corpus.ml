@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* The embedded corpus: self-contained C programs, each run natively end to
    end - compiled, assembled, mapped and called in this process - and
    checked against the result recorded on its first line. *)

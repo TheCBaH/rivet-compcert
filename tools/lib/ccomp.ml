@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 let first_line s = match String.index_opt s '\n' with None -> s | Some i -> String.sub s 0 i
 let work_root repo = Fpath.(Repo.path repo / "_compcert")
 

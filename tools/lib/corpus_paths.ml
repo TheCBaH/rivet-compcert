@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 let dir repo suite target =
   Fpath.(Repo.path repo / "fixtures" / "corpus" / suite / Target.to_string target)
 

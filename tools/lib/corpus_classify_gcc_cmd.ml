@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* Corpus_classify_gcc_cmd - classify-c-gcc, a second, independent-compiler
    sibling of Corpus_classify_cmd's classify-c: the same modules/CompCert/
    test/c/*.c corpus, compiled with the system cross gcc (Gcc) instead of

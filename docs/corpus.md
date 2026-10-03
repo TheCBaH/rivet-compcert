@@ -1,6 +1,6 @@
 # The `corpus` command: classifying CompCert's own test suites
 
-M5 ("Expand CompCert coverage in parallel", `.ai/asm_plan.md`) grows the
+Corpus expansion grows the
 fixture corpus beyond the 10 hand-picked cases under
 `asm/fixtures/compcert-3.17/` by running CompCert's own test suites through
 this project's parser and recording, per file, whether it was accepted.
@@ -117,7 +117,7 @@ B6/B7/BE/BF` family plus `movslq`'s own `0x63`), `setl`/`sete`/etc.
 operand shapes CompCert's own codegen needs (register-register, the
 mem-source `Alu_r_rm` direction, and the group-1 immediate form), the
 general group-2 shift/rotate forms (`rorl $27,%eax`, `sall $16,%eax`,
-`sall %cl,%eax` - the `0xC1 ib`/`0xD3` encodings beyond the M4-era
+`sall %cl,%eax` - the `0xC1 ib`/`0xD3` encodings beyond the earlier
 shift-by-1-only `0xD1`), TEST's own immediate form (`0xF7 /0 id`), the
 two-operand `imul $imm,reg` form (`0x69`/`0x6B`), 8-bit register-to-register
 and register-to-memory `mov` (opcode `0x88`/`0x8A` - a genuinely different
@@ -141,7 +141,7 @@ resolution: every one of the 24 files references at least one libc function
 (`malloc`, `atoi`, `printf`, `cos`, `memcmp`, ...) or a symbol defined in a
 CompCert test-suite file this corpus does not also compile (`i`, `p`, `data`,
 `arch_big_endian`), and `plan_image` correctly reports each as
-`image.undefined` - libc linking is `.ai/asm_plan.md` §2.2's explicit
+`image.undefined` - libc linking is an explicit
 non-goal, and multi-file linking of the *rest* of the suite (not just
 `test/c/`) is unstarted. `corpus assemble-c-<target>` is the reproducible,
 committed-manifest form of this check (`asm.exe`'s default path, no
@@ -659,7 +659,7 @@ silently deleted.
 
 ## Capability ladder: turning the manifests into scope decisions
 
-M5's ordered work starts by grouping every recurring `assemble-c`/
+The ordered work starts by grouping every recurring `assemble-c`/
 `classify-regression`/`classify-compression` rejection reason (the tables and
 `summary.txt` files above) into either a documented scope exclusion or a real
 gap with a next-smallest fixture, rather than pursuing one suite or one
@@ -681,8 +681,7 @@ gaps:
   the constraint's own purpose, not a gap.
 - `extasm.c` `outcome:rejected` (`error[parse]: unexpected token`) on the
   three targets where it *does* compile (x86_32, arm, riscv32): real GNU
-  extended-asm operand syntax this project does not parse. `.ai/asm_plan.md`
-  §10 stages inline-assembly support as incremental and later; this is that
+  extended-asm operand syntax this project does not parse. Inline-assembly support is staged as incremental and later; this is that
   gap's first corpus evidence, deliberately deferred until inline-asm work
   starts rather than special-cased here.
 - `dollars.c` `outcome:rejected` (`error[parse]: unexpected token`) on x86_32/
@@ -773,7 +772,7 @@ gaps:
    Regenerating unmasked one further, unrelated gap in the same
    `siphash24.c`: `adcl %ecx, %edx`, ADC's own rm-written-from-reg direction
    (`0x11 /r`). This direction already existed for `Add`/`Xor`/`Sub`/etc
-   (M4/M5), and even ADC's own mirror direction (`adcl mem, %reg`, `0x13`)
+   (earlier work), and even ADC's own mirror direction (`adcl mem, %reg`, `0x13`)
    was already present - only the `0x11` table entry and its reg-reg
    lowering case were missing, an oversight rather than a new instruction
    family. Byte-checked against real i686-linux-gnu-as: `adcl %ecx, %edx`
@@ -783,7 +782,7 @@ gaps:
    oracle, not just this corpus's own pipeline. Regenerating x86_32's
    `assemble-c` manifest with both fixes reaches 24 blocked/0 rejected -
    every file in this corpus now clears parsing through image binding on
-   x86_32, with only external-symbol linking left (M6+ scope).
+   x86_32, with only external-symbol linking left (later scope).
 
    Regenerating also surfaced `xorpd __negd_mask, %xmmN` (ccomp's own
    sign-flip idiom for float negation/`fabs`) as the corpus's new
@@ -887,7 +886,7 @@ gaps:
    `asm/test/targets/test_targets.ml`'s `push {reglist}` tests. Re-running
    the wider `gas_frontier.t` runtime-helper corpus after this fix (not one
    of the four `classify-regression`/`classify-compression` suites, but the
-   same frontier check M4 uses) surfaced a sibling, still-open gap the
+   same frontier check the earlier work uses) surfaced a sibling, still-open gap the
    register-list parse error had been masking: `pop {reglist}` (used by
    `i64_udivmod`/`i64_umod`'s epilogue) is a genuinely different encoding
    (LDM-class, not STM) and is not implemented here (since fully closed - see
@@ -996,7 +995,7 @@ gaps:
    arm's `assemble-c` manifest with this fix reaches **24 blocked/0
    rejected**: every file in this corpus now clears parsing through image
    binding on ARM too, matching x86_32/x86_64's already-fully-closed state,
-   with only external-symbol linking (M6+ scope) left. `asm-fixture-oracle-arm`
+   with only external-symbol linking (later scope) left. `asm-fixture-oracle-arm`
    (the hand-picked byte/QEMU corpus) stayed green throughout, confirming no
    drift in any previously-verified encoding.
 4. **AArch64.** `classify-regression`'s `uxtx #0` (`add x0, x0, x16, uxtx #0`)
@@ -1435,7 +1434,7 @@ above for what is fixed and what remains.
   -> `e2723020`, `orrs r6, r2, r3` -> `e1926003`, `sbc r1, r1, r4` ->
   `e0c11004`. Fixing these closes `i64_dtos`/`i64_dtou`/`i64_sar` outright;
   `i64_sdiv`/`i64_smod` progress to the already-understood, out-of-scope
-  `image.undefined __compcert_i64_udivmod` multi-file-linking gap (M6+
+  `image.undefined __compcert_i64_udivmod` multi-file-linking gap (later
   scope, not an assembler one - the same gap `stmia`/`ldmia`/`pop` closing
   once already exposed for `i64_udiv`/`i64_umod`, above); `i64_udivmod`
   progresses from `orrs` to a new, separate gap (`it`, Thumb's if-then block

@@ -1,4 +1,4 @@
-(** M5 corpus growth: classify-c-gcc, a second, independent-compiler sibling of
+(** Corpus growth: classify-c-gcc, a second, independent-compiler sibling of
     {!Corpus_classify_cmd}'s classify-c.
 
     Same [modules/CompCert/test/c/*.c] corpus, same parse-level

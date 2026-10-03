@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* Usage: embed_probe [--run] <file.c> [<repeat>]. The source is read up
    front, before any compile starts, so that a trace of the compile itself has
    no reason to touch the file system. Without --run the assembly is printed;

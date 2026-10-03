@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* Corpus_classify_cmd - hermetic: fakes/stubs only, no process and no cross
    toolchain, except the one integration test at the bottom which needs the
    real, already-built asm.exe. *)

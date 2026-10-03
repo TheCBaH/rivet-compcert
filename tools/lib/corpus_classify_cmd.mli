@@ -1,4 +1,4 @@
-(** M5 corpus growth: classify CompCert's own [test/c/] suite against this
+(** Corpus growth: classify CompCert's own [test/c/] suite against this
     project's parser, one target at a time.
 
     Scope is deliberately narrow: one corpus, parse-level classification only

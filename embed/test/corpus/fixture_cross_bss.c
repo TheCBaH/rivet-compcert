@@ -1,7 +1,7 @@
 /* expect: 22 */
 /* Seeded from the cross_bss fixture (asm/fixtures/compcert-3.17/cross_bss): its two sources merged into one translation unit, with an entry wrapper. */
 
-/* The other half of M3's cross-file .bss/.comm slice - see caller.c.
+/* The other half of the cross-file .bss/.comm slice - see caller.c.
 
    Deliberately uninitialized: a tentative definition of a non-static
    global is exactly the construct CompCert routes to `.comm` (under its
@@ -15,8 +15,7 @@
    resolver) instead. */
 int shared_value;
 
-/* M3's cross-file .bss/.comm slice (.ai/asm_plan.md Milestone 3, follow-up
-   2). shared_value is declared but never
+/* The cross-file .bss/.comm slice. shared_value is declared but never
    defined in this translation unit - the defining half lives in data.c, a
    separate input to the same link, exactly as in cross_data. The
    difference from cross_data is entirely in data.c: there the global is

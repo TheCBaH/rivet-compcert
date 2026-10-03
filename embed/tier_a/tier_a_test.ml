@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* The Tier A checks for one target: C source in memory -> assembly text ->
    laid-out image, against the committed CompCert fixtures. Every
    compcert_embed/targets/<target>/test copies this file and supplies

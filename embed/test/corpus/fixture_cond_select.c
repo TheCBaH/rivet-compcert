@@ -1,11 +1,11 @@
 /* expect: 42 */
 /* Seeded from the cond_select fixture (asm/fixtures/compcert-3.17/cond_select), with an entry wrapper. */
 
-/* M2's conditional slice (.ai/asm_plan.md §12, Milestone 2).
+/* The conditional slice.
 
    Comparison and conditional selection, which is where the condition code
    stops being a constant: ARM's A32 condition field is [cond_al] throughout
-   M1 and becomes a real field here, and x86 gains cmp/jcc.
+   the initial scope and becomes a real field here, and x86 gains cmp/jcc.
 
    Both branches are to same-section local labels, so GNU as resolves them
    while assembling and the object carries no .text relocation for them. They

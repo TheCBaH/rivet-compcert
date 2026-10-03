@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* Compiling each checked-in CompCert fixture source in memory reproduces the
    checked-in ccomp -S output byte for byte. The one line allowed to differ is
    the header's command-line comment, which records the argv of whichever

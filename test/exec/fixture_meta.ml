@@ -1,4 +1,7 @@
-(* M4 (.ai/asm_plan.md §12): a small, complete, read-only mirror of exactly
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
+(* A small, complete, read-only mirror of exactly
    the manifest record families [asm/tools/lib/manifest.ml]'s [Manifest]
    module also parses - [abi-version], [supported-targets],
    [expected-value:<i>], [observation:<i>].
