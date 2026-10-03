@@ -1,5 +1,9 @@
 # rivet-compcert
 
+[![ci](https://github.com/TheCBaH/rivet-compcert/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TheCBaH/rivet-compcert/actions/workflows/ci.yml)
+[![images](https://github.com/TheCBaH/rivet-compcert/actions/workflows/images.yml/badge.svg?branch=main)](https://github.com/TheCBaH/rivet-compcert/actions/workflows/images.yml)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/TheCBaH/rivet-compcert)
+
 Runs [CompCert](https://github.com/AbsInt/CompCert) against
 [rivet](https://github.com/TheCBaH/rivet), the retargetable assembler: CompCert's
 assembly output is assembled by rivet and compared with GNU `as` and with QEMU
