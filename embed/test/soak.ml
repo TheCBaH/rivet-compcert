@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* Usage: soak.exe <corpus-dir> [<cycles>]. Runs compile+run cycles over the
    corpus, round robin, in one process, and reports memory growth every 1000
    cycles: OCaml heap, resident set size, and the size of CompCert's atom

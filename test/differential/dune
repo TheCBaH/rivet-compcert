@@ -1,4 +1,4 @@
-; The M1.5 differential gate. Reads the committed fixtures and their GNU oracle
+; The differential gate. Reads the committed fixtures and their GNU oracle
 ; artifacts as ordinary files, so this needs no cross toolchain and no emulator
 ; and runs in every leg of the portable matrix.
 

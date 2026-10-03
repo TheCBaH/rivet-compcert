@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* Proves the CompCert Asm.program adapter (adapter.ml) end to end: a real
    in-process CompCert compile of the return42/asm_test_entry fixture on
    aarch64, run through Adapter.convert, compared against
@@ -28,9 +31,9 @@ open Asm_core
    leading whitespace from each continued line, which would silently eat the
    C comment's real 3-space indentation. *)
 let asm_test_entry_c =
-  "/* The M1 walking skeleton (.ai/asm_plan.md). Compiled by four unmodified\n\
+  "/* The walking skeleton. Compiled by four unmodified\n\
   \   CompCert 3.17 configurations; the 26 instruction forms those four outputs\n\
-  \   contain *are* the M1 scope.\n\n\
+  \   contain *are* the scope.\n\n\
   \   Deliberately minimal: the point is not to exercise the compiler but to pin a\n\
   \   relocation-free .text whose bytes our assembler must reproduce exactly. The\n\
   \   only relocation any of the four objects carries is R_*_PC32/PREL32 in\n\

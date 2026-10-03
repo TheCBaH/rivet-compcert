@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* The decided robustness behaviors: varargs are refused before code
    generation, and crashes and hangs in generated code are contained by the
    opt-in isolation mode. *)

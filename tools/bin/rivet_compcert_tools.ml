@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* The corpus commands: CompCert's own test suites, compiled with the installed
    ccomp and classified against rivet's parser and pipeline. *)
 open Rivet_tools

@@ -1,7 +1,7 @@
 /* expect: 42 */
 /* Seeded from the args_arith fixture (asm/fixtures/compcert-3.17/args_arith), with an entry wrapper. */
 
-/* M2's arithmetic slice (.ai/asm_plan.md §12, Milestone 2).
+/* The arithmetic slice.
 
    Two functions, because the slice has two halves that must not be merged.
    [asm_test_sum] is where integer *arguments* live: it is exported and never
@@ -15,7 +15,7 @@
    stack loads and stores, which is the memory shape this slice wants.
 
    Two globals in one unit is deliberate: it is what makes entry selection a
-   real decision rather than the single-global inference M1 could get away
+   real decision rather than the single-global inference the initial scope could get away
    with.
 
    Deliberately no division or modulo. CompCert lowers `/ 3` to a signed

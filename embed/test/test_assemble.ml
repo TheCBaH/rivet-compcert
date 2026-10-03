@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* The in-memory C -> assembly -> image path reproduces the fixture oracle's
    post-link bytes: every case's sources are compiled and assembled in
    memory, the image is bound at the addresses the reference link used

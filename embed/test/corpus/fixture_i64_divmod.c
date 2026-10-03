@@ -1,7 +1,7 @@
 /* expect: 42 */
 /* Seeded from the i64_divmod fixture (asm/fixtures/compcert-3.17/i64_divmod), with an entry wrapper. */
 
-/* M4 (.ai/asm_plan.md §12): the CompCert-runtime-helper fixture. Two
+/* The CompCert-runtime-helper fixture. Two
    volatile long long operands force real __compcert_i64_sdiv/
    __compcert_i64_smod runtime calls on x86_32 (which has no 64-bit divide
    instruction) rather than a compile-time-folded constant - the whole

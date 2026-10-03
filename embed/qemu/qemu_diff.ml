@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* The embedded corpus under QEMU, for one target, and natively as well
    where this host runs that target's ISA. Every
    compcert_embed/targets/<target>/test copies this file and supplies

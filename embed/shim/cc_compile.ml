@@ -1,3 +1,6 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
 (* The CompCert-facing half of Compcert_embed, for one target. Every
    compcert_embed_<target> library copies this file and supplies
    [Embed_cc.CC], its own CompCert embed variant: the types used below are

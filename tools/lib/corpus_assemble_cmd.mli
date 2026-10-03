@@ -1,11 +1,11 @@
-(** M5 corpus growth: run CompCert's own [test/c/] suite through the full
+(** Corpus growth: run CompCert's own [test/c/] suite through the full
     [parse -> simplify -> lower -> encode -> plan_image] pipeline, one target
     at a time - not merely {!Corpus_classify_cmd}'s parse-level check.
 
     Every file in the corpus references at least one external symbol
     (libc, or a symbol defined in a CompCert test-suite file this corpus does
     not also compile) that a single-translation-unit compile can never
-    resolve (.ai/asm_plan.md §2.2's libc-linking non-goal). [plan_image]
+    resolve (libc linking is an explicit non-goal). [plan_image]
     reports every one of those as [image.undefined] and nothing else - so a
     file whose only diagnostics carry that code is {e blocked} on an expected,
     already-understood gap, not rejected for a real parser, lowering,

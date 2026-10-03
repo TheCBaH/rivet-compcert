@@ -1,4 +1,7 @@
-(* Execution: E5 (.ai/asm_plan.md M1.6) and X1.
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
+(* Execution: E5 and X1.
 
    The last rung of the evidence ladder, and the only one where the assembler's
    own output is the thing that runs. Every earlier gate compares this
@@ -7,7 +10,7 @@
    the guest to have actually returned the value its own [expected-status.txt]
    declares.
 
-   Four conditions, all of them, per §16.3 and the M1.6 acceptance:
+   Four conditions, all of them:
 
      termination  = completed
      result       = recovered
@@ -106,9 +109,9 @@ let address_for profile section =
   | ".text" -> Abi.code_addr profile
   | ".rodata" -> Abi.rodata_addr profile
   | ".data" -> Abi.data_addr profile
-  (* M3 (.ai/asm_plan.md §12): a real NOBITS section is now possible, so it
+  (* A real NOBITS section is now possible, so it
      needs its own address rather than aliasing .data's - two segments at one
-     address was exactly M1's silent behavior Image.bind_image no longer
+     address was exactly the earlier silent behavior Image.bind_image no longer
      tolerates once more than one segment can be nonempty (image.ml's
      overlap check). Abi_v2.bss_addr, not a new Abi (v1) constant: BSS
      placement is a policy decision, not a wire-format one, and v1 is frozen
@@ -118,7 +121,7 @@ let address_for profile section =
 
 (* Sorted lexicographically by filename, each unit named after its own stem -
    the same convention [test_differential.ml]'s [unit_paths]/[build] use, so a
-   multi-source case (M3's [cross_call]/[cross_data]) gets a deterministic,
+   multi-source case ([cross_call]/[cross_data]) gets a deterministic,
    collision-free set of unit names instead of every file sharing the single
    entry-name unit this function used before it supported more than one. *)
 let units_of dir =
@@ -160,8 +163,8 @@ let assemble profile case =
 
 (* {1 The manifest for a bound image}
 
-   [Manifest.single_code] describes the M1 shape - one executable segment,
-   entered at its first byte - and an M2 case with an initialized global has two
+   [Manifest.single_code] describes the single-segment shape - one executable segment,
+   entered at its first byte - and a case with an initialized global has two
    segments with different permissions. Each bound segment becomes its own
    descriptor carrying its own [perms] and [zero_fill], which is what makes a
    two-segment case prove anything: a data segment mapped read-only, or not
@@ -235,12 +238,12 @@ let mutate profile bytes =
 
 (* {1 Running} *)
 
-(* M4 Phase 4: [abi_version] is now a parameter of exec.ml's own driver rather
+(* [abi_version] is now a parameter of exec.ml's own driver rather
    than a literal 1 - [Qemu_user]/[Record]/[Abi] were already version-
-   parametric (M4 Phase 2.4's dispatch-site table), but this local wrapper was
+   parametric (the dispatch-site table), but this local wrapper was
    the one remaining hardcoded call site. Every existing call site still
    passes [~abi_version:1] explicitly (return42/run_control's fixed point);
-   Phase 5.3 is what will make a case's own manifest record choose the
+   A later change will make a case's own manifest record choose the
    version. *)
 let run ~abi_version profile manifest =
   Qemu_user.run ~abi_version ~profile
@@ -299,7 +302,7 @@ let describe (img : Image.t) =
            (Asm_core.Perms.to_string s.Image.perms))
        img.Image.segments)
 
-(* M4 Phase 9: an opt-in retry with QEMU's own tracing, decided here rather
+(* An opt-in retry with QEMU's own tracing, decided here rather
    than inside [Qemu_user.run] - [run_control]'s own induced "41 instead of
    42" case is a *designed* failure of [want_status]/[want_values], not
    evidence of a defect, and only this layer knows which verdict was wanted.
@@ -327,7 +330,7 @@ let maybe_trace ~abi_version ~profile ~manifest = function
           | Some t -> Printf.printf "  trace (ASM_QEMU_TRACE):\n%s\n" t
           | None -> Printf.printf "  trace (ASM_QEMU_TRACE): qemu wrote none\n"))
 
-(* M4 (.ai/asm_plan.md §12): how many profiles each REQUIRED case (one whose
+(* How many profiles each REQUIRED case (one whose
    manifest declares [abi-version: 3] - an opt-in, not the default) was
    actually attempted on, i.e. reached [assemble] rather than being skipped
    for an unsupported target. Checked after the whole profile loop
@@ -417,7 +420,7 @@ let run_case profile case =
                 maybe_trace ~abi_version:meta.Fixture_meta.abi_version ~profile ~manifest:m v))
   end
 
-(* M4: a required case present in [cases] must have been attempted (see
+(* A required case present in [cases] must have been attempted (see
    [required_attempted] above) on every profile whose target it declares
    support for - not merely at least once. *)
 let check_required_cases_attempted cases =
@@ -466,15 +469,15 @@ let run_control profile =
           Printf.printf "  FAIL %-24s return42 has %d segments, the control splices one\n"
             "induced-failure control" (List.length segs))
 
-(* M4 Phase 4's own exit criterion: a direct proof that the *generalized*
+(* Exit criterion: a direct proof that the *generalized*
    [run]/[verdict] above - not [Qemu_user]/[Record], already proven generic by
    [abi_v3_smoke.ml] - report a multi-value result correctly at
    [~abi_version:3]. No fixture reaches v3 through [cases()] yet (that is
-   Phase 5/6), so this hand-builds a manifest the same way
+   still to come), so this hand-builds a manifest the same way
    [abi_v3_smoke.ml] does: a tiny machine-code segment that writes a known
    constant to a data segment and returns 42, observed as a second value. *)
 let run_v3_plumbing_check () =
-  let label = "v3 plumbing (Phase 4)" in
+  let label = "v3 plumbing" in
   let profile = Abi.X86_64 in
   match Qemu_user.provenance ~abi_version:Abi_v3.abi_version profile with
   | [] ->

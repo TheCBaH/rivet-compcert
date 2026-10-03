@@ -1,4 +1,7 @@
-(* The differential gate (.ai/asm_plan.md M1.5, M2's O1-O3).
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
+(* The differential gate.
 
    Every case of the CompCert corpus, on every target, compared against the
    committed GNU oracle three ways:
@@ -20,7 +23,7 @@
    Cases are discovered from the corpus rather than listed, so adding a fixture
    directory adds a row here. A case that this assembler cannot yet assemble
    prints the diagnostic that blocks it instead of being omitted: the transcript
-   is the M2 progress record, and a gate that silently skipped what it could not
+   is the progress record, and a gate that silently skipped what it could not
    do would report the same success at every stage of the milestone. *)
 
 let corpus_root = "../../fixtures/compcert-3.17"
@@ -312,7 +315,7 @@ let cases () =
 
 let case_dir case target = Filename.concat (Filename.concat corpus_root case) target
 
-(* M4 (.ai/asm_plan.md §12): a trivial, read-only, single-field scanner - not
+(* A trivial, read-only, single-field scanner - not
    the fuller [Fixture_meta] reader [test/oracle/exec.ml] has, since the
    differential gate has no ABI/observation concept at all, only "does this
    case's committed manifest restrict which targets it has directories for."
@@ -320,7 +323,7 @@ let case_dir case target = Filename.concat (Filename.concat corpus_root case) ta
    this record; this is a second reader of the same manifest.txt format, not
    a second grammar authority. Absent manifest, or no such record, means
    every one of [targets] - exactly today's behavior for every
-   pre-M4 case. *)
+   earlier case. *)
 let supported_targets case =
   let path = Filename.concat (Filename.concat corpus_root case) "manifest.txt" in
   if not (Sys.file_exists path) then targets
@@ -341,8 +344,8 @@ let targets_for case = List.filter (fun t -> List.mem t (supported_targets case)
 (* CompCert writes its source path into the assembly banner, so the stem is the
    case's own and return42 keeps the [asm_test_entry] spelling its committed
    bytes were generated with. Every [.s] under a target directory is one of the
-   case's own compilation units - one for the single-source cases M1/M2 added,
-   more than one for M3's - paired with its own stem, sorted so build order is
+   case's own compilation units - one for the single-source cases,
+   more than one for the multi-source cases - paired with its own stem, sorted so build order is
    deterministic. This is also the unit name a multi-source case's own oracle
    evidence is filed under (tools/lib/oracle_cmd.ml's [unit_dir]), since both
    sides derive it the same way, from the same file. *)
@@ -360,7 +363,7 @@ let unit_paths case target =
    what makes a post-link comparison meaningful for a section that carries
    relocations.
 
-   Manifest v2 (M3 §11, .ai/asm_plan.md §12): five columns, not three - a
+   Manifest v2: five columns, not three - a
    NOBITS section (.bss) has no byte artifact at all, so [ls_file] is [None]
    rather than a path to a file that was never written, and [ls_size] is its
    only evidence, since {!bytes_of_hex_file} has nothing to read for it. *)
@@ -427,7 +430,7 @@ let target_of_name name =
   match Driver.Registry.find name with Some d -> d | None -> failwith ("no such target: " ^ name)
 
 (* X1's convention: every case's entry is a zero-argument [asm_test_entry].
-   Naming it explicitly rather than inferring it is the point - three of the M2
+   Naming it explicitly rather than inferring it is the point - three of the
    cases declare a callee or a data object beside the entry, and cardinality
    then names nothing. *)
 let entry_symbol = "asm_test_entry"
@@ -444,9 +447,9 @@ let brief e =
 
 type built = { laid_out : Image.laid_out; bound : Image.t; addresses : (string * int64) list }
 
-(* One unit reads exactly like every M1/M2 case always has: [D.assemble] with
+(* One unit reads exactly like every single-source case always has: [D.assemble] with
    the frozen entry name doubling as its unit name. More than one goes through
-   M3's [D.assemble_many] instead, each unit named after its own stem - the
+   [D.assemble_many] instead, each unit named after its own stem - the
    same name its own oracle evidence is filed under. *)
 let build case target =
   let (module D : Target_intf.Target.DRIVER) = target_of_name target in
@@ -745,7 +748,7 @@ let check_disasm case target =
              difference. The byte ranges come from our own dump, and that those
              bytes are right is what the comparison above already establishes
              exactly. A multi-source case's merge-gap fill is exactly this kind
-             of padding, so it drops out here the same way M1/M2's alignment
+             of padding, so it drops out here the same way single-source alignment
              padding always did - no unit-slicing needed on this side either. *)
           let pads =
             List.filter_map (fun r -> if r.padding then Some (r.off, r.len) else None) rows
@@ -902,7 +905,7 @@ let%expect_test "diagnostic spelling agrees with objdump after normalization" =
    ordinary [.balign] - the only form a lexer/parser round trip has to write -
    and reassembling that as a single module fills it with {!T.nop_bytes}
    again, not {!T.merge_fill}. On every target except x86_32 those coincide,
-   so this is invisible there; on x86_32 they measurably differ (M3 §5), so
+   so this is invisible there; on x86_32 they measurably differ, so
    the reassembled bytes genuinely are not identical at the fill site even
    though the ENCODING on both sides is correct and check_bytes already
    proves it against real GNU evidence. Skipped uniformly for every

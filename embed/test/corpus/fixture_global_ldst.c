@@ -1,13 +1,13 @@
 /* expect: 42 */
 /* Seeded from the global_ldst fixture (asm/fixtures/compcert-3.17/global_ldst), with an entry wrapper. */
 
-/* M2's global load/store slice (.ai/asm_plan.md §12, Milestone 2).
+/* The global load/store slice.
 
    The initializer is non-zero on purpose. CompCert routes an uninitialized or
    all-zero global to .comm or .bss (modules/CompCert/x86/TargetPrinter.ml:189,
    and variable_section's ~bss argument), and common allocation and NOBITS
-   storage are both M3. A non-zero initializer puts the object in .data as
-   ordinary PROGBITS bytes, which is the second allocatable section M2 wants
+   storage are both later work. A non-zero initializer puts the object in .data as
+   ordinary PROGBITS bytes, which is the second allocatable section the assembler wants
    and nothing more.
 
    This is also the fixture where the four targets stop agreeing about how a
