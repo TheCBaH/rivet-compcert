@@ -18,6 +18,7 @@
   rivet.driver
   rivet.target_intf
   rivet.native_exec
-  rivet.fmt)
+  rivet.fmt
+  threads.posix)
  (enabled_if
   (= %{env:RIVET_COMPCERT_EMBED=false} true)))

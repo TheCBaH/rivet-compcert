@@ -1,0 +1,15 @@
+; Host-symbol binding and the persistent loader through Compcert_embed, with a
+; stand-in compiler that returns its input as assembly. The assembly is
+; x86_64, so this only exists on an x86_64 host.
+
+(library
+ (name test_embed_native)
+ (modes byte native)
+ (libraries compcert_embed rivet.x86_64 rivet.native_exec rivet.foundation)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect))
+ (enabled_if
+  (and
+   (= %{env:RIVET_COMPCERT_EMBED=false} true)
+   (= %{architecture} amd64))))

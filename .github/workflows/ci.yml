@@ -45,6 +45,9 @@ jobs:
     - name: tool tests
       run: |
         ${{ env.EXEC }} make tools-test
+    - name: embed unit tests
+      run: |
+        ${{ env.EXEC }} make embed-unit
 
   # The committed ccomp output through the GNU oracle, then rivet's own image of
   # each fixture under QEMU. Neither needs ccomp.

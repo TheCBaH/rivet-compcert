@@ -155,6 +155,11 @@ embed_env = env -u COMPCERT_CONFIG \
   OCAMLPATH=$(call EMBED_LIB,$(1)):$$OCAMLPATH \
   RIVET_NATIVE_EXEC=true RIVET_COMPCERT_EMBED=true RIVET_COMPCERT_EMBED_$(shell echo $(1) | tr a-z A-Z)=true
 
+# The embedding's own logic against a stand-in compiler: needs rivet, not
+# CompCert.
+embed-unit: submodules
+	RIVET_NATIVE_EXEC=true RIVET_COMPCERT_EMBED=true opam exec -- dune build @embed/unit/runtest
+
 # The target's library and its Tier A report (C to assembly to image against the
 # committed fixtures), plus embed/test, which runs aarch64 code, on an aarch64 host.
 EMBED_HOST_ISA := $(shell uname -m | sed -e 's/^amd64$$/x86_64/' -e 's/^arm64$$/aarch64/')
@@ -166,7 +171,7 @@ EMBED_TEST_GOALS  := $(addprefix embed-test-,$(TARGETS))
 EMBED_QEMU_GOALS  := $(addprefix embed-qemu-,$(TARGETS))
 EMBED_SOAK_GOALS  := $(addprefix embed-soak-,$(TARGETS))
 .PHONY: $(EMBED_BUILD_GOALS) $(EMBED_TEST_GOALS) $(EMBED_QEMU_GOALS) $(EMBED_SOAK_GOALS) \
-  embed-corpus-check helpers exec
+  embed-corpus-check embed-unit helpers exec
 
 $(EMBED_BUILD_GOALS): embed-build-%: compcert-fetch
 	scripts/compcert-embed-sync.sh $*

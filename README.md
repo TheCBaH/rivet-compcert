@@ -49,6 +49,31 @@ from the pinned artifacts. CI (`.github/workflows/ci.yml`) runs `check`,
 `docs/fixture-oracle.md` and `docs/corpus.md` describe the evidence chain and
 the corpora.
 
+## Embedding in another project
+
+The embedding libraries are installable as `rivet_compcert.compcert_embed` and
+`rivet_compcert.compcert_embed_<target>`. They require rivet by its
+`rivet.<library>` names, so build in this order, with `vendor/rivet` at the
+revision to install (it is the one this repository is tested against):
+
+1. rivet: `RIVET_NATIVE_EXEC=true dune build --only-packages rivet @install`
+   in `vendor/rivet`, then `dune install rivet`. Set `RIVET_EXTERNAL_DEPS=true`
+   too when the consumer supplies its own `fmt` and `err_trace` (see rivet's
+   README); installed rivet then requires those findlib names instead of
+   carrying its own copies.
+2. rivet_compcert: `make embed-build-<target>`, then
+   `dune build --only-packages rivet_compcert @install` with the
+   `RIVET_COMPCERT_EMBED*` gates and `OCAMLPATH` that `make embed-test-<target>`
+   uses, then `dune install rivet_compcert`.
+
+`Compcert_embed` takes preprocessed C only: no `#include`, `#define` or `#if`,
+and every type and function the source uses declared in it. A directive is
+refused before CompCert runs, as an `Input` error with code
+`embed.input.directive`; line markers, `#line` and `#pragma` pass. Compilation
+is serialized by one process-wide lock. `load ~host_symbols:[...]` binds host
+functions through trampolines and returns a `Native_exec` handle for repeated
+calls; `make embed-unit` tests this without CompCert.
+
 ## License
 
 The tooling in this repository is MIT licensed (`LICENSE`). **Content derived

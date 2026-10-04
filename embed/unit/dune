@@ -1,0 +1,18 @@
+; Compcert_embed's input contract and serialization against a stand-in compiler
+; that returns its input as assembly. Needs rivet, not CompCert, so it runs
+; without a CompCert build.
+
+(library
+ (name test_embed_unit)
+ (modes byte native)
+ (libraries
+  compcert_embed
+  rivet.x86_64
+  rivet.native_exec
+  rivet.foundation
+  threads.posix)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect))
+ (enabled_if
+  (= %{env:RIVET_COMPCERT_EMBED=false} true)))
