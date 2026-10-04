@@ -49,6 +49,15 @@ from the pinned artifacts. CI (`.github/workflows/ci.yml`) runs `check`,
 `docs/fixture-oracle.md` and `docs/corpus.md` describe the evidence chain and
 the corpora.
 
+## Installing with opam
+
+`rivet_compcert.opam` builds the host ISA's embedding against the installed
+`rivet` and installs it with its CompCert variant (`compcert_<isa>_embed`);
+no submodule is needed, so a source archive works:
+`opam pin add rivet_compcert <archive URL>`. The pinned CompCert artifacts are
+downloaded during the build. The manual ordering below is the same thing done
+by hand.
+
 ## Embedding in another project
 
 The embedding libraries are installable as `rivet_compcert.compcert_embed` and

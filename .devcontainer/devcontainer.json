@@ -15,7 +15,7 @@
         },
         "ghcr.io/thecbah/ocaml-features/ocaml:1": {
             "version": "${localEnv:OCAML_VERSION}",
-            "packages": "bos bytesrw cmdliner digestif fmt fpath jsont mtime menhir ocamlformat#0.28.1 ppx_expect qcheck zarith",
+            "packages": "bos bytesrw cmdliner digestif fmt fpath jsont mtime menhir ocamlformat#0.28.1 ppx_expect qcheck zarith err_trace#git+https://github.com/TheCBaH/err_trace#main",
             "system-packages": "libgmp-dev pkg-config"
         }
     },
@@ -28,7 +28,7 @@
     },
     "remoteUser": "vscode",
     "postCreateCommand": {
-	"submodules": "git submodule update --init --depth 1 vendor/rivet && git -C vendor/rivet submodule update --init --depth 1 vendor/fmt/upstream vendor/err_trace/upstream",
+	"submodules": "git submodule update --init --depth 1 vendor/rivet && git -C vendor/rivet submodule update --init --depth 1 vendor/fmt/upstream",
         // See .devcontainer/fix-opam-owner.sh: a blind `chown -R` here forces
         // a full data copy-up of the whole opam install on every fresh
         // container (this host's overlay2 has metacopy disabled), even

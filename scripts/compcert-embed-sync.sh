@@ -20,7 +20,12 @@ EMBED_DIR="$REPO_ROOT/embed/patch"
 Fatal() { echo "FATAL: $*" >&2; exit 1; }
 
 # shellcheck source=../vendor/rivet/scripts/target-matrix.sh
-. "$REPO_ROOT/vendor/rivet/scripts/target-matrix.sh"
+if [ -f "$REPO_ROOT/vendor/rivet/scripts/target-matrix.sh" ]; then
+  . "$REPO_ROOT/vendor/rivet/scripts/target-matrix.sh"
+else
+  # An opam build has no submodules.
+  FIXTURE_TARGETS=(x86_32 x86_64 arm aarch64 riscv32 riscv64)
+fi
 
 target="${1:-}"
 found=false

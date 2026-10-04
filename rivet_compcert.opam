@@ -1,0 +1,30 @@
+opam-version: "2.0"
+synopsis: "CompCert embedded in-process behind rivet's driver"
+description: """
+C source in, a laid-out rivet image out, with nothing written to disk: the
+host ISA's CompCert, extracted to OCaml and patched to read and print through
+memory, drives rivet's assembler. The CompCert artifacts are downloaded at
+build time from the release pinned in compcert.lock (no Rocq needed), and the
+variant is installed as compcert_<isa>_embed.
+
+Content derived from CompCert is covered by CompCert's own non-commercial
+license, reproduced in LICENSE.CompCert.
+"""
+maintainer: "Vladimir N. Silyaev"
+authors: ["Vladimir N. Silyaev"]
+license: ["MIT" "LicenseRef-CompCert"]
+homepage: "https://github.com/TheCBaH/rivet-compcert"
+bug-reports: "https://github.com/TheCBaH/rivet-compcert/issues"
+depends: [
+  "ocaml" {>= "4.14.0"}
+  "dune" {>= "3.15"}
+  "menhir"
+  "zarith"
+  "rivet"
+]
+build: [
+  ["make" "opam-build"]
+]
+install: [
+  ["make" "opam-install" "PREFIX=%{prefix}%"]
+]

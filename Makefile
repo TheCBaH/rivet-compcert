@@ -11,7 +11,7 @@ submodules:
 	@test -f vendor/rivet/dune-project || { \
 	  echo "vendor/rivet is not checked out; run: git submodule update --init vendor/rivet" >&2; exit 1; }
 	@test -f vendor/rivet/vendor/fmt/upstream/src/fmt.ml || \
-	  git -C vendor/rivet submodule update --init --depth 1 vendor/fmt/upstream vendor/err_trace/upstream
+	  git -C vendor/rivet submodule update --init --depth 1 vendor/fmt/upstream
 
 build: submodules
 	opam exec -- dune build @all
@@ -159,6 +159,29 @@ embed_env = env -u COMPCERT_CONFIG \
 # CompCert.
 embed-unit: submodules
 	RIVET_NATIVE_EXEC=true RIVET_COMPCERT_EMBED=true opam exec -- dune build @embed/unit/runtest
+
+# {1 The opam package}
+#
+# rivet_compcert.opam builds the host ISA's embedding against the installed
+# rivet, with no submodule: the pinned CompCert artifacts are fetched, the embed
+# variant is built and installed as compcert_<isa>_embed, then this package's
+# libraries are.
+OPAM_ISA := $(shell uname -m | sed -e 's/^amd64$$/x86_64/' -e 's/^arm64$$/aarch64/')
+opam_env = env -u COMPCERT_CONFIG OCAMLPATH=$(call EMBED_LIB,$(OPAM_ISA)):$$OCAMLPATH \
+  RIVET_NATIVE_EXEC=true RIVET_COMPCERT_EMBED=true \
+  RIVET_COMPCERT_EMBED_$(shell echo $(OPAM_ISA) | tr a-z A-Z)=true
+
+opam-build:
+	scripts/fetch-compcert.sh $(OPAM_ISA)
+	scripts/compcert-embed-sync.sh $(OPAM_ISA)
+	cd _compcert/$(OPAM_ISA)/embed && dune build --root . @install
+	$(opam_env) dune build --only-packages rivet_compcert @install
+
+opam-install:
+	cd _compcert/$(OPAM_ISA)/embed && dune install --root . --prefix $(PREFIX) compcert_$(OPAM_ISA)_embed
+	$(opam_env) dune install --prefix $(PREFIX) rivet_compcert
+
+.PHONY: opam-build opam-install
 
 # The target's library and its Tier A report (C to assembly to image against the
 # committed fixtures), plus embed/test, which runs aarch64 code, on an aarch64 host.
