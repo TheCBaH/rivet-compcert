@@ -9,6 +9,7 @@
 
 (library
  (name compcert_embed)
+ (public_name rivet_compcert.compcert_embed)
  (modes byte native)
  (libraries
   rivet.foundation

@@ -174,6 +174,7 @@ $(EMBED_BUILD_GOALS): embed-build-%: compcert-fetch
 
 $(EMBED_TEST_GOALS): embed-test-%: submodules embed-build-%
 	$(call embed_env,$*) opam exec -- dune build $(call embed_suites,$*)
+	$(call embed_env,$*) opam exec -- dune build --only-packages rivet_compcert @install
 
 # The embedded corpus under each target's QEMU; every result must equal the
 # program's recorded expectation.
