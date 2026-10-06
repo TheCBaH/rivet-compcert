@@ -15,8 +15,8 @@
         },
         "ghcr.io/thecbah/ocaml-features/ocaml:1": {
             "version": "${localEnv:OCAML_VERSION}",
-            "packages": "bos bytesrw cmdliner digestif fmt fpath jsont mtime menhir ocamlformat#0.28.1 ppx_expect qcheck zarith err_trace#git+https://github.com/TheCBaH/err_trace#main",
-            "system-packages": "libgmp-dev pkg-config"
+            "packages": "bos bytesrw cmdliner digestif fmt fpath jsont mtime menhir ocamlformat#0.28.1 ppx_expect qcheck err_trace#git+https://github.com/TheCBaH/err_trace#main",
+            "system-packages": "pkg-config"
         }
     },
     "customizations": {
