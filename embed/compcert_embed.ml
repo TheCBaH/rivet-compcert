@@ -140,9 +140,8 @@ module type COMPILER = sig
   val compile_to_asm : name:string -> string -> (string, string) result
 
   val runtime_units : unit -> ((string * string) list, string) result
-  (** the target's [__compcert_i64_*] helpers as assembly units, named after
-      their CompCert runtime file ([i64_sdiv], ...); empty where ccomp links
-      none *)
+  (** the target's runtime helpers as assembly units, named after their
+      CompCert runtime file ([i64_sdiv], ...); empty where ccomp links none *)
 end
 
 (* {1 Runtime helpers} *)
@@ -175,9 +174,10 @@ let symbols_after prefix ~skip_blanks text =
 let globals text =
   symbols_after ".globl" ~skip_blanks:true text @ symbols_after ".global" ~skip_blanks:true text
 
-(* The runtime's symbol prefixes: CompCert's own helpers, and the AAPCS division functions
-   its arm code calls. *)
-let runtime_prefixes = [ "__compcert_i64_"; "__aeabi_" ]
+(* The runtime's symbol prefixes: CompCert's own helpers (the F-only profile's
+   [__compcert_fp32_*] conversions among them), and the AAPCS division functions its arm
+   code calls. *)
+let runtime_prefixes = [ "__compcert_i64_"; "__compcert_fp32_"; "__aeabi_" ]
 
 let helper_references text =
   List.concat_map

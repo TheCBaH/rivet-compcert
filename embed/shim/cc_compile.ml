@@ -137,7 +137,9 @@ let compile_to_asm ~name source =
 
 (* Every name [runtime/Makefile] gives an [i64_] prefix in the compiled C
    helpers is renamed the way its [sed 's/i64_/__compcert_i64_/g'] does:
-   CompCert refuses the reserved names in C, so the sources use short ones. *)
+   CompCert refuses the reserved names in C, so the sources use short ones.
+   Only the [i64_*] units are renamed, as only they are by the Makefile: the
+   others use their final names, and may call an [__compcert_i64_*] helper. *)
 let rename_i64 text =
   let b = Buffer.create (String.length text + 256) in
   let n = String.length text in
@@ -153,7 +155,7 @@ let rename_i64 text =
   go 0;
   Buffer.contents b
 
-(* The target's __compcert_i64_* helpers (Embed_runtime_data, generated at
+(* The target's runtime helpers (Embed_runtime_data, generated at
    sync time) as assembly units. C helpers are compiled once per process,
    on first use, by this same CompCert. *)
 let runtime =
@@ -165,7 +167,11 @@ let runtime =
              | CC.Embed_runtime_data.Asm -> Ok ((name, text) :: units)
              | CC.Embed_runtime_data.C -> (
                  match compile_to_asm ~name:(name ^ ".c") text with
-                 | Ok asm -> Ok ((name, rename_i64 asm) :: units)
+                 | Ok asm ->
+                     let asm =
+                       if String.starts_with ~prefix:"i64_" name then rename_i64 asm else asm
+                     in
+                     Ok ((name, asm) :: units)
                  | Error m -> Error m)))
        (Ok []) CC.Embed_runtime_data.helpers
     |> Result.map List.rev)

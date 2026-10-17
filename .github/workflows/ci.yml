@@ -129,6 +129,7 @@ jobs:
         - { os: ubuntu-24.04, platform: linux/amd64, target: aarch64 }
         - { os: ubuntu-24.04, platform: linux/amd64, target: riscv32 }
         - { os: ubuntu-24.04, platform: linux/amd64, target: riscv64 }
+        - { os: ubuntu-24.04, platform: linux/amd64, target: riscv32_fp32 }
         - { os: ubuntu-24.04-arm, platform: linux/arm64, target: aarch64 }
     steps:
     - name: checkout
@@ -147,10 +148,13 @@ jobs:
     - name: sync and Tier A
       run: |
         ${{ env.EXEC }} make embed-test-${{ matrix.target }}
+    # The corpus is D-ABI code: the F-only profile has neither goal.
     - name: corpus under QEMU
+      if: matrix.target != 'riscv32_fp32'
       run: |
         ${{ env.EXEC }} make embed-qemu-${{ matrix.target }}
     - name: compile-only soak
+      if: matrix.target != 'riscv32_fp32'
       run: |
         ${{ env.EXEC }} make embed-soak-${{ matrix.target }} SOAK_CYCLES=2000
 

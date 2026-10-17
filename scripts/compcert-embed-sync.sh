@@ -27,12 +27,15 @@ else
   FIXTURE_TARGETS=(x86_32 x86_64 arm aarch64 riscv32 riscv64)
 fi
 
+# riscv32_fp32 is CompCert's F-only profile of rivet's riscv32 target.
+EMBED_TARGETS=("${FIXTURE_TARGETS[@]}" riscv32_fp32)
+
 target="${1:-}"
 found=false
-for t in "${FIXTURE_TARGETS[@]}"; do
+for t in "${EMBED_TARGETS[@]}"; do
   [ "$t" = "$target" ] && found=true
 done
-[ "$found" = true ] || Fatal "usage: $0 <target>  (targets: ${FIXTURE_TARGETS[*]})"
+[ "$found" = true ] || Fatal "usage: $0 <target>  (targets: ${EMBED_TARGETS[*]})"
 
 pristine="$REPO_ROOT/_compcert/$target/export"
 variant="$REPO_ROOT/_compcert/$target/embed"
