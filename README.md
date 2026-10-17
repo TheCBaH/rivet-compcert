@@ -13,7 +13,7 @@ driver.
 ## Data flow
 
 ```
-TheCBaH/devcontainer.CompCert  --release v0.0.3-dev-->  compcert.lock  --make compcert-fetch-->  _compcert/<target>/
+TheCBaH/devcontainer.CompCert  --release v3.17-4----->  compcert.lock  --make compcert-fetch-->  _compcert/<target>/
 TheCBaH/rivet                  --submodule------->   vendor/rivet
 ```
 
