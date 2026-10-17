@@ -1,0 +1,46 @@
+== the D detector
+fadd.s fld fcvt.d.s fsd: D instructions fcvt.d.s fld fsd
+== runtime
+available: i64_sar i64_shl i64_shr i64_sdiv i64_smod i64_udiv i64_umod i64_udivmod i64_smulh i64_umulh fp32_conversions
+i64_sar: no D instruction
+i64_shl: no D instruction
+i64_shr: no D instruction
+i64_sdiv: no D instruction
+i64_smod: no D instruction
+i64_udiv: no D instruction
+i64_umod: no D instruction
+i64_udivmod: no D instruction
+i64_smulh: no D instruction
+i64_umulh: no D instruction
+fp32_conversions: no D instruction
+== C -> assembly -> image
+-- arith.c
+assembly: no D instruction
+links: none
+plans: ok
+-- convert.c
+assembly: no D instruction
+links: fp32_conversions i64_shl i64_shr
+plans: ok
+-- pair.c
+assembly: no D instruction
+links: none
+plans: ok
+-- int64.c
+assembly: no D instruction
+links: i64_smulh i64_umulh
+plans: ok
+-- i64_to_float.c
+assembly: no D instruction
+links: none
+plans: [plan] <synthesized by riscv32.encode>: error[image.undefined]: fixup hi references undefined symbol __compcert_i64_stof
+<synthesized by riscv32.encode>: error[image.undefined]: fixup lo references undefined symbol __compcert_i64_stof
+-- float_to_i64.c
+compile: [compile] float_to_i64.c: error: In function ftos: FP32: FP64 or unsupported instruction
+
+-- double_arith.c
+compile: [compile] double_arith.c:1: error: FP32: FP64 arithmetic and comparisons are unsupported
+
+-- builtin.c
+compile: [compile] builtin.c:1: error: FP32: FP64 builtins are unsupported
+

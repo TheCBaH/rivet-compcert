@@ -189,8 +189,11 @@ EMBED_HOST_ISA := $(shell uname -m | sed -e 's/^amd64$$/x86_64/' -e 's/^arm64$$/
 embed_suites = @embed/targets/$(1)/all @embed/targets/$(1)/runtest \
   $(if $(filter $(EMBED_HOST_ISA),$(1)),$(if $(filter aarch64,$(1)),@embed/test/runtest))
 
-EMBED_BUILD_GOALS := $(addprefix embed-build-,$(TARGETS))
-EMBED_TEST_GOALS  := $(addprefix embed-test-,$(TARGETS))
+# riscv32_fp32 is CompCert's F-only riscv32 profile. It has the library and its
+# own report but no QEMU or soak goal: those run the D-ABI corpus.
+EMBED_TARGETS := $(TARGETS) riscv32_fp32
+EMBED_BUILD_GOALS := $(addprefix embed-build-,$(EMBED_TARGETS))
+EMBED_TEST_GOALS  := $(addprefix embed-test-,$(EMBED_TARGETS))
 EMBED_QEMU_GOALS  := $(addprefix embed-qemu-,$(TARGETS))
 EMBED_SOAK_GOALS  := $(addprefix embed-soak-,$(TARGETS))
 .PHONY: $(EMBED_BUILD_GOALS) $(EMBED_TEST_GOALS) $(EMBED_QEMU_GOALS) $(EMBED_SOAK_GOALS) \

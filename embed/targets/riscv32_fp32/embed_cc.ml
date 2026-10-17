@@ -1,0 +1,5 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic"]
+
+(* This library's CompCert build, for the shared shim. *)
+module CC = Compcert_riscv32_fp32_embed

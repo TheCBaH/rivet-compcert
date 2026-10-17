@@ -13,7 +13,7 @@ driver.
 ## Data flow
 
 ```
-TheCBaH/devcontainer.CompCert  --release v3.17-2-->  compcert.lock  --make compcert-fetch-->  _compcert/<target>/
+TheCBaH/devcontainer.CompCert  --release v3.17-4----->  compcert.lock  --make compcert-fetch-->  _compcert/<target>/
 TheCBaH/rivet                  --submodule------->   vendor/rivet
 ```
 
@@ -74,6 +74,14 @@ revision to install (it is the one this repository is tested against):
    `dune build --only-packages rivet_compcert @install` with the
    `RIVET_COMPCERT_EMBED*` gates and `OCAMLPATH` that `make embed-test-<target>`
    uses, then `dune install rivet_compcert`.
+
+Besides the six targets, `riscv32_fp32` embeds CompCert's F-only riscv32
+profile (`rv32imf`, ILP32F; `make embed-test-riscv32_fp32`, library
+`rivet_compcert.compcert_embed_riscv32_fp32`), assembled by rivet's riscv32
+target. Its output has no D-extension instruction. Binary64 arithmetic,
+binary64 builtins and float-to-64-bit-integer conversions are refused, and
+its runtime has no 64-bit-integer-to-float helper; the profile's report
+(`embed/targets/riscv32_fp32/test/fp32.expected`) records each.
 
 `Compcert_embed` takes preprocessed C only: no `#include`, `#define` or `#if`,
 and every type and function the source uses declared in it. A directive is

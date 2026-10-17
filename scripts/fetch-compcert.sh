@@ -11,7 +11,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 lock=compcert.lock
-targets=(x86_32 x86_64 arm aarch64 riscv32 riscv64)
+# riscv32_fp32 is CompCert's F-only riscv32 profile (rv32imf, ILP32F): another
+# extraction for rivet's riscv32 target.
+targets=(x86_32 x86_64 arm aarch64 riscv32 riscv64 riscv32_fp32)
 want=${1:-all}
 
 die() { echo "fetch-compcert: $*" >&2; exit 1; }
@@ -62,7 +64,7 @@ for t in "${sel[@]}"; do
   if [ -f vendor/rivet/scripts/target-matrix.sh ]; then
     # shellcheck disable=SC1091
     . vendor/rivet/scripts/target-matrix.sh
-    target_config "$t"
+    target_config "${t%_fp32}"
     asm=$(sed -n 's/^asm=//p' "_compcert/$t/export/compcert.ini")
     [ "$asm" = "${TOOLPREFIX}gcc" ] ||
       die "$t: compcert.ini asm=$asm, rivet expects ${TOOLPREFIX}gcc"
