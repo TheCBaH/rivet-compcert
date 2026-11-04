@@ -71,7 +71,8 @@ let%expect_test "Pmovz with a nonzero shift amount converts to a trailing lsl Sh
   | Some { T.Instruction.ops; _ } ->
       if
         List.exists
-          (function T.Operand.Shift { T.Shift.kind = "lsl"; amount = 16 } -> true | _ -> false)
+          (function
+            | T.Operand.Shift { T.Shift.kind = T.Shift.Lsl; amount = 16 } -> true | _ -> false)
           ops
       then print_endline "shift operand present"
       else print_endline "shift operand MISSING"
