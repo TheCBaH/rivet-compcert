@@ -129,7 +129,7 @@ let convert_instr (i : CC_asm.instruction) : Aarch64.Instruction.t option =
          divide by 16. *)
       let amount = Int64.to_int (CC.Camlcoq.Z.to_int64 pos) in
       let shift =
-        if amount = 0 then [] else [ Aarch64.Operand.Shift { Aarch64.Shift.kind = "lsl"; amount } ]
+        if amount = 0 then [] else [ Aarch64.Operand.Shift { Aarch64.Shift.kind = Aarch64.Shift.Lsl; amount } ]
       in
       Some
         {
