@@ -4,3 +4,4 @@ _compcert/
 .corpus-work/
 .asm-helpers/
 /modules/
+/compcert-*.tar.gz

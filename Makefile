@@ -168,7 +168,8 @@ embed-unit: submodules
 # {1 The opam package}
 #
 # rivet_compcert.opam builds the host ISA's embedding against the installed
-# rivet, with no submodule: the pinned CompCert artifacts are fetched, the embed
+# rivet, with no submodule and no network: the pinned CompCert artifacts are
+# the extra-source files opam staged in the build directory, the embed
 # variant is built and installed as compcert_<isa>_embed, then this package's
 # libraries are.
 OPAM_ISA := $(shell uname -m | sed -e 's/^amd64$$/x86_64/' -e 's/^arm64$$/aarch64/')
@@ -177,7 +178,7 @@ opam_env = env -u COMPCERT_CONFIG OCAMLPATH=$(call EMBED_LIB,$(OPAM_ISA)):$$OCAM
   RIVET_COMPCERT_EMBED_$(shell echo $(OPAM_ISA) | tr a-z A-Z)=true
 
 opam-build:
-	scripts/fetch-compcert.sh $(OPAM_ISA)
+	COMPCERT_OFFLINE=true scripts/fetch-compcert.sh $(OPAM_ISA)
 	scripts/compcert-embed-sync.sh $(OPAM_ISA)
 	cd _compcert/$(OPAM_ISA)/embed && dune build --root . @install
 	$(opam_env) dune build --only-packages rivet_compcert @install

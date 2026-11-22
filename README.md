@@ -55,8 +55,10 @@ the corpora.
 `rivet` and installs it with its CompCert variant (`compcert_<isa>_embed`);
 no submodule is needed, so a source archive works:
 `opam pin add rivet_compcert <archive URL>`. The pinned CompCert artifacts are
-downloaded during the build. The manual ordering below is the same thing done
-by hand.
+the opam file's `extra-source` entries, which opam fetches before the build, so
+the build itself needs no network; `make compcert-bump` changes
+`compcert.lock`, so update those entries with it (the `opam` workflow checks
+they agree). The manual ordering below is the same thing done by hand.
 
 ## Embedding in another project
 

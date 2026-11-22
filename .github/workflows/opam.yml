@@ -1,0 +1,86 @@
+name: opam
+
+# Installs rivet_compcert the way a user would: a clean switch, opam's sandbox
+# on (so the build has no network), the package pinned from the source archive
+# of the commit under test, rivet, rivet-native-exec and err_trace through its
+# pin-depends, and the CompCert artifacts through its extra-source entries.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+    # For pull_request events github.sha is a synthetic merge commit; pin the PR head instead.
+    - name: resolve git ref
+      id: ref
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "repo=${{ github.event.pull_request.head.repo.full_name }}" >> "$GITHUB_OUTPUT"
+          echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "repo=${{ github.repository }}" >> "$GITHUB_OUTPUT"
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        fi
+    - name: checkout the opam file and the lock
+      uses: actions/checkout@v7
+      with:
+        ref: ${{ steps.ref.outputs.sha }}
+        repository: ${{ steps.ref.outputs.repo }}
+        sparse-checkout: |
+          rivet_compcert.opam
+          compcert.lock
+        sparse-checkout-cone-mode: false
+    - name: extra-source entries match compcert.lock
+      run: |
+        tag=$(awk '$1 == "tag" { print $2 }' compcert.lock)
+        repo=$(awk '$1 == "repo" { print $2 }' compcert.lock)
+        awk -v u="https://github.com/$repo/releases/download/$tag/" \
+          '$1 != "tag" && $1 != "repo" { print $2, u $2, $1 }' compcert.lock | sort > want
+        awk -F'"' '/^extra-source/ { n = $2 } /^  src:/ { s = $2 }
+          /^  checksum:/ { sub(/^sha256=/, "", $2); print n, s, $2 }' rivet_compcert.opam | sort > have
+        diff want have
+    # Ubuntu 24.04 denies unprivileged user namespaces the capabilities bwrap
+    # needs, and opam init, asked under OPAMYES, would disable the sandbox. No
+    # cache either: a restored opam root keeps the config of the init that made it.
+    - name: allow bwrap's user namespace
+      run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    - name: ocaml
+      uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: 5.5.0
+        opam-pin: false
+        cache: false
+    - name: the build sandbox is on
+      run: opam option --global wrap-build-commands | tee /dev/stderr | grep -q sandbox.sh
+    - name: pin
+      run: |
+        opam pin add -n -y rivet_compcert \
+          "https://github.com/${{ steps.ref.outputs.repo }}/archive/${{ steps.ref.outputs.sha }}.tar.gz"
+    - name: install
+      run: opam install -y rivet_compcert
+    - name: installed pins are the ones rivet_compcert.opam names
+      run: |
+        opam list --installed --columns=name,version,pin err_trace rivet rivet-native-exec rivet_compcert
+        opam pin list
+        awk -F'"' '/^pin-depends:/ { p = 1; next } p && /^\]/ { p = 0 } p { print $2, $4 }' \
+          rivet_compcert.opam > pins
+        test -s pins
+        while read -r pkg url; do
+          got=$(opam pin list --color=never | awk -v p="$pkg" '$1 == p { print $3 }')
+          echo "$pkg: want $url, got $got"
+          [ "$got" = "$url" ]
+          opam list --installed --silent "${pkg%%.*}"
+        done < pins
+        test -d "$(opam var lib)/compcert_$(uname -m)_embed"

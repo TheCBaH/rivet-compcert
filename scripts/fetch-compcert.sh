@@ -7,6 +7,10 @@
 # A target whose .stamp equals the hash of its lock lines is left alone, so a
 # repeat run (or a CI cache hit) downloads nothing. Tarballs are kept in
 # _compcert/dl and re-verified on every run that unpacks them.
+#
+# A tarball already in the repository root (where opam stages the package's
+# extra-source files) is used instead of a download; COMPCERT_OFFLINE=true
+# makes a missing one an error rather than a fetch.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -43,7 +47,11 @@ for t in "${sel[@]}"; do
   fi
 
   for f in "${files[@]}"; do
-    if [ ! -f "_compcert/dl/$f" ]; then
+    if [ -f "$f" ]; then
+      cp "$f" "_compcert/dl/$f"
+    elif [ "${COMPCERT_OFFLINE:-}" = true ]; then
+      [ -f "_compcert/dl/$f" ] || die "$f is not staged and COMPCERT_OFFLINE is set"
+    elif [ ! -f "_compcert/dl/$f" ]; then
       curl -fsSL --retry 3 -o "_compcert/dl/$f.part" \
         "https://github.com/$repo/releases/download/$tag/$f"
       mv "_compcert/dl/$f.part" "_compcert/dl/$f"
