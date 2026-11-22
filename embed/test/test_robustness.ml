@@ -12,16 +12,16 @@ let io () =
 
 let show = function
   | Ok (o : Native_exec.outcome) -> Printf.printf "Ok %Ld\n" o.value
-  | Error e -> Format.printf "Error %a@." Compcert_embed.pp_error e
+  | Error e -> Format.printf "Error %a@." Rivet_compcert_embed.pp_error e
 
 let run ?(isolate = false) ?timeout_s source =
-  match Compcert_embed_aarch64.compile source with
+  match Rivet_compcert_embed_aarch64.compile source with
   | Error e -> Error e
   | Ok laid ->
       Native_exec.run ~isolate ?timeout_s laid ~io:(io ())
       |> Result.map_error (fun e ->
           {
-            Compcert_embed.stage = Execute;
+            Rivet_compcert_embed.stage = Execute;
             message = Format.asprintf "%a" Native_exec.pp_error e;
             codes = [];
           })
@@ -39,9 +39,10 @@ let%expect_test "a call to a variadic external is refused too" =
 let%expect_test "isolated runs return the value and the io buffer" =
   let buf = io () in
   (match
-     Compcert_embed_aarch64.compile "long entry(void *io) { ((char *)io)[3] = 'k'; return 99; }\n"
+     Rivet_compcert_embed_aarch64.compile
+       "long entry(void *io) { ((char *)io)[3] = 'k'; return 99; }\n"
    with
-  | Error e -> Format.printf "%a@." Compcert_embed.pp_error e
+  | Error e -> Format.printf "%a@." Rivet_compcert_embed.pp_error e
   | Ok laid -> (
       match Native_exec.run ~isolate:true laid ~io:buf with
       | Ok o -> Printf.printf "value %Ld, io[3] %c\n" o.value buf.{3}

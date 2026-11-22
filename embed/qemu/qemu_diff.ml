@@ -4,7 +4,7 @@
 (* The embedded corpus under QEMU, for one target, and natively as well
    where this host runs that target's ISA. Every
    compcert_embed/targets/<target>/test copies this file and supplies
-   [Embed], its target's instance of Compcert_embed.Make.
+   [Embed], its target's instance of Rivet_compcert_embed.Make.
 
    Each corpus program gets a zero-argument wrapper, [qemu_entry], that calls
    [entry] with a static io area, because the exec ABI's helper enters its
@@ -139,7 +139,7 @@ let () =
       let want = Option.value qemu_override ~default:general in
       let line =
         match Embed.compile ~entry:"qemu_entry" ~name:file (source ^ wrapper) with
-        | Error e -> Error (Format.asprintf "%a" Compcert_embed.pp_error e)
+        | Error e -> Error (Format.asprintf "%a" Rivet_compcert_embed.pp_error e)
         | Ok laid -> (
             let native_value =
               if not native then Ok None

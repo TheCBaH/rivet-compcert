@@ -84,3 +84,14 @@ jobs:
           opam list --installed --silent "${pkg%%.*}"
         done < pins
         test -d "$(opam var lib)/compcert_$(uname -m)_embed"
+    - name: installed units carry their package's prefix
+      run: |
+        lib=$(opam var lib)
+        v=compcert_$(uname -m)_embed
+        find "$lib/rivet_compcert" -name '*.cmi' | sed 's|.*/||' | sort > units
+        find "$lib/$v" -name '*.cmi' | sed 's|.*/||' | sort > variant
+        cat units
+        test -s units
+        test -s variant
+        if grep -v '^rivet_compcert_' units; then exit 1; fi
+        if grep -v "^$v\(__.*\)\?\.cmi\$" variant; then exit 1; fi

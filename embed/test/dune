@@ -5,8 +5,8 @@
  (name test_compcert_embed)
  (modes byte native)
  (libraries
-  compcert_embed
-  compcert_embed_aarch64
+  rivet_compcert_embed
+  rivet_compcert_embed_aarch64
   rivet-native-exec
   rivet.image
   rivet.foundation)
@@ -35,7 +35,10 @@
 (executable
  (name embed_probe)
  (modules embed_probe)
- (libraries compcert_embed compcert_embed_aarch64 rivet-native-exec)
+ (libraries
+  rivet_compcert_embed
+  rivet_compcert_embed_aarch64
+  rivet-native-exec)
  (enabled_if
   (and
    (= %{env:RIVET_COMPCERT_EMBED=false} true)
@@ -47,7 +50,11 @@
 (executable
  (name soak)
  (modules soak)
- (libraries compcert_embed compcert_embed_aarch64 rivet-native-exec unix)
+ (libraries
+  rivet_compcert_embed
+  rivet_compcert_embed_aarch64
+  rivet-native-exec
+  unix)
  (enabled_if
   (and
    (= %{env:RIVET_COMPCERT_EMBED=false} true)

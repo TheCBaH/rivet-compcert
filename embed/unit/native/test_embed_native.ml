@@ -6,7 +6,7 @@ module Fake = struct
   let runtime_units () = Ok []
 end
 
-module E = Compcert_embed.Make (X86_64) (Fake)
+module E = Rivet_compcert_embed.Make (X86_64) (Fake)
 
 let io_of_string s =
   let io = Bigarray.Array1.create Bigarray.char Bigarray.c_layout 64 in
@@ -19,7 +19,7 @@ let caller =
 
 let code = function
   | Ok _ -> "loaded"
-  | Error (e : Compcert_embed.error) -> String.concat "," e.codes
+  | Error (e : Rivet_compcert_embed.error) -> String.concat "," e.codes
 
 let%expect_test "an unbound host symbol and an unresolvable one are both refused" =
   print_endline (code (E.load caller));

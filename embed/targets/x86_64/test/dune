@@ -13,8 +13,8 @@
 (executables
  (names tier_a_test qemu_diff)
  (libraries
-  compcert_embed
-  compcert_embed_x86_64
+  rivet_compcert_embed
+  rivet_compcert_embed_x86_64
   rivet-native-exec
   rivet.image
   rivet.foundation

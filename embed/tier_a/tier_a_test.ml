@@ -4,7 +4,7 @@
 (* The Tier A checks for one target: C source in memory -> assembly text ->
    laid-out image, against the committed CompCert fixtures. Every
    compcert_embed/targets/<target>/test copies this file and supplies
-   [Embed], its target's instance of Compcert_embed.Make; the report is
+   [Embed], its target's instance of Rivet_compcert_embed.Make; the report is
    compared with that target's tier_a.expected.
 
    Usage:
@@ -19,7 +19,7 @@
 let read path = In_channel.with_open_bin path In_channel.input_all
 let ( / ) = Filename.concat
 let target = Embed.target
-let pp_error = Compcert_embed.pp_error
+let pp_error = Rivet_compcert_embed.pp_error
 
 (* The header comment recording the argv of whichever process compiled; its
    comment leader is the target's (//, #, @). *)
@@ -97,7 +97,7 @@ let identity fixtures =
 
 let print_result = function
   | Ok _ -> print_endline "Ok"
-  | Error (e : Compcert_embed.error) -> Printf.printf "Error:\n%s" e.message
+  | Error (e : Rivet_compcert_embed.error) -> Printf.printf "Error:\n%s" e.message
 
 let syntax_error = "int entry(void) { return 1 +; }\n"
 
@@ -139,7 +139,7 @@ let repeated fixtures =
   in
   let render = function
     | Ok s -> "ok\n" ^ s
-    | Error (e : Compcert_embed.error) -> "error\n" ^ e.message
+    | Error (e : Rivet_compcert_embed.error) -> "error\n" ^ e.message
   in
   let first = List.map (fun f -> render (f ())) inputs in
   let n = List.length inputs in
@@ -268,7 +268,7 @@ let runtime fixtures =
       List.iter
         (fun (name, text) ->
           let entry =
-            match Compcert_embed.globals text with g :: _ -> g | [] -> "__compcert_" ^ name
+            match Rivet_compcert_embed.globals text with g :: _ -> g | [] -> "__compcert_" ^ name
           in
           Printf.printf "%s: %s\n" name
             (match Embed.assemble_units ~entry [ (name, text) ] with
@@ -301,11 +301,11 @@ let stages () =
   | Ok _ -> print_endline "unexpectedly Ok"
   | Error e ->
       Printf.printf "stage %s, codes %s\n%s\n"
-        (Compcert_embed.stage_name e.stage)
+        (Rivet_compcert_embed.stage_name e.stage)
         (String.concat "," e.codes) e.message);
   match Embed.compile "long entry(void *io) { return 1 +; }\n" with
   | Ok _ -> print_endline "unexpectedly Ok"
-  | Error e -> Printf.printf "stage %s\n" (Compcert_embed.stage_name e.stage)
+  | Error e -> Printf.printf "stage %s\n" (Rivet_compcert_embed.stage_name e.stage)
 
 (* {1 Robustness} *)
 

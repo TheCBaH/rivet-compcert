@@ -45,7 +45,7 @@ let flags case =
 
 let compile case file =
   let source = read (Filename.concat fixture_sources (Filename.concat case file)) in
-  Compcert_embed_aarch64.compile_to_asm ~name:file source
+  Rivet_compcert_embed_aarch64.compile_to_asm ~name:file source
 
 let%expect_test "every fixture source compiles to its checked-in aarch64 assembly" =
   List.iter
@@ -89,11 +89,11 @@ let%expect_test "the command-line comment is the only line excluded, and it is p
 
 let print_result = function
   | Ok _ -> print_endline "Ok"
-  | Error { Compcert_embed.message; _ } -> Printf.printf "Error:\n%s" message
+  | Error { Rivet_compcert_embed.message; _ } -> Printf.printf "Error:\n%s" message
 
 let%expect_test "a syntax error is an Error carrying CompCert's message" =
   print_result
-    (Compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
+    (Rivet_compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
   [%expect
     {|
     Error:
@@ -104,7 +104,7 @@ let%expect_test "a syntax error is an Error carrying CompCert's message" =
 
 let%expect_test "a type error is an Error carrying CompCert's message" =
   print_result
-    (Compcert_embed_aarch64.compile_to_asm ~name:"bad.c"
+    (Rivet_compcert_embed_aarch64.compile_to_asm ~name:"bad.c"
        "struct s { int a; };\nint entry(void) { struct s x; return x + 1; }\n");
   [%expect
     {|
@@ -113,8 +113,8 @@ let%expect_test "a type error is an Error carrying CompCert's message" =
 
 let%expect_test "the process keeps compiling after errors" =
   print_result
-    (Compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
-  print_result (Compcert_embed_aarch64.compile_to_asm "int entry(void) { return 7; }\n");
+    (Rivet_compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
+  print_result (Rivet_compcert_embed_aarch64.compile_to_asm "int entry(void) { return 7; }\n");
   [%expect
     {|
     Error:
@@ -130,12 +130,13 @@ let%expect_test "100 sequential compiles of mixed inputs give identical outputs"
     inputs
     @ [
         (fun () ->
-          Compcert_embed_aarch64.compile_to_asm ~name:"bad.c" "int entry(void) { return 1 +; }\n");
+          Rivet_compcert_embed_aarch64.compile_to_asm ~name:"bad.c"
+            "int entry(void) { return 1 +; }\n");
       ]
   in
   let render = function
     | Ok s -> "ok\n" ^ s
-    | Error { Compcert_embed.message; _ } -> "error\n" ^ message
+    | Error { Rivet_compcert_embed.message; _ } -> "error\n" ^ message
   in
   let first = List.map (fun f -> render (f ())) inputs in
   let n = List.length inputs in

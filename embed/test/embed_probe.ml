@@ -21,18 +21,18 @@ let () =
   print_string "--- compile start\n";
   flush stdout;
   let fail e =
-    prerr_string (Format.asprintf "%a\n" Compcert_embed.pp_error e);
+    prerr_string (Format.asprintf "%a\n" Rivet_compcert_embed.pp_error e);
     exit 1
   in
   for i = 1 to repeat do
     let last = i = repeat in
     if run then (
       Bigarray.Array1.fill io '\000';
-      match Compcert_embed_aarch64.run ~name source ~io with
+      match Rivet_compcert_embed_aarch64.run ~name source ~io with
       | Ok o -> if last then Printf.printf "%Ld\n" o.value
       | Error e -> fail e)
     else
-      match Compcert_embed_aarch64.compile_to_asm ~name source with
+      match Rivet_compcert_embed_aarch64.compile_to_asm ~name source with
       | Ok asm -> if last then print_string asm
       | Error e -> fail e
   done

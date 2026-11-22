@@ -24,7 +24,7 @@ let fresh_io () =
 
 let run_one ?(io = fresh_io ()) file =
   let source = read (Filename.concat corpus file) in
-  (Compcert_embed_aarch64.run ~name:file source ~io, expected source)
+  (Rivet_compcert_embed_aarch64.run ~name:file source ~io, expected source)
 
 let%expect_test "every corpus program returns its expected value natively" =
   List.iter
@@ -32,7 +32,8 @@ let%expect_test "every corpus program returns its expected value natively" =
       match run_one file with
       | Ok o, want when o.Native_exec.value = want -> Printf.printf "%s: ok\n" file
       | Ok o, want -> Printf.printf "%s: got %Ld, want %Ld\n" file o.value want
-      | Error e, _ -> Printf.printf "%s: %s\n" file (Format.asprintf "%a" Compcert_embed.pp_error e))
+      | Error e, _ ->
+          Printf.printf "%s: %s\n" file (Format.asprintf "%a" Rivet_compcert_embed.pp_error e))
     (programs ());
   [%expect
     {|
@@ -69,13 +70,13 @@ let%expect_test "io_buffer's writes are visible to the host after the call" =
         (Char.code io.{0})
         (Char.code io.{255})
         !word
-  | Error e, _ -> print_endline (Format.asprintf "%a" Compcert_embed.pp_error e));
+  | Error e, _ -> print_endline (Format.asprintf "%a" Rivet_compcert_embed.pp_error e));
   [%expect {| io[0]=255 io[255]=0 word@512=32640 |}]
 
 let%expect_test "exported globals can be read back after the call" =
   let source = "int counter = 5;\nlong entry(void *io) { counter += 37; return 0; }\n" in
-  (match Compcert_embed_aarch64.run ~read_globals:[ "counter" ] source ~io:(fresh_io ()) with
+  (match Rivet_compcert_embed_aarch64.run ~read_globals:[ "counter" ] source ~io:(fresh_io ()) with
   | Ok { globals = [ (_, b) ]; _ } -> Printf.printf "counter = %ld\n" (String.get_int32_le b 0)
   | Ok _ -> print_endline "unexpected globals"
-  | Error e -> print_endline (Format.asprintf "%a" Compcert_embed.pp_error e));
+  | Error e -> print_endline (Format.asprintf "%a" Rivet_compcert_embed.pp_error e));
   [%expect {| counter = 42 |}]

@@ -19,24 +19,24 @@ module Fake = struct
   let runtime_units () = Ok []
 end
 
-module E = Compcert_embed.Make (X86_64) (Fake)
+module E = Rivet_compcert_embed.Make (X86_64) (Fake)
 
 let show = function
   | Ok _ -> print_endline "ok"
-  | Error (e : Compcert_embed.error) ->
+  | Error (e : Rivet_compcert_embed.error) ->
       Printf.printf "%s [%s]\n"
-        (Format.asprintf "%a" Compcert_embed.pp_error e)
+        (Format.asprintf "%a" Rivet_compcert_embed.pp_error e)
         (String.concat "," e.codes)
 
 let%expect_test "preprocessed C is accepted, with line markers and pragmas" =
   show
-    (Compcert_embed.check_preprocessed
+    (Rivet_compcert_embed.check_preprocessed
        "# 1 \"a.c\"\n# 3 \"a.c\" 2\n#line 9\n#pragma once\n  int x; /* # not a directive */\n");
   [%expect {| ok |}]
 
 let%expect_test "a directive is refused with its line, however it is spelled" =
   List.iter
-    (fun src -> show (Compcert_embed.check_preprocessed ~name:"m.c" src))
+    (fun src -> show (Rivet_compcert_embed.check_preprocessed ~name:"m.c" src))
     [
       "#include <stdint.h>\nint x;\n";
       "int x;\n  #define N 3\n";
@@ -55,7 +55,7 @@ let%expect_test "a directive is refused with its line, however it is spelled" =
 
 let%expect_test "a # inside a comment or a literal is not a directive" =
   show
-    (Compcert_embed.check_preprocessed
+    (Rivet_compcert_embed.check_preprocessed
        "/* one\n#include <x.h>\n*/\nchar *s = \"# x\";\nchar c = '#';\n// x\n#pragma p\n");
   [%expect {| ok |}]
 

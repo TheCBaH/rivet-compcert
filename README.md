@@ -63,8 +63,9 @@ they agree). The manual ordering below is the same thing done by hand.
 ## Embedding in another project
 
 The embedding libraries are installable as `rivet_compcert.compcert_embed` and
-`rivet_compcert.compcert_embed_<target>`. They require rivet by its
-`rivet.<library>` names, so build in this order, with `vendor/rivet` at the
+`rivet_compcert.compcert_embed_<target>` (modules `Rivet_compcert_embed` and
+`Rivet_compcert_embed_<target>`). They require rivet by its `rivet.<library>`
+names, so build in this order, with `vendor/rivet` at the
 revision to install (it is the one this repository is tested against):
 
 1. rivet: `RIVET_NATIVE_EXEC=true dune build --only-packages rivet,rivet-native-exec
@@ -86,7 +87,7 @@ binary64 builtins and float-to-64-bit-integer conversions are refused, and
 its runtime has no 64-bit-integer-to-float helper; the profile's report
 (`embed/targets/riscv32_fp32/test/fp32.expected`) records each.
 
-`Compcert_embed` takes preprocessed C only: no `#include`, `#define` or `#if`,
+`Rivet_compcert_embed` takes preprocessed C only: no `#include`, `#define` or `#if`,
 and every type and function the source uses declared in it. A directive is
 refused before CompCert runs, as an `Input` error with code
 `embed.input.directive`; line markers, `#line` and `#pragma` pass. Compilation

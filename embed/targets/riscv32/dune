@@ -1,4 +1,4 @@
-; Compcert_embed for riscv32: the shared shim (../../shim) over this target's
+; Rivet_compcert_embed for riscv32: the shared shim (../../shim) over this target's
 ; CompCert embed variant (compcert_riscv32_embed, from
 ; ../../../../compcert-lib-riscv32-embed, resolved via OCAMLPATH). Enabled only
 ; when that variant has been built, which RIVET_COMPCERT_EMBED_RISCV32 says.
@@ -6,11 +6,11 @@
 (copy_files# ../../shim/cc_compile.ml)
 
 (library
- (name compcert_embed_riscv32)
+ (name rivet_compcert_embed_riscv32)
  (public_name rivet_compcert.compcert_embed_riscv32)
  (modes byte native)
  (libraries
-  compcert_embed
+  rivet_compcert_embed
   compcert_riscv32_embed
   rivet.riscv32
   rivet-native-exec)

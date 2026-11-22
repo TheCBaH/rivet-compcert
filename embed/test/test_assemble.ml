@@ -44,13 +44,13 @@ let check case =
   let compiled =
     List.map
       (fun (stem, c) ->
-        match Compcert_embed_aarch64.compile_to_asm ~name:(stem ^ ".c") c with
+        match Rivet_compcert_embed_aarch64.compile_to_asm ~name:(stem ^ ".c") c with
         | Ok s -> (stem, s)
-        | Error e -> failwith (Format.asprintf "%a" Compcert_embed.pp_error e))
+        | Error e -> failwith (Format.asprintf "%a" Rivet_compcert_embed.pp_error e))
       (sources case)
   in
-  match Compcert_embed_aarch64.assemble_units ~entry:"asm_test_entry" compiled with
-  | Error e -> Printf.printf "%s: %s\n" case (Format.asprintf "%a" Compcert_embed.pp_error e)
+  match Rivet_compcert_embed_aarch64.assemble_units ~entry:"asm_test_entry" compiled with
+  | Error e -> Printf.printf "%s: %s\n" case (Format.asprintf "%a" Rivet_compcert_embed.pp_error e)
   | Ok laid -> (
       let m = manifest case in
       let addresses = List.map (fun (sec, _, a, _, _) -> (sec, a)) m in
@@ -91,13 +91,13 @@ let%expect_test "every aarch64 fixture case links to the oracle's bytes" =
 
 let%expect_test "an undefined external function is a plan-stage image.undefined error naming it" =
   (match
-     Compcert_embed_aarch64.compile
+     Rivet_compcert_embed_aarch64.compile
        "extern int helper(int);\nlong entry(void *io) { return helper(3); }\n"
    with
   | Ok _ -> print_endline "unexpectedly Ok"
   | Error e ->
       Printf.printf "stage %s, codes %s\n%s\n"
-        (Compcert_embed.stage_name e.stage)
+        (Rivet_compcert_embed.stage_name e.stage)
         (String.concat "," e.codes) e.message);
   [%expect
     {|
@@ -105,7 +105,7 @@ let%expect_test "an undefined external function is a plan-stage image.undefined 
     <synthesized by aarch64.encode>: error[image.undefined]: fixup target references undefined symbol helper |}]
 
 let%expect_test "a CompCert error is tagged with the compile stage" =
-  (match Compcert_embed_aarch64.compile "long entry(void *io) { return 1 +; }\n" with
+  (match Rivet_compcert_embed_aarch64.compile "long entry(void *io) { return 1 +; }\n" with
   | Ok _ -> print_endline "unexpectedly Ok"
-  | Error e -> Printf.printf "stage %s\n" (Compcert_embed.stage_name e.stage));
+  | Error e -> Printf.printf "stage %s\n" (Rivet_compcert_embed.stage_name e.stage));
   [%expect {| stage compile |}]

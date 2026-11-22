@@ -1,4 +1,4 @@
-; Compcert_embed for CompCert's F-only riscv32 profile (rv32imf, ILP32F): the
+; Rivet_compcert_embed for CompCert's F-only riscv32 profile (rv32imf, ILP32F): the
 ; shared shim (../../shim) over its embed variant (compcert_riscv32_fp32_embed,
 ; resolved via OCAMLPATH), assembled by rivet's riscv32 target. Enabled only
 ; when that variant has been built, which RIVET_COMPCERT_EMBED_RISCV32_FP32 says.
@@ -6,11 +6,11 @@
 (copy_files# ../../shim/cc_compile.ml)
 
 (library
- (name compcert_embed_riscv32_fp32)
+ (name rivet_compcert_embed_riscv32_fp32)
  (public_name rivet_compcert.compcert_embed_riscv32_fp32)
  (modes byte native)
  (libraries
-  compcert_embed
+  rivet_compcert_embed
   compcert_riscv32_fp32_embed
   rivet.riscv32
   rivet-native-exec)

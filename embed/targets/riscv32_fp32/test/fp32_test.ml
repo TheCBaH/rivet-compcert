@@ -7,7 +7,7 @@
    the code calls it, and binary64 arithmetic refused by the compiler. The
    report must equal fp32.expected. *)
 
-let pp_error = Compcert_embed.pp_error
+let pp_error = Rivet_compcert_embed.pp_error
 
 (* A mnemonic of the D extension: [fld], [fsd], or an F-format one with a [d]
    component ([fadd.d], [fcvt.d.s], [fmv.x.d], ...). *)
@@ -76,7 +76,7 @@ let compile (name, source) =
       | Ok units -> (
           Printf.printf "links: %s\n"
             (match List.tl units with [] -> "none" | us -> String.concat " " (List.map fst us));
-          let entry = List.hd (Compcert_embed.globals asm) in
+          let entry = List.hd (Rivet_compcert_embed.globals asm) in
           match Embed.assemble_units ~entry [ (name, asm) ] with
           | Ok _ -> print_endline "plans: ok"
           | Error e -> Format.printf "plans: %a@." pp_error e))

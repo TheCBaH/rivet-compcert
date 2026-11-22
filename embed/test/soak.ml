@@ -7,7 +7,7 @@
    tables, which grow with every distinct identifier ever compiled. Any
    result that differs from the program's recorded expectation is fatal. *)
 
-module CC = Compcert_embed_aarch64.CC
+module CC = Rivet_compcert_embed_aarch64.CC
 
 let read path = In_channel.with_open_bin path In_channel.input_all
 
@@ -47,13 +47,13 @@ let () =
   for i = 1 to cycles do
     let name, source, want = programs.(i mod Array.length programs) in
     Bigarray.Array1.fill io '\000';
-    (match Compcert_embed_aarch64.run ~name source ~io with
+    (match Rivet_compcert_embed_aarch64.run ~name source ~io with
     | Ok o when o.value = want -> ()
     | Ok o ->
         Printf.printf "cycle %d: %s returned %Ld, want %Ld\n" i name o.value want;
         exit 1
     | Error e ->
-        Format.printf "cycle %d: %s: %a@." i name Compcert_embed.pp_error e;
+        Format.printf "cycle %d: %s: %a@." i name Rivet_compcert_embed.pp_error e;
         exit 1);
     if i mod 1000 = 0 then report i t0
   done

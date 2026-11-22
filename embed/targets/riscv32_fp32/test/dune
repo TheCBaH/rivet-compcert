@@ -13,8 +13,8 @@
 (executables
  (names tier_a_test qemu_diff fp32_test)
  (libraries
-  compcert_embed
-  compcert_embed_riscv32_fp32
+  rivet_compcert_embed
+  rivet_compcert_embed_riscv32_fp32
   rivet-native-exec
   rivet.image
   rivet.foundation
