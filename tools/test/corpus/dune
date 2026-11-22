@@ -6,7 +6,7 @@
 (executable
  (name test_corpus_classify)
  (modes byte native)
- (libraries rivet_compcert_tools rivet-tools.lib err_trace fpath unix))
+ (libraries rivet_compcert_tools rivet-tools.lib err_trace.err fpath unix))
 
 (rule
  (alias runtest)
@@ -20,7 +20,7 @@
 (executable
  (name test_corpus_assemble)
  (modes byte native)
- (libraries rivet_compcert_tools rivet-tools.lib err_trace fpath unix))
+ (libraries rivet_compcert_tools rivet-tools.lib err_trace.err fpath unix))
 
 (rule
  (alias runtest)
@@ -34,7 +34,7 @@
 (executable
  (name test_corpus_classify_gcc)
  (modes byte native)
- (libraries rivet_compcert_tools rivet-tools.lib err_trace fpath unix))
+ (libraries rivet_compcert_tools rivet-tools.lib err_trace.err fpath unix))
 
 (rule
  (alias runtest)

@@ -19,7 +19,7 @@ depends: [
   "ocaml" {>= "4.14.0"}
   "dune" {>= "3.15"}
   "menhir"
-  "err_trace" {>= "0.2.0~dev"}
+  "err_trace" {>= "0.3.0"}
   "rivet"
   "rivet-native-exec"
 ]
@@ -32,7 +32,7 @@ install: [
 # None of these are in opam-repository yet, and pin-depends is not transitive: Rivet is the
 # commit vendor/rivet pins, err_trace the one that Rivet pins.
 pin-depends: [
-  ["err_trace.0.2.0~dev" "git+https://github.com/TheCBaH/err_trace.git#d7765040d9cc3d024522e204866ac00ff261c4e8"]
-  ["rivet.dev" "git+https://github.com/TheCBaH/rivet.git#1345853a5fb06630856018605ed6302d4e5eba3e"]
-  ["rivet-native-exec.dev" "git+https://github.com/TheCBaH/rivet.git#1345853a5fb06630856018605ed6302d4e5eba3e"]
+  ["err_trace.0.3.0" "git+https://github.com/TheCBaH/err_trace.git#8138a417b452e55483028df851cb562fbf175eed"]
+  ["rivet.dev" "git+https://github.com/TheCBaH/rivet.git#9aeb149b117a3402ecdc95ed4a3c1f986a79bf07"]
+  ["rivet-native-exec.dev" "git+https://github.com/TheCBaH/rivet.git#9aeb149b117a3402ecdc95ed4a3c1f986a79bf07"]
 ]
