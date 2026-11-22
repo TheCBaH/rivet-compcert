@@ -69,6 +69,11 @@ asm-build: submodules
 fixtures-check: tools-build
 	RIVET_ROOT=$(CURDIR) $(TOOLS_EXE) fixture check
 
+# Rivet's differential gate over the committed fixtures: bytes, objdump
+# spelling, reassembly and relocations. Reads committed files only.
+differential: submodules
+	opam exec -- dune build @test/differential/runtest
+
 # One target's whole leg, in the one order that makes the evidence chain hold:
 # exact regeneration with the pinned ccomp, GNU oracle, QEMU execution, manifest
 # completeness, clean tree. --check before git diff because git diff cannot see

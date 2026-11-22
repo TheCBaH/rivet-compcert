@@ -39,6 +39,9 @@ jobs:
     - name: fixtures
       run: |
         ${{ env.EXEC }} make fixtures-check
+    - name: differential
+      run: |
+        ${{ env.EXEC }} make differential
     - name: corpora
       run: |
         ${{ env.EXEC }} make corpus-check
