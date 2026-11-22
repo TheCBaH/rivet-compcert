@@ -1,11 +1,11 @@
 [@@@ai_disclosure "ai-generated"]
 [@@@ai_provider "Anthropic, OpenAI"]
 
-(* The differential gate over the CompCert corpus: Rivet's {!Differential.Make} instantiated for
+(* The differential gate over the CompCert corpus: Rivet's {!Rivet_differential.Make} instantiated for
    fixtures/compcert-3.17, where a case is any directory with a manifest, and the transcripts
    that pin it. *)
 
-include Differential.Make (struct
+include Rivet_differential.Make (struct
   let root = "../../fixtures/compcert-3.17"
   let targets = [ "x86_32"; "x86_64"; "arm"; "aarch64"; "riscv32"; "riscv64" ]
   let is_case dir = Sys.file_exists (Filename.concat dir "manifest.txt")

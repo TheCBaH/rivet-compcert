@@ -54,12 +54,14 @@ let check case =
   | Ok laid -> (
       let m = manifest case in
       let addresses = List.map (fun (sec, _, a, _, _) -> (sec, a)) m in
-      match Image.bind_image laid ~addresses with
-      | Error e -> Printf.printf "%s: BIND %s\n" case (Foundation.Diag.render e)
+      match Rivet_image.bind_image laid ~addresses with
+      | Error e -> Printf.printf "%s: BIND %s\n" case (Rivet_foundation.Diag.render e)
       | Ok image ->
           List.iter
             (fun (sec, kind, _, size, file) ->
-              match List.find_opt (fun (s : Image.segment) -> s.name = sec) image.segments with
+              match
+                List.find_opt (fun (s : Rivet_image.segment) -> s.name = sec) image.segments
+              with
               | None -> Printf.printf "%s %s: missing\n" case sec
               | Some s ->
                   let ours = String.length s.bytes + s.zero_fill in

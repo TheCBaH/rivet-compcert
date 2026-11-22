@@ -184,8 +184,8 @@ let helper_references text =
     (fun prefix -> symbols_after prefix ~skip_blanks:false text |> List.map (( ^ ) prefix))
     runtime_prefixes
 
-module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
-  module P = Pipeline.Make (T)
+module Make (T : Rivet_target_intf.Target.TARGET) (C : COMPILER) = struct
+  module P = Rivet_text_pipeline.Pipeline.Make (T)
 
   let target = T.name
 
@@ -201,15 +201,15 @@ module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
   let assembler_error stage e =
     {
       stage;
-      message = Foundation.Diag.render e;
-      codes = List.map Foundation.Diagnostic.code (Foundation.Diag.diagnostics e);
+      message = Rivet_foundation.Diag.render e;
+      codes = List.map Rivet_foundation.Diagnostic.code (Rivet_foundation.Diag.diagnostics e);
     }
 
   let ( let* ) = Result.bind
   let at stage r = Result.map_error (assembler_error stage) r
 
   let lower_unit (unit_name, text) =
-    let source = Foundation.Span.source ~name:unit_name ~contents:text in
+    let source = Rivet_foundation.Span.source ~name:unit_name ~contents:text in
     let* src = at Parse (P.parse ~unit_name ~source) in
     let* norm, _ = at Simplify (P.simplify ~state:T.default_state src) in
     at Lower (P.lower ~state:T.default_state norm)
@@ -250,20 +250,20 @@ module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
     |> Result.map_error (fun m -> { stage = Compile; message = strip_colors m; codes = [] })
 
   (* Names of host functions the units call, bound to this process's
-     addresses by a trampoline unit (see [Native_exec.bind_host]). The
+     addresses by a trampoline unit (see [Rivet_native_exec.bind_host]). The
      addresses are process-specific: an image assembled with them is only for
      this process. *)
   let with_host_symbols host_symbols units =
     match host_symbols with
     | [] -> Ok units
     | names -> (
-        match Native_exec.bind_host ~target names with
+        match Rivet_native_exec.bind_host ~target names with
         | Ok text -> Ok (units @ [ ("host", text) ])
         | Error e ->
             Error
               {
                 stage = Execute;
-                message = Format.asprintf "%a" Native_exec.pp_error e;
+                message = Format.asprintf "%a" Rivet_native_exec.pp_error e;
                 codes = [ "embed.host_symbol" ];
               })
 
@@ -288,21 +288,22 @@ module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
 
   (* {1 Running} *)
 
-  (* Only where this process runs [target]'s ISA; elsewhere [Native_exec]
-     refuses the image. In this process by default, unlike [Native_exec.run], so host
+  (* Only where this process runs [target]'s ISA; elsewhere [Rivet_native_exec]
+     refuses the image. In this process by default, unlike [Rivet_native_exec.run], so host
      callbacks change this process's state; [~isolate:true] runs it in a forked child: a
      crash or a hang in generated code is then an [Execute] error instead of the end of
      this process. *)
   let execute_error e =
-    { stage = Execute; message = Format.asprintf "%a" Native_exec.pp_error e; codes = [] }
+    { stage = Execute; message = Format.asprintf "%a" Rivet_native_exec.pp_error e; codes = [] }
 
-  (* A persistent mapping for repeated calls: [Native_exec.call] on the result,
-     [Native_exec.close] when done. *)
+  (* A persistent mapping for repeated calls: [Rivet_native_exec.call] on the result,
+     [Rivet_native_exec.close] when done. *)
   let load ?entry ?host_symbols ?name source =
     let* laid = compile ?entry ?host_symbols ?name source in
-    Native_exec.load laid |> Result.map_error execute_error
+    Rivet_native_exec.load laid |> Result.map_error execute_error
 
   let run ?entry ?host_symbols ?name ?read_globals ?(isolate = false) ?timeout_s source ~io =
     let* laid = compile ?entry ?host_symbols ?name source in
-    Native_exec.run ?read_globals ~isolate ?timeout_s laid ~io |> Result.map_error execute_error
+    Rivet_native_exec.run ?read_globals ~isolate ?timeout_s laid ~io
+    |> Result.map_error execute_error
 end

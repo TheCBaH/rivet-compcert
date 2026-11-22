@@ -30,7 +30,7 @@ let%expect_test "every corpus program returns its expected value natively" =
   List.iter
     (fun file ->
       match run_one file with
-      | Ok o, want when o.Native_exec.value = want -> Printf.printf "%s: ok\n" file
+      | Ok o, want when o.Rivet_native_exec.value = want -> Printf.printf "%s: ok\n" file
       | Ok o, want -> Printf.printf "%s: got %Ld, want %Ld\n" file o.value want
       | Error e, _ ->
           Printf.printf "%s: %s\n" file (Format.asprintf "%a" Rivet_compcert_embed.pp_error e))

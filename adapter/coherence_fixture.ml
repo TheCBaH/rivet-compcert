@@ -6,11 +6,11 @@
    assembly text, and the text path over the committed fixture. test_adapter checks that
    CompCert's own compile, converted by Adapter, meets both. *)
 
-module P = Driver.Registry.Aarch64
-module T = Aarch64
-open Asm_core
+module P = Rivet_driver.Registry.Aarch64
+module T = Rivet_aarch64
+open Rivet_asm_core
 
-let origin = Foundation.Origin.synthesized ~pass:"direct" ()
+let origin = Rivet_foundation.Origin.synthesized ~pass:"direct" ()
 
 (* Through the parser's own name table, so this file and the text path resolve
    [sp] the same way. A typo cannot reach an encoding - it fails here, at module
@@ -63,7 +63,7 @@ let direct_normalized : T.Instruction.t Normalized_ast.module_ =
         insn
           {
             T.Instruction.op = T.Opcode.Movz;
-            ops = [ T.Operand.Reg (x "w0"); T.Operand.Imm (Foundation.Bigint.of_int 42) ];
+            ops = [ T.Operand.Reg (x "w0"); T.Operand.Imm (Rivet_foundation.Bigint.of_int 42) ];
           };
         insn
           {
@@ -82,7 +82,7 @@ let direct_normalized : T.Instruction.t Normalized_ast.module_ =
               [
                 T.Operand.Reg (x "sp");
                 T.Operand.Reg (x "sp");
-                T.Operand.Imm (Foundation.Bigint.of_int 16);
+                T.Operand.Imm (Rivet_foundation.Bigint.of_int 16);
               ];
           };
         insn { T.Instruction.op = T.Opcode.Ret; ops = [ T.Operand.Reg (x "x30") ] };
@@ -102,12 +102,12 @@ let fixture = "../fixtures/compcert-3.17/return42/aarch64/asm_test_entry.s"
 
 let from_text () =
   let text = In_channel.with_open_bin fixture In_channel.input_all in
-  let source = Foundation.Span.source ~name:"aarch64.s" ~contents:text in
+  let source = Rivet_foundation.Span.source ~name:"aarch64.s" ~contents:text in
   match P.parse ~unit_name:"asm_test_entry" ~source with
-  | Error ds -> failwith (Foundation.Diag.render ds)
+  | Error ds -> failwith (Rivet_foundation.Diag.render ds)
   | Ok src -> (
       match P.simplify ~state:T.default_state src with
-      | Error ds -> failwith (Foundation.Diag.render ds)
+      | Error ds -> failwith (Rivet_foundation.Diag.render ds)
       | Ok (n, state) -> (n, state))
 
 let render_normalized = Fmt.to_to_string (Normalized_ast.pp T.Instruction.pp)
@@ -123,14 +123,16 @@ let bytes_of l =
   | Ok (`Fixed a) -> a.Lowered_ast.bytes
   | Ok (`Relax (a :: _)) -> a.Lowered_ast.bytes
   | Ok (`Relax []) -> failwith "empty relaxation ladder"
-  | Error d -> failwith (Foundation.Diagnostic.message (T.error_diagnostic (Err.Error.kind d)))
+  | Error d ->
+      failwith (Rivet_foundation.Diagnostic.message (T.error_diagnostic (Err.Error.kind d)))
 
 let form_of l =
   match T.encode l with
   | Ok (`Fixed a) -> Some ("aarch64." ^ a.Lowered_ast.form)
   | Ok (`Relax (a :: _)) -> Some ("aarch64." ^ a.Lowered_ast.form)
   | Ok (`Relax []) -> failwith "empty relaxation ladder"
-  | Error d -> failwith (Foundation.Diagnostic.message (T.error_diagnostic (Err.Error.kind d)))
+  | Error d ->
+      failwith (Rivet_foundation.Diagnostic.message (T.error_diagnostic (Err.Error.kind d)))
 
 let direct_lowered : T.fixup_kind Lowered_ast.module_ =
   let frag l = Lowered_ast.Bytes { bytes = bytes_of l; form = form_of l; fixups = []; origin } in

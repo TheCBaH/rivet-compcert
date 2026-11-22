@@ -70,7 +70,7 @@ revision to install (it is the one this repository is tested against):
 
 1. rivet: `RIVET_NATIVE_EXEC=true dune build --only-packages rivet,rivet-native-exec
    @install` in `vendor/rivet`, then `dune install rivet rivet-native-exec`
-   (`Native_exec`, which the embedding links, is its own package). Set `RIVET_EXTERNAL_DEPS=true`
+   (`Rivet_native_exec`, which the embedding links, is its own package). Set `RIVET_EXTERNAL_DEPS=true`
    too when the consumer supplies its own `fmt` and `err_trace` (see rivet's
    README); installed rivet then requires those findlib names instead of
    carrying its own copies.
@@ -92,7 +92,7 @@ and every type and function the source uses declared in it. A directive is
 refused before CompCert runs, as an `Input` error with code
 `embed.input.directive`; line markers, `#line` and `#pragma` pass. Compilation
 is serialized by one process-wide lock. `load ~host_symbols:[...]` binds host
-functions through trampolines and returns a `Native_exec` handle for repeated
+functions through trampolines and returns a `Rivet_native_exec` handle for repeated
 calls; `make embed-unit` tests this without CompCert.
 
 ## License

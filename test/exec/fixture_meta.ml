@@ -17,7 +17,7 @@
    duplicates) are defense in depth on that already-validated file, not a
    second grammar authority. *)
 
-open Asm_oracle
+open Rivet_oracle
 
 type t = {
   abi_version : int;

@@ -19,7 +19,7 @@ module Fake = struct
   let runtime_units () = Ok []
 end
 
-module E = Rivet_compcert_embed.Make (X86_64) (Fake)
+module E = Rivet_compcert_embed.Make (Rivet_x86_64) (Fake)
 
 let show = function
   | Ok _ -> print_endline "ok"

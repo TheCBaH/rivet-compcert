@@ -99,6 +99,6 @@ install: [
 # commit vendor/rivet pins, err_trace the one that Rivet pins.
 pin-depends: [
   ["err_trace.0.3.0" "git+https://github.com/TheCBaH/err_trace.git#8138a417b452e55483028df851cb562fbf175eed"]
-  ["rivet.dev" "git+https://github.com/TheCBaH/rivet.git#9aeb149b117a3402ecdc95ed4a3c1f986a79bf07"]
-  ["rivet-native-exec.dev" "git+https://github.com/TheCBaH/rivet.git#9aeb149b117a3402ecdc95ed4a3c1f986a79bf07"]
+  ["rivet.dev" "git+https://github.com/TheCBaH/rivet.git#d7ee073ff46e0b5c430f769bd1ff67a914a2e246"]
+  ["rivet-native-exec.dev" "git+https://github.com/TheCBaH/rivet.git#d7ee073ff46e0b5c430f769bd1ff67a914a2e246"]
 ]

@@ -13,14 +13,14 @@
    v1 §13). The programs fold their own results to 32 bits, so nothing is
    lost. The laid-out image is run under the target's QEMU by the exec-ABI
    helper, bound at the ABI's fixed addresses, and, on a host of the same
-   ISA, natively by Native_exec as well. Every result must equal the
+   ISA, natively by Rivet_native_exec as well. Every result must equal the
    program's recorded expectation.
 
    Usage: qemu_diff.exe <corpus-dir>. Needs the exec-ABI helpers
    (RIVET_HELPERS_DIR, built by make helpers) and the target's QEMU. *)
 
-open Asm_oracle
-open Asm_oracle_run
+open Rivet_oracle
+open Rivet_oracle_run
 
 let target = Embed.target
 
@@ -62,10 +62,10 @@ let region name =
   else if starts ".bss" then Abi_v2.bss_addr profile
   else failwith ("no ABI region for section " ^ name)
 
-let addresses (plan : Image.plan) =
+let addresses (plan : Rivet_image.plan) =
   let next = Hashtbl.create 4 in
   List.map
-    (fun (s : Image.segment_plan) ->
+    (fun (s : Rivet_image.segment_plan) ->
       let base = region s.seg_name in
       let at = Option.value (Hashtbl.find_opt next base) ~default:base in
       (* The runner maps each segment on whole pages (exec ABI v1 §9), so two segments may
@@ -76,7 +76,7 @@ let addresses (plan : Image.plan) =
       (s.seg_name, at))
     plan.segments
 
-let manifest (img : Image.t) ~expected =
+let manifest (img : Rivet_image.t) ~expected =
   {
     Manifest.profile;
     case_id = 42;
@@ -88,7 +88,7 @@ let manifest (img : Image.t) ~expected =
     observations = [];
     segments =
       List.map
-        (fun (s : Image.segment) ->
+        (fun (s : Rivet_image.segment) ->
           {
             Manifest.vaddr = s.address;
             init = s.bytes;
@@ -103,8 +103,8 @@ let manifest (img : Image.t) ~expected =
   }
 
 let qemu_value laid ~expected =
-  match Image.bind_image laid ~addresses:(addresses (Image.plan_of laid)) with
-  | Error e -> Error ("bind: " ^ Foundation.Diag.render e)
+  match Rivet_image.bind_image laid ~addresses:(addresses (Rivet_image.plan_of laid)) with
+  | Error e -> Error ("bind: " ^ Rivet_foundation.Diag.render e)
   | Ok img -> (
       let m = manifest img ~expected in
       (* v2: the first exec-ABI version with the RISC-V profiles, and the one whose BSS window
@@ -129,7 +129,7 @@ let () =
     |> List.sort compare
   in
   let failures = ref 0 in
-  let native = Native_exec.host_isa = Some target in
+  let native = Rivet_native_exec.host_isa = Some target in
   Printf.printf "target %s, %s\n" target
     (if native then "native and qemu" else "qemu only (not this host's ISA)");
   List.iter
@@ -145,8 +145,8 @@ let () =
               if not native then Ok None
               else
                 let io = Bigarray.Array1.create Bigarray.char Bigarray.c_layout 16 in
-                match Native_exec.run ~isolate:false laid ~io with
-                | Error e -> Error (Format.asprintf "native: %a" Native_exec.pp_error e)
+                match Rivet_native_exec.run ~isolate:false laid ~io with
+                | Error e -> Error (Format.asprintf "native: %a" Rivet_native_exec.pp_error e)
                 (* [qemu_entry] returns an [int]: only the low 32 bits are defined. *)
                 | Ok { value; _ } -> Ok (Some (low32 value))
             in

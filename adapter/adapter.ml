@@ -25,15 +25,15 @@ module CC = struct
 end
 
 module CC_asm = CC.Asm
-open Asm_core
+open Rivet_asm_core
 
-let origin = Foundation.Origin.synthesized ~pass:"compcert-adapter" ()
+let origin = Rivet_foundation.Origin.synthesized ~pass:"compcert-adapter" ()
 
-let imm (z : CC.BinNums.coq_Z) : Aarch64.Operand.t =
-  Aarch64.Operand.Imm (Foundation.Bigint.of_int64 (CC.Camlcoq.Z.to_int64 z))
+let imm (z : CC.BinNums.coq_Z) : Rivet_aarch64.Operand.t =
+  Rivet_aarch64.Operand.Imm (Rivet_foundation.Bigint.of_int64 (CC.Camlcoq.Z.to_int64 z))
 
-let reg ?(width = 64) ?(is_sp = false) (num : int) : Aarch64.Reg.t =
-  { Aarch64.Reg.num; width; is_sp }
+let reg ?(width = 64) ?(is_sp = false) (num : int) : Rivet_aarch64.Reg.t =
+  { Rivet_aarch64.Reg.num; width; is_sp }
 
 let ireg_num : CC_asm.ireg -> int = function
   | CC_asm.X0 -> 0
@@ -68,27 +68,27 @@ let ireg_num : CC_asm.ireg -> int = function
   | CC_asm.X29 -> 29
   | CC_asm.X30 -> 30
 
-let ireg_reg ?width (r : CC_asm.ireg) : Aarch64.Reg.t = reg ?width (ireg_num r)
+let ireg_reg ?width (r : CC_asm.ireg) : Rivet_aarch64.Reg.t = reg ?width (ireg_num r)
 
-let iregsp_reg ?width : CC_asm.iregsp -> Aarch64.Reg.t = function
+let iregsp_reg ?width : CC_asm.iregsp -> Rivet_aarch64.Reg.t = function
   | CC_asm.RR1 r -> ireg_reg ?width r
   | CC_asm.XSP -> reg ?width ~is_sp:true 31
 
 let width_of_isize : CC_asm.isize -> int = function CC_asm.W -> 32 | CC_asm.X -> 64
 
-let mem_of_addressing (a : CC_asm.addressing) : Aarch64.Mem.t =
+let mem_of_addressing (a : CC_asm.addressing) : Rivet_aarch64.Mem.t =
   match a with
   | CC_asm.ADimm (base, off) ->
       {
-        Aarch64.Mem.base = iregsp_reg base;
-        offset = Aarch64.Disp.Const (CC.Camlcoq.camlint64_of_coqint off);
+        Rivet_aarch64.Mem.base = iregsp_reg base;
+        offset = Rivet_aarch64.Disp.Const (CC.Camlcoq.camlint64_of_coqint off);
         writeback = false;
         pre = true;
       }
   | CC_asm.ADpreincr (base, off) ->
       {
-        Aarch64.Mem.base = iregsp_reg base;
-        offset = Aarch64.Disp.Const (CC.Camlcoq.camlint64_of_coqint off);
+        Rivet_aarch64.Mem.base = iregsp_reg base;
+        offset = Rivet_aarch64.Disp.Const (CC.Camlcoq.camlint64_of_coqint off);
         writeback = true;
         pre = true;
       }
@@ -102,24 +102,25 @@ let mem_of_addressing (a : CC_asm.addressing) : Aarch64.Mem.t =
    wants to agree with that path must drop them too, not convert or reject
    them. Exposed (not just used inside [convert]) so test_adapter.ml can
    unit-test the Pmovz nonzero-shift case directly. *)
-let convert_instr (i : CC_asm.instruction) : Aarch64.Instruction.t option =
+let convert_instr (i : CC_asm.instruction) : Rivet_aarch64.Instruction.t option =
   match i with
   | CC_asm.Pcfi_adjust _ | CC_asm.Pcfi_rel_offset _ -> None
   | CC_asm.Pmov (rd, rs) ->
       Some
         {
-          Aarch64.Instruction.op = Aarch64.Opcode.Mov;
-          ops = [ Aarch64.Operand.Reg (iregsp_reg rd); Aarch64.Operand.Reg (iregsp_reg rs) ];
+          Rivet_aarch64.Instruction.op = Rivet_aarch64.Opcode.Mov;
+          ops =
+            [ Rivet_aarch64.Operand.Reg (iregsp_reg rd); Rivet_aarch64.Operand.Reg (iregsp_reg rs) ];
         }
   | CC_asm.Pstp (r1, r2, addr) ->
       Some
         {
-          Aarch64.Instruction.op = Aarch64.Opcode.Stp;
+          Rivet_aarch64.Instruction.op = Rivet_aarch64.Opcode.Stp;
           ops =
             [
-              Aarch64.Operand.Reg (ireg_reg r1);
-              Aarch64.Operand.Reg (ireg_reg r2);
-              Aarch64.Operand.Mem (mem_of_addressing addr);
+              Rivet_aarch64.Operand.Reg (ireg_reg r1);
+              Rivet_aarch64.Operand.Reg (ireg_reg r2);
+              Rivet_aarch64.Operand.Mem (mem_of_addressing addr);
             ];
         }
   | CC_asm.Pmovz (sz, rd, n, pos) ->
@@ -130,34 +131,45 @@ let convert_instr (i : CC_asm.instruction) : Aarch64.Instruction.t option =
       let amount = Int64.to_int (CC.Camlcoq.Z.to_int64 pos) in
       let shift =
         if amount = 0 then []
-        else [ Aarch64.Operand.Shift { Aarch64.Shift.kind = Aarch64.Shift.Lsl; amount } ]
+        else
+          [
+            Rivet_aarch64.Operand.Shift
+              { Rivet_aarch64.Shift.kind = Rivet_aarch64.Shift.Lsl; amount };
+          ]
       in
       Some
         {
-          Aarch64.Instruction.op = Aarch64.Opcode.Movz;
-          ops = Aarch64.Operand.Reg (ireg_reg ~width rd) :: imm n :: shift;
+          Rivet_aarch64.Instruction.op = Rivet_aarch64.Opcode.Movz;
+          ops = Rivet_aarch64.Operand.Reg (ireg_reg ~width rd) :: imm n :: shift;
         }
   | CC_asm.Pldrx (rd, addr) ->
       Some
         {
-          Aarch64.Instruction.op = Aarch64.Opcode.Ldr;
-          ops = [ Aarch64.Operand.Reg (ireg_reg rd); Aarch64.Operand.Mem (mem_of_addressing addr) ];
+          Rivet_aarch64.Instruction.op = Rivet_aarch64.Opcode.Ldr;
+          ops =
+            [
+              Rivet_aarch64.Operand.Reg (ireg_reg rd);
+              Rivet_aarch64.Operand.Mem (mem_of_addressing addr);
+            ];
         }
   | CC_asm.Paddimm (sz, rd, rn, n) ->
       let width = width_of_isize sz in
       Some
         {
-          Aarch64.Instruction.op = Aarch64.Opcode.Add;
+          Rivet_aarch64.Instruction.op = Rivet_aarch64.Opcode.Add;
           ops =
             [
-              Aarch64.Operand.Reg (iregsp_reg ~width rd);
-              Aarch64.Operand.Reg (iregsp_reg ~width rn);
+              Rivet_aarch64.Operand.Reg (iregsp_reg ~width rd);
+              Rivet_aarch64.Operand.Reg (iregsp_reg ~width rn);
               imm n;
             ];
         }
   | CC_asm.Pret rd ->
       Some
-        { Aarch64.Instruction.op = Aarch64.Opcode.Ret; ops = [ Aarch64.Operand.Reg (ireg_reg rd) ] }
+        {
+          Rivet_aarch64.Instruction.op = Rivet_aarch64.Opcode.Ret;
+          ops = [ Rivet_aarch64.Operand.Reg (ireg_reg rd) ];
+        }
   | _ -> failwith "Compcert_adapter.convert_instr: instruction out of return42 scope"
 
 let items_of_function (name : string) (f : CC_asm.coq_function) =
@@ -208,7 +220,7 @@ let describe_def (id, g) =
    matching asm_test_entry.s exactly - which has no trace of any builtin -
    so silently ignoring Gfun External here reproduces the real printer's
    behavior rather than working around it. *)
-let convert (p : CC_asm.program) : Aarch64.Instruction.t Normalized_ast.module_ =
+let convert (p : CC_asm.program) : Rivet_aarch64.Instruction.t Normalized_ast.module_ =
   let is_internal_fun (_, g) =
     match g with CC.AST.Gfun (CC.AST.Internal _) -> true | _ -> false
   in

@@ -6,7 +6,7 @@ module Fake = struct
   let runtime_units () = Ok []
 end
 
-module E = Rivet_compcert_embed.Make (X86_64) (Fake)
+module E = Rivet_compcert_embed.Make (Rivet_x86_64) (Fake)
 
 let io_of_string s =
   let io = Bigarray.Array1.create Bigarray.char Bigarray.c_layout 64 in
@@ -31,9 +31,9 @@ let%expect_test "an unbound host symbol and an unresolvable one are both refused
 let%expect_test "a bound host symbol is called repeatedly through one mapping" =
   let t = Result.get_ok (E.load ~host_symbols:[ "strlen" ] caller) in
   List.iter
-    (fun s -> Printf.printf "%Ld\n" (Result.get_ok (Native_exec.call t ~io:(io_of_string s))))
+    (fun s -> Printf.printf "%Ld\n" (Result.get_ok (Rivet_native_exec.call t ~io:(io_of_string s))))
     [ "hello"; ""; "twelve bytes" ];
-  Native_exec.close t;
+  Rivet_native_exec.close t;
   [%expect {|
     5
     0

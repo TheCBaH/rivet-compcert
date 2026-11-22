@@ -18,9 +18,9 @@ module CC = struct
   module Frontend = Frontend
 end
 
-module P = Driver.Registry.Aarch64
-module T = Aarch64
-open Asm_core
+module P = Rivet_driver.Registry.Aarch64
+module T = Rivet_aarch64
+open Rivet_asm_core
 
 (* Byte-for-byte copy of
    fixtures/compcert-3.17/return42/source/asm_test_entry.c - diffed
@@ -93,7 +93,7 @@ let%expect_test
     print_endline "adapter, direct, and text-path normalized ASTs are identical"
   else Printf.printf "NORMALIZED ASTS DIFFER\n--- adapter\n%s\n--- direct\n%s\n--- text\n%s\n" a b c;
   (match P.lower ~state:T.default_state adapted with
-  | Error ds -> print_endline (Foundation.Diag.render ds)
+  | Error ds -> print_endline (Rivet_foundation.Diag.render ds)
   | Ok low ->
       let low_a = render_lowered low in
       let low_b = render_lowered Coherence_fixture.direct_lowered in

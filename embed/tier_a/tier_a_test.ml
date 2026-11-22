@@ -198,12 +198,14 @@ let link_one ?(with_fixture_helpers = true) fixtures case =
   | Ok laid -> (
       let m = linked fixtures case in
       let addresses = List.map (fun (sec, _, a, _, _) -> (sec, a)) m in
-      match Image.bind_image laid ~addresses with
-      | Error e -> Printf.printf "%s: BIND %s\n" label (Foundation.Diag.render e)
+      match Rivet_image.bind_image laid ~addresses with
+      | Error e -> Printf.printf "%s: BIND %s\n" label (Rivet_foundation.Diag.render e)
       | Ok image ->
           List.iter
             (fun (sec, kind, _, size, file) ->
-              match List.find_opt (fun (s : Image.segment) -> s.name = sec) image.segments with
+              match
+                List.find_opt (fun (s : Rivet_image.segment) -> s.name = sec) image.segments
+              with
               | None -> Printf.printf "%s %s: missing\n" label sec
               | Some s ->
                   let ours = String.length s.bytes + s.zero_fill in

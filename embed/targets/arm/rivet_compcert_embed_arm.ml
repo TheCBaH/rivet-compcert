@@ -4,4 +4,4 @@
 (* In-process CompCert for arm; see Rivet_compcert_embed. *)
 
 module CC = Embed_cc.CC
-include Rivet_compcert_embed.Make (Arm) (Cc_compile)
+include Rivet_compcert_embed.Make (Rivet_arm) (Cc_compile)
