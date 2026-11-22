@@ -3,10 +3,9 @@
 
 (* Proves the CompCert Asm.program adapter (adapter.ml) end to end: a real
    in-process CompCert compile of the return42/asm_test_entry fixture on
-   aarch64, run through Adapter.convert, compared against
-   asm/test/coherence/test_coherence.ml's direct_normalized/direct_lowered
-   and against the text (parse/simplify) path - the "fourth producer" against
-   the same assertions that file already makes. *)
+   aarch64, run through Adapter.convert, compared against coherence_fixture.ml's
+   direct_normalized/direct_lowered and against the text (parse/simplify) path of the
+   committed fixture. *)
 
 (* The export is an unwrapped library, so CompCert's modules are top-level. *)
 module CC = struct
@@ -24,7 +23,7 @@ module T = Aarch64
 open Asm_core
 
 (* Byte-for-byte copy of
-   asm/fixtures/compcert-3.17/return42/source/asm_test_entry.c - diffed
+   fixtures/compcert-3.17/return42/source/asm_test_entry.c - diffed
    against that file at authoring time, not transcribed from memory. Deliberately one
    physical line with explicit \n escapes rather than OCaml's
    backslash-newline continuation: that continuation mechanism strips all
@@ -87,8 +86,8 @@ let%expect_test
      and the text path, and lowers identically to the direct lowered module" =
   let adapted = Adapter.convert (compile_via_compcert ()) in
   let a = render_normalized adapted in
-  let b = render_normalized Test_coherence.direct_normalized in
-  let parsed, _ = Test_coherence.from_text () in
+  let b = render_normalized Coherence_fixture.direct_normalized in
+  let parsed, _ = Coherence_fixture.from_text () in
   let c = render_normalized parsed in
   if String.equal a b && String.equal b c then
     print_endline "adapter, direct, and text-path normalized ASTs are identical"
@@ -97,7 +96,7 @@ let%expect_test
   | Error ds -> print_endline (Foundation.Diag.render ds)
   | Ok low ->
       let low_a = render_lowered low in
-      let low_b = render_lowered Test_coherence.direct_lowered in
+      let low_b = render_lowered Coherence_fixture.direct_lowered in
       if String.equal low_a low_b then print_endline "adapter lowers identically to direct_lowered"
       else Printf.printf "LOWERED MODULES DIFFER\n--- adapter\n%s\n--- direct\n%s\n" low_a low_b);
   [%expect

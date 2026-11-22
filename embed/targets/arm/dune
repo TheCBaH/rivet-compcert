@@ -9,7 +9,7 @@
  (name compcert_embed_arm)
  (public_name rivet_compcert.compcert_embed_arm)
  (modes byte native)
- (libraries compcert_embed compcert_arm_embed rivet.arm rivet.native_exec)
+ (libraries compcert_embed compcert_arm_embed rivet.arm rivet-native-exec)
  (enabled_if
   (and
    (= %{env:RIVET_COMPCERT_EMBED=false} true)

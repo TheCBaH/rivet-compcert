@@ -8,7 +8,7 @@
  (libraries
   compcert_embed
   rivet.x86_64
-  rivet.native_exec
+  rivet-native-exec
   rivet.foundation
   threads.posix)
  (inline_tests)

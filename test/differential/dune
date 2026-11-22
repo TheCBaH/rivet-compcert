@@ -1,4 +1,5 @@
-; The differential gate. Reads the committed fixtures and their GNU oracle
+; The differential gate over the CompCert fixtures: an instance of Rivet's
+; rivet.differential. Reads the committed fixtures and their GNU oracle
 ; artifacts as ordinary files, so this needs no cross toolchain and no emulator
 ; and runs in every leg of the portable matrix.
 
@@ -6,13 +7,7 @@
  (name test_differential)
  (modules test_differential)
  (modes byte native)
- (libraries
-  rivet.driver
-  rivet.image
-  rivet.target_intf
-  rivet.foundation
-  rivet.test_dump_inputs
-  rivet.fmt)
+ (libraries rivet.differential)
  (inline_tests
   (deps
    (glob_files_rec %{workspace_root}/fixtures/compcert-3.17/**)))

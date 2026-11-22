@@ -167,7 +167,7 @@ let items_of_function (name : string) (f : CC_asm.coq_function) =
     [
       [
         dir (Directive.Section { name = ".text"; perms = Perms.rx; nobits = false });
-        dir (Directive.Align { boundary = 4 });
+        dir (Directive.Align { boundary = 4; fill = None; max_skip = None });
         dir (Directive.Global { name });
         Normalized_ast.Label { name; origin };
       ];

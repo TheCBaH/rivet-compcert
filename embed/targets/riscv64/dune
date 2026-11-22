@@ -13,7 +13,7 @@
   compcert_embed
   compcert_riscv64_embed
   rivet.riscv64
-  rivet.native_exec)
+  rivet-native-exec)
  (enabled_if
   (and
    (= %{env:RIVET_COMPCERT_EMBED=false} true)

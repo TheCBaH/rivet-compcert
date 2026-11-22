@@ -16,8 +16,9 @@
   rivet.asm_core
   rivet.image
   rivet.driver
+  rivet.text_pipeline
   rivet.target_intf
-  rivet.native_exec
+  rivet-native-exec
   rivet.fmt
   threads.posix)
  (enabled_if

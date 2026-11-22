@@ -145,7 +145,7 @@ let () =
               if not native then Ok None
               else
                 let io = Bigarray.Array1.create Bigarray.char Bigarray.c_layout 16 in
-                match Native_exec.run ~target laid ~io with
+                match Native_exec.run ~isolate:false laid ~io with
                 | Error e -> Error (Format.asprintf "native: %a" Native_exec.pp_error e)
                 (* [qemu_entry] returns an [int]: only the low 32 bits are defined. *)
                 | Ok { value; _ } -> Ok (Some (low32 value))

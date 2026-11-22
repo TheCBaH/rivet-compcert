@@ -14,11 +14,11 @@ let show = function
   | Ok (o : Native_exec.outcome) -> Printf.printf "Ok %Ld\n" o.value
   | Error e -> Format.printf "Error %a@." Compcert_embed.pp_error e
 
-let run ?isolate ?timeout_s source =
+let run ?(isolate = false) ?timeout_s source =
   match Compcert_embed_aarch64.compile source with
   | Error e -> Error e
   | Ok laid ->
-      Native_exec.run ?isolate ?timeout_s laid ~io:(io ())
+      Native_exec.run ~isolate ?timeout_s laid ~io:(io ())
       |> Result.map_error (fun e ->
           {
             Compcert_embed.stage = Execute;
