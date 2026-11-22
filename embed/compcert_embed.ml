@@ -185,7 +185,7 @@ let helper_references text =
     runtime_prefixes
 
 module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
-  module P = Driver.Pipeline.Make (T)
+  module P = Pipeline.Make (T)
 
   let target = T.name
 
@@ -289,9 +289,10 @@ module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
   (* {1 Running} *)
 
   (* Only where this process runs [target]'s ISA; elsewhere [Native_exec]
-     refuses the image. [~isolate:true] runs it in a forked child (see
-     [Native_exec.run]): a crash or a hang in generated code is then an
-     [Execute] error instead of the end of this process. *)
+     refuses the image. In this process by default, unlike [Native_exec.run], so host
+     callbacks change this process's state; [~isolate:true] runs it in a forked child: a
+     crash or a hang in generated code is then an [Execute] error instead of the end of
+     this process. *)
   let execute_error e =
     { stage = Execute; message = Format.asprintf "%a" Native_exec.pp_error e; codes = [] }
 
@@ -299,10 +300,9 @@ module Make (T : Target_intf.Target.TARGET) (C : COMPILER) = struct
      [Native_exec.close] when done. *)
   let load ?entry ?host_symbols ?name source =
     let* laid = compile ?entry ?host_symbols ?name source in
-    Native_exec.load ~target laid |> Result.map_error execute_error
+    Native_exec.load laid |> Result.map_error execute_error
 
-  let run ?entry ?host_symbols ?name ?read_globals ?isolate ?timeout_s source ~io =
+  let run ?entry ?host_symbols ?name ?read_globals ?(isolate = false) ?timeout_s source ~io =
     let* laid = compile ?entry ?host_symbols ?name source in
-    Native_exec.run ~target ?read_globals ?isolate ?timeout_s laid ~io
-    |> Result.map_error execute_error
+    Native_exec.run ?read_globals ~isolate ?timeout_s laid ~io |> Result.map_error execute_error
 end

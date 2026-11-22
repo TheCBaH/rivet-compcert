@@ -65,8 +65,9 @@ The embedding libraries are installable as `rivet_compcert.compcert_embed` and
 `rivet.<library>` names, so build in this order, with `vendor/rivet` at the
 revision to install (it is the one this repository is tested against):
 
-1. rivet: `RIVET_NATIVE_EXEC=true dune build --only-packages rivet @install`
-   in `vendor/rivet`, then `dune install rivet`. Set `RIVET_EXTERNAL_DEPS=true`
+1. rivet: `RIVET_NATIVE_EXEC=true dune build --only-packages rivet,rivet-native-exec
+   @install` in `vendor/rivet`, then `dune install rivet rivet-native-exec`
+   (`Native_exec`, which the embedding links, is its own package). Set `RIVET_EXTERNAL_DEPS=true`
    too when the consumer supplies its own `fmt` and `err_trace` (see rivet's
    README); installed rivet then requires those findlib names instead of
    carrying its own copies.

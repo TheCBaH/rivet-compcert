@@ -16,16 +16,18 @@
 
 (library
  (name compcert_adapter)
- (modules adapter test_adapter)
+ (modules adapter coherence_fixture test_adapter)
  (modes byte native)
  (libraries
   compcert_aarch64
   rivet.foundation
   rivet.asm_core
   rivet.aarch64
-  rivet.test_support
+  rivet.driver
   rivet.fmt)
- (inline_tests)
+ (inline_tests
+  (deps
+   %{workspace_root}/fixtures/compcert-3.17/return42/aarch64/asm_test_entry.s))
  (preprocess
   (pps ppx_expect))
  (enabled_if

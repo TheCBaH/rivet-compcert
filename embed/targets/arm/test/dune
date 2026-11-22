@@ -15,7 +15,7 @@
  (libraries
   compcert_embed
   compcert_embed_arm
-  rivet.native_exec
+  rivet-native-exec
   rivet.image
   rivet.foundation
   rivet.oracle

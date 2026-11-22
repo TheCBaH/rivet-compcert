@@ -5,7 +5,7 @@
 (library
  (name test_embed_native)
  (modes byte native)
- (libraries compcert_embed rivet.x86_64 rivet.native_exec rivet.foundation)
+ (libraries compcert_embed rivet.x86_64 rivet-native-exec rivet.foundation)
  (inline_tests)
  (preprocess
   (pps ppx_expect))

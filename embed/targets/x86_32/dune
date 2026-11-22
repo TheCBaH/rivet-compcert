@@ -13,7 +13,7 @@
   compcert_embed
   compcert_x86_32_embed
   rivet.x86_32
-  rivet.native_exec)
+  rivet-native-exec)
  (enabled_if
   (and
    (= %{env:RIVET_COMPCERT_EMBED=false} true)
